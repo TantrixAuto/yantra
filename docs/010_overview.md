@@ -257,39 +257,3 @@ WS := "\s"!;
 </pre></code>
 
 As seen above, we can attach multiple walkers to a single grammar, and define functions within each walker.
-
-## Steps to build and run the above example
-### Create input file
-Copy the above code and paste into file basic.y in any convenient directory (or use basic.y from the samples folder).
-
-### Generate the parser generator
-Generate the cpp file
-```
-~/build/yantra/Debug/bin/ycc -f test.y -a
-```
-
-### Build the cpp file
-```
-clang++ -g -Wall --std=c++20 test.cpp
-```
-
-### Run the parser, for C++ generation
-```
-./a.out -s "z = a::b::C;" -w CppWalker
-```
-
-Observe the following output
-```
-z = a::b::C
-```
-
-### Run the parser, for Java generation
-```
-./a.out -s "z = a::b::C;" -w JavaWalker
-```
-
-Observe the following output
-```
-z = a.b.C
-```
-
