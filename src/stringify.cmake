@@ -1,0 +1,40 @@
+set(BLOCK_SIZE 0)
+
+function(FlushChunk)
+    get_property(tCHUNK GLOBAL PROPERTY CHUNK)
+    file(APPEND ${CODEBLOCK_FILE} "${tCHUNK}")
+endfunction()
+
+function(WriteLine DATA)
+    get_property(tCHUNK GLOBAL PROPERTY CHUNK)
+    string(CONCAT tCHUNK "${tCHUNK}" "${DATA}\n")
+    set_property(GLOBAL PROPERTY CHUNK "${tCHUNK}")
+
+    string(LENGTH "${tCHUNK}" CHUNK_SIZE)
+    if( ${CHUNK_SIZE} GREATER 1500)
+        FlushChunk()
+        set(tCHUNK "")
+        set_property(GLOBAL PROPERTY CHUNK "${tCHUNK}")
+    endif()
+endfunction()
+
+message("PROTOTYPE_FILE: ${PROTOTYPE_FILE}")
+
+file(STRINGS ${PROTOTYPE_FILE} LINES)
+
+file(WRITE ${CODEBLOCK_FILE} "")
+WriteLine("extern const char* ${VARNAME};")
+WriteLine("const char* ${VARNAME} = R\"ENDTABLES(")
+foreach(LINE ${LINES})
+    WriteLine("${LINE}")
+
+    string(LENGTH "$LINE}" LLEN)
+    math(EXPR BLOCK_SIZE "${BLOCK_SIZE} + 1" )
+    if( ${BLOCK_SIZE} GREATER 50)
+        WriteLine(")ENDTABLES\"")
+        WriteLine("R\"ENDTABLES(")
+        set(BLOCK_SIZE 0)
+    endif()
+endforeach()
+WriteLine(")ENDTABLES\"; //${CBID}\n")
+FlushChunk()
