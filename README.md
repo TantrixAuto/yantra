@@ -21,3 +21,6 @@ It is recommended that they be read in the given order.
 | [Concepts](docs/020_concepts.md)               | - Key concepts of Yantra.             |
 | [User Manual](docs/030_manual.md)              | - User manual describing the grammar.<br/>- List of pragmas. |
 | [Developer Reference](docs/040_developers.md)  | - Description of major classes.<br/>- Steps to build Yantra. |
+
+# Sample project
+See https://github.com/TantrixAuto/lingo for standalone sample project that uses yantra.

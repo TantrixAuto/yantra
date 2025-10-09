@@ -1,0 +1,9 @@
+# Miscellaneous
+*.log
+.DS_Store
+.vscode/
+/build/*
+*.user
+.vs/
+CppProperties.json
+
