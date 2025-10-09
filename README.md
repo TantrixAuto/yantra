@@ -15,12 +15,14 @@ The folloing are a set of key links to get familiar with Yantra.
 
 It is recommended that they be read in the given order.
 
-| Name                                       | Description                         |
-|--------------------------------------------|-------------------------------------|
+| Name                                           | Description.                          |
+|------------------------------------------------|---------------------------------------|
 | [Overview](docs/010_overview.md)               | - A high-level overview of Yantra.    |
 | [Concepts](docs/020_concepts.md)               | - Key concepts of Yantra.             |
 | [User Manual](docs/030_manual.md)              | - User manual describing the grammar.<br/>- List of pragmas. |
-| [Developer Reference](docs/040_developers.md)  | - Description of major classes.<br/>- Steps to build Yantra. |
+| [Developer Reference](docs/040_developers.md)  | - Description of major classes.       |
+| [Build Instructions](docs/050_build.md)        | - Steps to build Yantra.              |
+| [Grammar Quickstart](docs/060_quickstart.md)   | - A quick introduction to the grammar file structure. |
 
 # Sample project
 See https://github.com/TantrixAuto/lingo for standalone sample project that uses yantra.
