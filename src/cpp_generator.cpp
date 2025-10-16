@@ -896,6 +896,11 @@ struct Generator {
                     print(os, "                    stateStack.push_back(0);");
                     ++len;
                 }
+
+                if ((r.ruleSetName() == grammar.start) && (rd.first->name == grammar.end)) {
+                    print(os, "                    shift(k.pos, Tolkien::ID::{}); //END", grammar.end);
+                    print(os, "                    stateStack.push_back(0);");
+                }
                 print(os, "                    reduce({}, {}, {}, Tolkien::ID::{}, \"{}\");", r.id, len, r.anchor, r.ruleSetName(), r.ruleSetName());
                 print(os, "                    k.id = Tolkien::ID::{};", r.ruleSetName());
                 if (r.ruleSetName() == grammar.start) {
@@ -1087,8 +1092,11 @@ struct Generator {
             if (state.checkEOF) {
                 print(os, "                if(ch == static_cast<char_t>(EOF)) {{");
                 print(os, "                    token.id = Tolkien::ID::{};", grammar.end);
-                print(os, "                    parser.parse(token);");
-                print(os, "                    parser.parse(token); // call parse() again to ensure all final reductions occur");
+                print(os, "                    parser.parse(token);\n");
+                print(os, "                    // at EOF, call parse() repeatedly until all final reductions are complete");
+                print(os, "                    while(parser.isClean() == false) {{");
+                print(os, "                        parser.parse(token);");
+                print(os, "                    }}");
                 print(os, "                    state = 0;");
                 print(os, "                    stream.consume();");
                 print(os, "                    continue; //EOF");
@@ -1540,6 +1548,7 @@ struct Generator {
             {"TOKEN", grammar.tokenClass},
             {"WALKER", grammar.getDefaultWalker().name},
             {"START_RULE", std::format("{}", grammar.start)},
+            {"START_RULE_NAME", std::format("\"{}\"", grammar.start)},
             {"MAX_REPEAT_COUNT", std::to_string(grammar.maxRepCount)},
             {"AST", grammar.astClass},
         };
