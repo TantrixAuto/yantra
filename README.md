@@ -11,7 +11,7 @@ Yantra is a powerful compiler compiler and LALR(1) parser generator written in C
 The name ***Yantra*** is Sanskrit for ***machine***, as in ***state machine*** in this context.
 
 # Essential Reading
-The folloing are a set of key links to get familiar with Yantra.
+The following are a set of key links to get familiar with Yantra.
 
 It is recommended that they be read in the given order.
 

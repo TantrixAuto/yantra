@@ -85,7 +85,14 @@ struct ParserStateMachineBuilder {
         return 'S';
     }
 
-    inline char resolveConflict(const Grammar::RegexSet& rx, const Grammar::Rule& r) const {
+    inline char resolveConflict(const Grammar::RegexSet& rx, const Grammar::Config& cfg) const {
+        auto& r = cfg.rule;
+
+        // if we are resolving a conflict against the END token,
+        // always resolve in favor of a REDUCE.
+        if(rx.name == grammar.end) {
+            return 'R';
+        }
         if(rx.precedence < r.precedence->precedence) {
             return 'S';
         }
@@ -107,7 +114,7 @@ struct ParserStateMachineBuilder {
         print(Logger::log(), "{}addReduce:rs={}", indent, rs.name);
 
         for(auto& rx : rs.follows) {
-            char p = resolveConflict(*rx, config.rule);
+            char p = resolveConflict(*rx, config);
             if(cs.hasShift(*rx) != nullptr) {
                 std::stringstream ss;
                 print(Logger::log(), "{}addReduce:{}: REDUCE-SHIFT conflict on:{}{}", indent, config.rule.pos.str(), rx->name, ss.str());
@@ -207,7 +214,7 @@ struct ParserStateMachineBuilder {
         auto& rx = grammar.getRegexSet(nextNode);
         if(cs.hasReduce(rx) != nullptr) {
             std::stringstream ss;
-            char p = resolveConflict(rx, config.rule);
+            char p = resolveConflict(rx, config);
             print(Logger::log(), "{}addShift: {}: SHIFT-REDUCE conflict on:{}{}, p={}", indent, config.rule.pos.str(), rx.name, ss.str(), p);
             if(p == 'R') {
                 return;
@@ -255,22 +262,30 @@ struct ParserStateMachineBuilder {
             std::vector<const Grammar::RuleSet*> epsilons;
             auto cpos = config.cpos;
             do {
-                print(Logger::log(), "{}getNextConfigSet:cfg={}, cpos={}", indent, config.str(), cpos);
+                print(Logger::log(), "{}getNextConfigSet({}):cfg={}, cpos={}", indent, is.id, config.str(), cpos);
                 assert(cpos <= config.rule.nodes.size());
                 bool first = (epsilonNode == nullptr);
                 epsilonNode = nullptr;
                 auto nextNode = config.rule.getNodeAt(cpos);
                 if(nextNode == nullptr) {
                     auto len = config.rule.nodes.size() - (cpos - config.cpos);
+                    print(Logger::log(), "{}getNextConfigSet({}):is-end:len={}", indent, is.id, len);
                     addReduce(cs, config, len, indent);
                 }else if(nextNode->isRegex()) {
                     if(nextNode->name == grammar.empty) {
-                        print(Logger::log(), "{}getNextConfigSet:is-epsilon", indent);
-                        // epsilonNode = nextNode;
+                        print(Logger::log(), "{}getNextConfigSet({}):is-regex-empty:{}", indent, is.id, nextNode->name);
+                    //     epsilonNode = nextNode;
+                    }else if(nextNode->name == grammar.end) {
+                        auto len = config.rule.nodes.size() - (cpos - config.cpos);
+                        print(Logger::log(), "{}getNextConfigSet({}):is-regex-end:{}, len={}, cfg={}", indent, is.id, nextNode->name, len, config.str(false));
+                        assert(len > 0);
+                        addReduce(cs, config, len, indent);
                     }else{
+                        print(Logger::log(), "{}getNextConfigSet({}):is-regex:{}", indent, is.id, nextNode->name);
                         addShift(*nextNode, cs, config, cpos, epsilons, indent);
                     }
                 }else if(nextNode->isRule()) {
+                    print(Logger::log(), "{}getNextConfigSet({}):is-rule:{}", indent, is.id, nextNode->name);
                     if(first == true) {
                         addGoto(*nextNode, cs, config, cpos, indent);
                         auto& rs = grammar.getRuleSetByName(nextNode->pos, nextNode->name);

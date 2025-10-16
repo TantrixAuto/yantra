@@ -26,6 +26,7 @@
 
 #define CLSNAME CLASSQID
 
+constexpr const char* START_RULE_NAME = "";
 constexpr unsigned long MAX_REPEAT_COUNT = 100;
 constexpr unsigned long ROW = 1;
 constexpr unsigned long COL = 1;
@@ -517,12 +518,11 @@ struct Parser {
         return shift(token);
     }
 
-    inline void reduce(const size_t& ruleID, const size_t& len, const size_t& anchor, const Tolkien::ID& k, const std::string& text) {
+    inline Tolkien _reduce(const size_t& len, const size_t& anchor, std::vector<ValueItem*>& childs) {
         assert(valueStack.size() >= len);
         assert(stateStack.size() >= len);
         auto ite = valueStack.end();
         auto it = ite - static_cast<long>(len);
-        std::vector<ValueItem*> childs;
         Tolkien anchorToken;
         std::stringstream ss;
         for (auto i = it; i < ite; ++i) {
@@ -540,12 +540,32 @@ struct Parser {
             stateStack.pop_back();
             valueStack.pop_back();
         }
-        auto tok = anchorToken;
+        return anchorToken;
+    }
+
+    inline void reduce(const size_t& ruleID, const size_t& len, const size_t& anchor, const Tolkien::ID& k, const std::string& text) {
+        std::vector<ValueItem*> childs;
+        auto tok = _reduce(len, anchor, childs);
         tok.id = k;
         tok.text = text;
         auto& vi = shift(tok);
         vi.ruleID = ruleID;
         vi.childs = childs;
+    }
+
+    inline bool isClean() const {
+        if((valueStack.size() > 1) || (stateStack.size() > 1)) {
+            return false;
+        }
+        if(stateStack.at(0) != 1) {
+            return false;
+        }
+
+        if(valueStack.at(0)->token.text != TAG(START_RULE_NAME)) {
+            return false;
+        }
+
+        return true;
     }
 
     inline void printParserState() const {
