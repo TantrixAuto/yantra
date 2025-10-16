@@ -1393,6 +1393,32 @@ run_passing_test 'string msgID'
 run_passing_test 'string ^msgID'
 
 #############################
+grammar='
+%class Calculator;
+%left PLUS MINUS;
+%left STAR SLASH;
+
+start := expr;
+
+expr := expr PLUS expr;
+expr := expr MINUS expr;
+expr := expr STAR expr;
+expr := expr SLASH expr;
+expr := NUMBER;
+
+NUMBER := "\d+";
+PLUS := "\+";
+MINUS := "-";
+STAR := "\*";
+SLASH := "/";
+WS := "\s+"!;
+'
+
+compile_grammar "$grammar" 0
+run_passing_test '1 + 2'
+run_passing_test '1 - 23'
+
+#############################
 # this infinite loop
 grammar='
 start := stmts;

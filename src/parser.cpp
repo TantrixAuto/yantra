@@ -1759,15 +1759,16 @@ struct Parser {
     inline void set_precedence(const Grammar::RegexSet::Assoc& assoc, const Token& s) {
         Tracer tr{lvl, s.text};
 
-        Token t = peek(tr);
-        if(t.id != Token::ID::ID) {
-            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+        Token t;
+
+        while((t = peek(tr)).id == Token::ID::ID) {
+            if(isRegexName(t.text) == false) {
+                throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_PRAGMA_VALUE:{}, should be TOKEN name", t.text);
+            }
+            grammar.addRegexSet(t.text, assoc);
+            lexer.next();
         }
-        if(isRegexName(t.text) == false) {
-            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_PRAGMA_VALUE:{}, should be TOKEN name", t.text);
-        }
-        grammar.addRegexSet(t.text, assoc);
-        lexer.next();
+
         read_semi(tr);
     }
 
