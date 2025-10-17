@@ -46,11 +46,11 @@ namespace {
 
 /// @brief This class generates the cpp parser
 struct Generator {
-    const Grammar& grammar;
+    const yg::Grammar& grammar;
     std::string qid;
     CodeBlock throwError;
 
-    inline Generator(const Grammar& g) : grammar{g} {}
+    inline Generator(const yg::Grammar& g) : grammar{g} {}
 
     /// @brief expands all variables in a codeblock and normalizes the indentation
     inline std::string expand(const std::string_view& codeblock, const std::string_view& indent, const bool& autoIndent, const std::unordered_map<std::string, std::string>& vars) {
@@ -218,13 +218,13 @@ struct Generator {
         print(os, "{}", cb);
     }
 
-    /// @brief Checks if the \ref Grammar::RuleSet contains a empty prooduction
-    inline bool hasEpsilon(const Grammar::RuleSet& rs) const {
+    /// @brief Checks if the \ref yg::Grammar::RuleSet contains a empty prooduction
+    inline bool hasEpsilon(const yg::Grammar::RuleSet& rs) const {
         return (rs.firstIncludes(grammar.empty) == true);
     }
 
     /// @brief Construct a full function name given a rule and a short function name
-    inline std::string getFunctionName(const Grammar::Rule& r, const std::string& fname) const {
+    inline std::string getFunctionName(const yg::Grammar::Rule& r, const std::string& fname) const {
         return std::format("{}_{}", r.ruleName, fname);
     }
 
@@ -232,7 +232,7 @@ struct Generator {
     /// If the node is a terminal, returns the default token class name
     /// If non-terminal, return the AST node name for the rule
     /// (which is the same as the rule name)
-    inline std::string getNodeType(const Grammar::Node& n) const {
+    inline std::string getNodeType(const yg::Grammar::Node& n) const {
         std::string nativeType;
         if(n.isRegex() == true) {
             nativeType = grammar.tokenClass;
@@ -245,9 +245,9 @@ struct Generator {
 
     /// @brief generates a list of args for a semantic action function for a rule
     inline std::string getArgs(
-        const Grammar::Rule& r,
-        const Grammar::Walker::FunctionSig& fsig,
-        const Grammar::Walker::CodeInfo* ci,
+        const yg::Grammar::Rule& r,
+        const yg::Grammar::Walker::FunctionSig& fsig,
+        const yg::Grammar::Walker::CodeInfo* ci,
         const std::string& indent
         ) {
         std::stringstream args;
@@ -458,12 +458,12 @@ struct Generator {
     /// @brief generates member function corresponding to the semantic action for each rule
     inline void generateRuleHandler(
         std::ostream& os,
-        const Grammar::Walker& walker,
-        const Grammar::Rule& r,
-        const Grammar::Walker::FunctionSig& fsig,
+        const yg::Grammar::Walker& walker,
+        const yg::Grammar::Rule& r,
+        const yg::Grammar::Walker::FunctionSig& fsig,
         const std::string& isVirtual,
         const std::string& isOverride,
-        const Grammar::Walker::CodeInfo* ci,
+        const yg::Grammar::Walker::CodeInfo* ci,
         const std::unordered_map<std::string, std::string>& vars,
         const std::string_view& indent
     ) {
@@ -499,10 +499,10 @@ struct Generator {
     /// @brief generates visitor overload to invoke the corresponding member function
     inline void generateRuleVisitorBody(
         std::ostream& os,
-        const Grammar::Walker& walker,
-        const Grammar::Walker::FunctionSig& fsig,
-        const Grammar::RuleSet& rs,
-        const Grammar::Rule& r,
+        const yg::Grammar::Walker& walker,
+        const yg::Grammar::Walker::FunctionSig& fsig,
+        const yg::Grammar::RuleSet& rs,
+        const yg::Grammar::Rule& r,
         const std::string& called,
         const std::string& xparams,
         const std::string_view& indent
@@ -578,7 +578,7 @@ struct Generator {
             print(os, "{}            return {}({});/*call4*/", indent, iname, params.str());
         }
 
-        if(walker.traversalMode == Grammar::Walker::TraversalMode::TopDown) {
+        if(walker.traversalMode == yg::Grammar::Walker::TraversalMode::TopDown) {
             print(os, "{}", wcalls.str());
         }
         print(os, "{}        }},\n", indent);
@@ -589,9 +589,9 @@ struct Generator {
     /// specific rule handler
     inline void generateRuleSetVisitor(
         std::ostream& os,
-        const Grammar::Walker& walker,
-        const Grammar::RuleSet& rs,
-        const Grammar::Walker::FunctionSig& fsig,
+        const yg::Grammar::Walker& walker,
+        const yg::Grammar::RuleSet& rs,
+        const yg::Grammar::Walker::FunctionSig& fsig,
         const std::string_view& indent
     ) {
         print(os, "{}//RULESET_VISITOR({}):{}:{}", indent, walker.name, rs.name, fsig.type);
@@ -609,7 +609,7 @@ struct Generator {
         auto xparams = extractParams(fsig.args);
 
         std::string called;
-        if(walker.traversalMode == Grammar::Walker::TraversalMode::Manual) {
+        if(walker.traversalMode == yg::Grammar::Walker::TraversalMode::Manual) {
             called = "true";
         }else{
             called = "false";
@@ -642,7 +642,7 @@ struct Generator {
     /// @brief generates all ruleset handlers
     inline void generateRuleSetVisitors(
         std::ostream& os,
-        const Grammar::Walker& walker,
+        const yg::Grammar::Walker& walker,
         const std::unordered_map<std::string, std::string>& vars,
         const std::string_view& indent
     ) {
@@ -691,10 +691,10 @@ struct Generator {
     /// @brief generates writer for Walker
     inline void generateWriter(
         std::ostream& os,
-        const Grammar::Walker& walker,
+        const yg::Grammar::Walker& walker,
         const std::string_view& indent
     ) {
-        if(walker.outputType == Grammar::Walker::OutputType::TextFile) {
+        if(walker.outputType == yg::Grammar::Walker::OutputType::TextFile) {
             print(os, "{}//GEN_FILE", indent);
             print(os, "{}TextFileWriter {};\n", indent, walker.writerName);
 
@@ -930,40 +930,40 @@ struct Generator {
 
     /// @brief class to calculate transitions from one Lexer state to the next
     struct TransitionSet {
-        const Grammar::Transition* wildcard = nullptr;
+        const yg::Grammar::Transition* wildcard = nullptr;
 
-        std::vector<std::pair<const Grammar::Transition*, const Grammar::RangeClass*>> smallRanges;
-        std::vector<std::pair<const Grammar::Transition*, const Grammar::RangeClass*>> largeRanges;
-        std::vector<std::pair<const Grammar::Transition*, const Grammar::LargeEscClass*>> largeEscClasses;
+        std::vector<std::pair<const yg::Grammar::Transition*, const yg::Grammar::RangeClass*>> smallRanges;
+        std::vector<std::pair<const yg::Grammar::Transition*, const yg::Grammar::RangeClass*>> largeRanges;
+        std::vector<std::pair<const yg::Grammar::Transition*, const yg::Grammar::LargeEscClass*>> largeEscClasses;
 
-        std::vector<std::pair<const Grammar::Transition*, const Grammar::ClassTransition*>> classes;
+        std::vector<std::pair<const yg::Grammar::Transition*, const yg::Grammar::ClassTransition*>> classes;
 
-        std::pair<const Grammar::Transition*, const Grammar::ClosureTransition*> enterClosure = {nullptr, nullptr};
-        std::pair<const Grammar::Transition*, const Grammar::ClosureTransition*> preLoop = {nullptr, nullptr};
-        std::pair<const Grammar::Transition*, const Grammar::ClosureTransition*> inLoop = {nullptr, nullptr};
-        std::pair<const Grammar::Transition*, const Grammar::ClosureTransition*> postLoop = {nullptr, nullptr};
-        std::pair<const Grammar::Transition*, const Grammar::ClosureTransition*> leaveClosure = {nullptr, nullptr};
+        std::pair<const yg::Grammar::Transition*, const yg::Grammar::ClosureTransition*> enterClosure = {nullptr, nullptr};
+        std::pair<const yg::Grammar::Transition*, const yg::Grammar::ClosureTransition*> preLoop = {nullptr, nullptr};
+        std::pair<const yg::Grammar::Transition*, const yg::Grammar::ClosureTransition*> inLoop = {nullptr, nullptr};
+        std::pair<const yg::Grammar::Transition*, const yg::Grammar::ClosureTransition*> postLoop = {nullptr, nullptr};
+        std::pair<const yg::Grammar::Transition*, const yg::Grammar::ClosureTransition*> leaveClosure = {nullptr, nullptr};
 
-        std::pair<const Grammar::Transition*, const Grammar::SlideTransition*> slide = {nullptr, nullptr};
+        std::pair<const yg::Grammar::Transition*, const yg::Grammar::SlideTransition*> slide = {nullptr, nullptr};
 
         struct Visitor {
-            const Grammar& grammar;
+            const yg::Grammar& grammar;
             TransitionSet& tset;
-            const Grammar::Transition& tx;
+            const yg::Grammar::Transition& tx;
 
-            inline Visitor(const Grammar& g, TransitionSet& s, const Grammar::Transition& x)
+            inline Visitor(const yg::Grammar& g, TransitionSet& s, const yg::Grammar::Transition& x)
                 : grammar(g), tset(s), tx(x) {}
 
-            inline void operator()(const Grammar::WildCard&) {
+            inline void operator()(const yg::Grammar::WildCard&) {
                 assert(tset.wildcard == nullptr);
                 tset.wildcard = &tx;
             }
 
-            inline void operator()(const Grammar::LargeEscClass& t) {
+            inline void operator()(const yg::Grammar::LargeEscClass& t) {
                 tset.largeEscClasses.push_back(std::make_pair(&tx, &t));
             }
 
-            inline void operator()(const Grammar::RangeClass& t) {
+            inline void operator()(const yg::Grammar::RangeClass& t) {
                 bool isSmallRange = ((t.ch2 - t.ch1) <= grammar.smallRangeSize);
                 if (isSmallRange) {
                     tset.smallRanges.push_back(std::make_pair(&tx, &t));
@@ -972,46 +972,46 @@ struct Generator {
                 }
             }
 
-            inline void operator()(const Grammar::PrimitiveTransition& t) {
+            inline void operator()(const yg::Grammar::PrimitiveTransition& t) {
                 std::visit(*this, t.atom.atom);
             }
 
-            inline void operator()(const Grammar::ClassTransition& t) {
+            inline void operator()(const yg::Grammar::ClassTransition& t) {
                 tset.classes.push_back(std::make_pair(&tx, &t));
             }
 
-            inline void operator()(const Grammar::ClosureTransition& t) {
+            inline void operator()(const yg::Grammar::ClosureTransition& t) {
                 switch(t.type) {
-                case Grammar::ClosureTransition::Type::Enter:
+                case yg::Grammar::ClosureTransition::Type::Enter:
                     assert(tset.enterClosure.first == nullptr);
                     tset.enterClosure = std::make_pair(&tx, &t);
                     break;
-                case Grammar::ClosureTransition::Type::PreLoop:
+                case yg::Grammar::ClosureTransition::Type::PreLoop:
                     assert(tset.preLoop.first == nullptr);
                     tset.preLoop = std::make_pair(&tx, &t);
                     break;
-                case Grammar::ClosureTransition::Type::InLoop:
+                case yg::Grammar::ClosureTransition::Type::InLoop:
                     assert(tset.inLoop.first == nullptr);
                     tset.inLoop = std::make_pair(&tx, &t);
                     break;
-                case Grammar::ClosureTransition::Type::PostLoop:
+                case yg::Grammar::ClosureTransition::Type::PostLoop:
                     assert(tset.postLoop.first == nullptr);
                     tset.postLoop = std::make_pair(&tx, &t);
                     break;
-                case Grammar::ClosureTransition::Type::Leave:
+                case yg::Grammar::ClosureTransition::Type::Leave:
                     assert(tset.leaveClosure.first == nullptr);
                     tset.leaveClosure = std::make_pair(&tx, &t);
                     break;
                 }
             }
 
-            inline void operator()(const Grammar::SlideTransition& t) {
+            inline void operator()(const yg::Grammar::SlideTransition& t) {
                 assert(tset.slide.first == nullptr);
                 tset.slide = std::make_pair(&tx, &t);
             }
         };
 
-        inline void process(const Grammar& g, const std::vector<Grammar::Transition*>& txs) {
+        inline void process(const yg::Grammar& g, const std::vector<yg::Grammar::Transition*>& txs) {
             for (auto& tx : txs) {
                 Visitor v(g, *this, *tx);
                 std::visit(v, tx->t);
@@ -1020,7 +1020,7 @@ struct Generator {
     };
 
     /// @brief generate code to transition from one Lexer state to another
-    inline void generateStateChange(std::ostream& os, const Grammar::Transition& t, const Grammar::State* nextState, const std::string& indent) {
+    inline void generateStateChange(std::ostream& os, const yg::Grammar::Transition& t, const yg::Grammar::State* nextState, const std::string& indent) {
         if (t.capture) {
             print(os, "                {}token.addText(ch);", indent);
         }
@@ -1144,13 +1144,13 @@ struct Generator {
                 std::string negate = (t.second->atom.negate?"!":"");
                 for(auto& ax : t.second->atom.atoms) {
                     std::visit(overloaded{
-                        [&negate, &ss, &sep](const Grammar::WildCard&) {
+                        [&negate, &ss, &sep](const yg::Grammar::WildCard&) {
                             ss << std::format("{}({}true)", sep, negate);
                         },
-                        [&negate, &ss, &sep](const Grammar::LargeEscClass& a) {
+                        [&negate, &ss, &sep](const yg::Grammar::LargeEscClass& a) {
                             ss << std::format("{}({}{}(ch))", sep, negate, a.checker);
                         },
-                        [&negate, &ss, &sep](const Grammar::RangeClass& a) {
+                        [&negate, &ss, &sep](const yg::Grammar::RangeClass& a) {
                             ss << std::format("{}({}contains(ch, {}, {}))", sep, negate, getChString(a.ch1), getChString(a.ch2));
                         },
                     }, ax);
@@ -1177,20 +1177,20 @@ struct Generator {
             }else if (state.matchedRegex) {
                 size_t nextStateID = 0;
                 switch(state.matchedRegex->modeChange) {
-                case Grammar::Regex::ModeChange::None:
+                case yg::Grammar::Regex::ModeChange::None:
                     break;
-                case Grammar::Regex::ModeChange::Next: {
+                case yg::Grammar::Regex::ModeChange::Next: {
                     auto& mode = grammar.getRegexNextMode(*(state.matchedRegex));
                     assert(mode.root);
                     nextStateID = mode.root->id;
                     print(os, "                modes.push_back({}); // MATCH, -> {}", nextStateID, state.matchedRegex->nextMode);
                     break;
                 }
-                case Grammar::Regex::ModeChange::Back:
+                case yg::Grammar::Regex::ModeChange::Back:
                     print(os, "                assert(modes.size() > 0);");
                     print(os, "                modes.pop_back();");
                     break;
-                case Grammar::Regex::ModeChange::Init:
+                case yg::Grammar::Regex::ModeChange::Init:
                     print(os, "                assert(modes.size() > 0);");
                     print(os, "                modes.clear();");
                     print(os, "                modes.push_back(1);");
@@ -1558,7 +1558,7 @@ struct Generator {
 };
 }
 
-void generateGrammar(const Grammar& g, const std::filesystem::path& of) {
+void generateGrammar(const yg::Grammar& g, const std::filesystem::path& of) {
     Generator gen(g);
     gen.generate(of);
 }

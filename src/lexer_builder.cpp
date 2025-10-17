@@ -4,34 +4,35 @@
 
 namespace {
 struct LexerStateMachineBuilder {
-    Grammar& grammar;
+    yg::Grammar& grammar;
     std::string indent = "-";
-    const Grammar::Atom* _atom = nullptr;
+    const yg::Grammar::Atom* _atom = nullptr;
 
-    Grammar::State* currentState = nullptr;
-    Grammar::State* closureState = nullptr;
-    Grammar::Transition* startClosureTransition = nullptr;
+    yg::Grammar::State* currentState = nullptr;
+    yg::Grammar::State* closureState = nullptr;
+    yg::Grammar::Transition* startClosureTransition = nullptr;
     bool inCapture = true;
 
-    inline LexerStateMachineBuilder(Grammar& g, Grammar::State* s) : grammar(g), currentState(s) {}
+    inline LexerStateMachineBuilder(yg::Grammar& g, yg::Grammar::State* s)
+        : grammar(g), currentState(s) {}
 
-    inline Grammar::State* getCurrentState() const {
+    inline yg::Grammar::State* getCurrentState() const {
         assert(currentState != nullptr);
         return currentState;
     }
 
-    inline void setCurrentState(Grammar::State* state) {
+    inline void setCurrentState(yg::Grammar::State* state) {
         currentState = state;
     }
 
-    inline void setStartClosureTransition(Grammar::Transition* t) {
+    inline void setStartClosureTransition(yg::Grammar::Transition* t) {
         assert(t != nullptr);
         if(startClosureTransition == nullptr) {
             startClosureTransition = t;
         }
     }
 
-    inline const Grammar::Atom& atom() const {
+    inline const yg::Grammar::Atom& atom() const {
         assert(_atom);
         return *_atom;
     }
@@ -60,8 +61,8 @@ struct LexerStateMachineBuilder {
     };
 
     template<typename AtomT>
-    inline Grammar::State* updateStateX(const Grammar::Primitive& pa, const AtomT& a, Grammar::State* state, Grammar::State* nextState) {
-        Grammar::Transition* t = state->getTransition(a);
+    inline yg::Grammar::State* updateStateX(const yg::Grammar::Primitive& pa, const AtomT& a, yg::Grammar::State* state, yg::Grammar::State* nextState) {
+        yg::Grammar::Transition* t = state->getTransition(a);
         if((t != nullptr) && (t->next != nullptr)) {
             setStartClosureTransition(t);
             return t->next;
@@ -87,7 +88,7 @@ struct LexerStateMachineBuilder {
     }
 
     template<typename AtomT>
-    inline void updateState(const Grammar::Primitive& pa, const AtomT& a) {
+    inline void updateState(const yg::Grammar::Primitive& pa, const AtomT& a) {
         auto state = updateStateX(pa, a, getCurrentState(), nullptr);
         setCurrentState(state);
 
@@ -97,7 +98,7 @@ struct LexerStateMachineBuilder {
         }
     }
 
-    inline void operator()(const Grammar::Primitive& a) {
+    inline void operator()(const yg::Grammar::Primitive& a) {
         Tracer _t(*this, std::format("Primitive:{}", a.str()));
 
         std::visit([this, &a](const auto& ax){
@@ -105,10 +106,10 @@ struct LexerStateMachineBuilder {
         }, a.atom);
     }
 
-    inline void operator()(const Grammar::Class& a) {
+    inline void operator()(const yg::Grammar::Class& a) {
         Tracer _t(*this, std::format("Class:{}", a.str()));
 
-        Grammar::Transition* t = getCurrentState()->getTransition(a);
+        yg::Grammar::Transition* t = getCurrentState()->getTransition(a);
         if(t != nullptr) {
             setStartClosureTransition(t);
             setCurrentState(t->next);
@@ -121,14 +122,14 @@ struct LexerStateMachineBuilder {
         setCurrentState(xstate);
     }
 
-    inline void operator()(const Grammar::Sequence& a) {
+    inline void operator()(const yg::Grammar::Sequence& a) {
         Tracer _t(*this, std::format("Sequence:{}", a.str()));
 
         process(*(a.lhs));
         process(*(a.rhs));
     }
 
-    inline void operator()(const Grammar::Disjunct& a) {
+    inline void operator()(const yg::Grammar::Disjunct& a) {
         Tracer _t(*this, std::format("Disjunct:{}", a.str()));
 
         auto s0 = getCurrentState();
@@ -142,7 +143,7 @@ struct LexerStateMachineBuilder {
         setCurrentState(s1);
     }
 
-    inline void operator()(const Grammar::Group& a) {
+    inline void operator()(const yg::Grammar::Group& a) {
         Tracer _t(*this, std::format("Group:{}", a.str()));
 
         if(a.capture == false) {
@@ -152,7 +153,7 @@ struct LexerStateMachineBuilder {
         inCapture = true;
     }
 
-    inline void operator()(const Grammar::Closure& a) {
+    inline void operator()(const yg::Grammar::Closure& a) {
         Tracer _t(*this, std::format("Closure:{}", a.str()));
 
         startClosureTransition = nullptr;
@@ -200,14 +201,14 @@ struct LexerStateMachineBuilder {
             s1->enterClosureTransition = enterClosureTransition;
             s1->leaveClosureTransition = leaveClosureTransition;
             s1->checkClosureTransition = checkClosureTransition;
-            if(checkClosureTransition->get<Grammar::WildCard>() != nullptr) {
+            if(checkClosureTransition->get<yg::Grammar::WildCard>() != nullptr) {
                 s3->startClosureTransition = startClosureTransition;
             }
             setCurrentState(sx);
         }
     }
 
-    void process(const Grammar::Atom& a) {
+    void process(const yg::Grammar::Atom& a) {
         auto xindent = indent;
         indent = indent + "-";
         auto xatom = _atom;
@@ -219,12 +220,12 @@ struct LexerStateMachineBuilder {
 };
 
 struct Optimizer {
-    Grammar& grammar;
-    std::unordered_set<const Grammar::State*> vset;
+    yg::Grammar& grammar;
+    std::unordered_set<const yg::Grammar::State*> vset;
 
-    inline Optimizer(Grammar& g) : grammar(g) {}
+    inline Optimizer(yg::Grammar& g) : grammar(g) {}
 
-    inline bool isVisited(const Grammar::State* state) {
+    inline bool isVisited(const yg::Grammar::State* state) {
         if(vset.contains(state) == true) {
             return true;
         }
@@ -232,7 +233,7 @@ struct Optimizer {
         return false;
     }
 
-    inline bool contains(std::vector<Grammar::Transition*>& dst, const Grammar::Transition* tx) {
+    inline bool contains(std::vector<yg::Grammar::Transition*>& dst, const yg::Grammar::Transition* tx) {
         for (auto& ptx : dst) {
             if(ptx->compare(*tx) == 0) {
                 return true;
@@ -241,7 +242,7 @@ struct Optimizer {
         return false;
     }
 
-    inline bool contains(Grammar::State* state, Grammar::Transition* stx) {
+    inline bool contains(yg::Grammar::State* state, yg::Grammar::Transition* stx) {
         if(contains(state->transitions, stx) || contains(state->superTransitions, stx) || contains(state->shadowTransitions, stx)) {
             return true;
         }
@@ -250,8 +251,8 @@ struct Optimizer {
 
     //TODO: find smallest superset
     // right now this function returns the first valid superset
-    inline const Grammar::Transition*
-    _findSmallestSuperset(const Grammar::Transition* subTx, const Grammar::State* superState, const bool& isClosure) const {
+    inline const yg::Grammar::Transition*
+    _findSmallestSuperset(const yg::Grammar::Transition* subTx, const yg::Grammar::State* superState, const bool& isClosure) const {
         for(auto& superTx : superState->transitions) {
             if(isClosure == true) {
                 if(superTx->next->closure == nullptr) {
@@ -274,35 +275,35 @@ struct Optimizer {
         return nullptr;
     }
 
-    inline const Grammar::Transition*
-    findSmallestSuperset(const Grammar::Transition* subTx, const Grammar::State* superState) const {
+    inline const yg::Grammar::Transition*
+    findSmallestSuperset(const yg::Grammar::Transition* subTx, const yg::Grammar::State* superState) const {
         return _findSmallestSuperset(subTx, superState, false);
     }
 
-    inline const Grammar::Transition*
-    findSmallestClosureSuperset(const Grammar::Transition* subTx, const Grammar::State* superState) const {
+    inline const yg::Grammar::Transition*
+    findSmallestClosureSuperset(const yg::Grammar::Transition* subTx, const yg::Grammar::State* superState) const {
         return _findSmallestSuperset(subTx, superState, true);
     }
 
-    inline Grammar::Transition*
-    cloneTransition(const Grammar::Transition& srcTx, Grammar::State* from, Grammar::State* next) {
+    inline yg::Grammar::Transition*
+    cloneTransition(const yg::Grammar::Transition& srcTx, yg::Grammar::State* from, yg::Grammar::State* next) {
         auto ntx = grammar.cloneTransition(srcTx, from, next);
         from->superTransitions.push_back(ntx);
         return ntx;
     }
 
-    inline Grammar::Transition*
+    inline yg::Grammar::Transition*
     createEnterTransition(
-        const Grammar::Transition& checkClosureTx,
-        const Grammar::Transition& enterClosureTx,
-        Grammar::State* from,
-        Grammar::State* next,
+        const yg::Grammar::Transition& checkClosureTx,
+        const yg::Grammar::Transition& enterClosureTx,
+        yg::Grammar::State* from,
+        yg::Grammar::State* next,
         const size_t& initialCount
     ) {
         auto istate = grammar.createNewState(from->pos);
         cloneTransition(checkClosureTx, from, istate);
         auto ntx = cloneTransition(enterClosureTx, istate, next);
-        if(auto nctx = ntx->isClosure(Grammar::ClosureTransition::Type::Enter)) {
+        if(auto nctx = ntx->isClosure(yg::Grammar::ClosureTransition::Type::Enter)) {
             nctx->initialCount = initialCount;
         }else{
             assert(false);
@@ -311,8 +312,8 @@ struct Optimizer {
     }
 
     inline void setSuperStateClosure(
-        const Grammar::Transition* superTx,
-        Grammar::State* state,
+        const yg::Grammar::Transition* superTx,
+        yg::Grammar::State* state,
         const size_t& initialCount,
         const std::string& indent
     ) {
@@ -344,15 +345,15 @@ struct Optimizer {
         }
 
         if((nextClosure.min >= initialCount) && (initialCount <= nextClosure.max)){
-            if(state->getClosureTransition(Grammar::ClosureTransition::Type::Leave) == nullptr) {
+            if(state->getClosureTransition(yg::Grammar::ClosureTransition::Type::Leave) == nullptr) {
                 cloneTransition(leaveClosureTx, state, leaveClosureTx.next);
             }
         }
     }
 
     inline void setSuperState(
-        Grammar::State* subState,
-        Grammar::State* superState,
+        yg::Grammar::State* subState,
+        yg::Grammar::State* superState,
         const size_t& initialCount,
         const std::string& indent
     ) {
@@ -388,7 +389,7 @@ struct Optimizer {
         }
     }
 
-    inline void setSuperStates(Grammar::State* state, const std::string& indent) {
+    inline void setSuperStates(yg::Grammar::State* state, const std::string& indent) {
         setSuperState(state, state, 1, indent);
 
         for(auto& subTx : state->transitions) {
@@ -400,7 +401,7 @@ struct Optimizer {
         }
     }
 
-    inline void setShadowState(Grammar::State* state, const std::string& indent) {
+    inline void setShadowState(yg::Grammar::State* state, const std::string& indent) {
         if(isVisited(state) == true) {
             return;
         }
@@ -420,7 +421,7 @@ struct Optimizer {
 };
 }
 
-void buildLexer(Grammar& g) {
+void buildLexer(yg::Grammar& g) {
     for(auto& regex : g.regexes) {
         if(!regex->atom) {
             continue;

@@ -1,3 +1,7 @@
+if(UNIX)
+add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-ferror-limit=0>)
+endif()
+
 # the following custom commands invokes stringify.cmake
 # It reads a source .cpp file and generates
 # another cpp file, comtaining the source file as a raw string array

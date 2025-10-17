@@ -1,5 +1,5 @@
 /// @file grammar.cpp
-/// This file contains implementation of certain functions in the Grammar class
+/// This file contains implementation of certain functions in the yg::Grammar class
 /// specifically, the Atom compare() functions
 
 #include "pch.hpp"
@@ -22,7 +22,7 @@ inline auto _visitTransition(VT& v, const LT& lhs, const RT& rhs) {
 }
 
 template<typename VT, typename LT>
-inline auto _visitTransition(VT& v, const LT& lhs, const Grammar::ClassTransition& rhs) requires (HasVisitMode<VT>) {
+inline auto _visitTransition(VT& v, const LT& lhs, const yg::Grammar::ClassTransition& rhs) requires (HasVisitMode<VT>) {
     v.classDone = false;
     for(auto& ax : rhs.atom.atoms) {
         std::visit([&v, &lhs](const auto& a){
@@ -39,7 +39,7 @@ inline auto _visitTransition(VT& v, const LT& lhs, const Grammar::ClassTransitio
 }
 
 template<typename VT, typename RT>
-inline auto _visitTransition(VT& v, const Grammar::ClassTransition& lhs, const RT& rhs) requires (HasVisitMode<VT>) {
+inline auto _visitTransition(VT& v, const yg::Grammar::ClassTransition& lhs, const RT& rhs) requires (HasVisitMode<VT>) {
     v.classDone = false;
     for(auto& ax : lhs.atom.atoms) {
         std::visit([&v, &rhs](const auto& a){
@@ -57,8 +57,8 @@ inline auto _visitTransition(VT& v, const Grammar::ClassTransition& lhs, const R
 
 template<typename VT>
 [[maybe_unused]]
-inline auto _visitTransition(VT& v, const Grammar::ClassTransition& lhs, const Grammar::ClassTransition& rhs)
-requires (HasVisitMode<VT> && !HasMethod<VT, Grammar::ClassTransition, Grammar::ClassTransition>) {
+inline auto _visitTransition(VT& v, const yg::Grammar::ClassTransition& lhs, const yg::Grammar::ClassTransition& rhs)
+requires (HasVisitMode<VT> && !HasMethod<VT, yg::Grammar::ClassTransition, yg::Grammar::ClassTransition>) {
     v.classDone = false;
     for(auto& lax : lhs.atom.atoms) {
         std::visit([&v, &rhs](const auto& la){
@@ -82,27 +82,27 @@ requires (HasVisitMode<VT> && !HasMethod<VT, Grammar::ClassTransition, Grammar::
 }
 
 template<typename VT>
-inline auto _visitTransition(VT& v, const Grammar::ClassTransition& lhs, const Grammar::ClassTransition& rhs)
-requires (HasVisitMode<VT> && HasMethod<VT, Grammar::ClassTransition, Grammar::ClassTransition>) {
+inline auto _visitTransition(VT& v, const yg::Grammar::ClassTransition& lhs, const yg::Grammar::ClassTransition& rhs)
+requires (HasVisitMode<VT> && HasMethod<VT, yg::Grammar::ClassTransition, yg::Grammar::ClassTransition>) {
     return v(lhs, rhs);
 }
 
 template<typename VT, typename RT>
-inline auto _visitTransition(VT& v, const Grammar::PrimitiveTransition& lhs, const RT& rhs) requires (HasVisitMode<VT>) {
+inline auto _visitTransition(VT& v, const yg::Grammar::PrimitiveTransition& lhs, const RT& rhs) requires (HasVisitMode<VT>) {
     return std::visit([&v, &rhs](const auto& a){
         return v(a, rhs);
     }, lhs.atom.atom);
 }
 
 template<typename VT, typename LT>
-inline auto _visitTransition(VT& v, const LT& lhs, const Grammar::PrimitiveTransition& rhs) requires (HasVisitMode<VT>) {
+inline auto _visitTransition(VT& v, const LT& lhs, const yg::Grammar::PrimitiveTransition& rhs) requires (HasVisitMode<VT>) {
     return std::visit([&v, &lhs](const auto& a){
         return v(lhs, a);
     }, rhs.atom.atom);
 }
 
 template<typename VT>
-inline auto _visitTransition(VT& v, const Grammar::PrimitiveTransition& lhs, const Grammar::PrimitiveTransition& rhs) requires (HasVisitMode<VT>) {
+inline auto _visitTransition(VT& v, const yg::Grammar::PrimitiveTransition& lhs, const yg::Grammar::PrimitiveTransition& rhs) requires (HasVisitMode<VT>) {
     return std::visit([&rhs, &v](const auto& l){
         return std::visit([&l, &v](const auto& r){
             return v(l, r);
@@ -115,7 +115,7 @@ inline auto _visitTransition(VT& v, const Grammar::PrimitiveTransition& lhs, con
 }
 
 template<typename VT>
-inline auto _visitTransition(VT& v, const Grammar::PrimitiveTransition& lhs, const Grammar::ClassTransition& rhs) requires (HasVisitMode<VT>) {
+inline auto _visitTransition(VT& v, const yg::Grammar::PrimitiveTransition& lhs, const yg::Grammar::ClassTransition& rhs) requires (HasVisitMode<VT>) {
     return std::visit([&v, &rhs](const auto& la){
         for(auto& rax : rhs.atom.atoms) {
             std::visit([&v, &la](const auto& ra){
@@ -132,7 +132,7 @@ inline auto _visitTransition(VT& v, const Grammar::PrimitiveTransition& lhs, con
 }
 
 template<typename VT>
-inline auto _visitTransition(VT& v, const Grammar::ClassTransition& lhs, const Grammar::PrimitiveTransition& rhs) requires (HasVisitMode<VT>) {
+inline auto _visitTransition(VT& v, const yg::Grammar::ClassTransition& lhs, const yg::Grammar::PrimitiveTransition& rhs) requires (HasVisitMode<VT>) {
     v.classDone = false;
     for(auto& ax : lhs.atom.atoms) {
         std::visit([&v, &rhs](const auto& la){
@@ -151,7 +151,7 @@ inline auto _visitTransition(VT& v, const Grammar::ClassTransition& lhs, const G
 }
 
 template<typename VT>
-inline auto visitTransition(VT& v, const Grammar::Transition& lhs, const Grammar::Transition& rhs) {
+inline auto visitTransition(VT& v, const yg::Grammar::Transition& lhs, const yg::Grammar::Transition& rhs) {
     return std::visit([&rhs, &v](const auto& l){
         return std::visit([&l, &v](const auto& r){
             return _visitTransition(v, l, r);
@@ -171,7 +171,7 @@ struct SubsetChecker {
         return true;
     }
 
-    inline bool operator()(const Grammar::RangeClass& lhs, const Grammar::RangeClass& rhs) {
+    inline bool operator()(const yg::Grammar::RangeClass& lhs, const yg::Grammar::RangeClass& rhs) {
         // first check for |+++++++|
         if((lhs.ch1 == rhs.ch1) && (lhs.ch2 == rhs.ch2)) {
             return false;
@@ -188,7 +188,7 @@ struct SubsetChecker {
         return false;
     }
 
-    inline bool operator()(const Grammar::RangeClass& lhs, const Grammar::LargeEscClass& rhs) {
+    inline bool operator()(const yg::Grammar::RangeClass& lhs, const yg::Grammar::LargeEscClass& rhs) {
         if(rhs.checker == "isLetter") {
             if(rhs.grammar.unicodeEnabled) {
                 if(Encodings::isUnicodeLetterSubset(lhs.ch1, lhs.ch2)) {
@@ -215,41 +215,41 @@ struct CompareChecker {
     bool classDone = false;
     int32_t classRet = -2;
 
-    inline int32_t operator()(const Grammar::WildCard&, const Grammar::WildCard&) {
+    inline int32_t operator()(const yg::Grammar::WildCard&, const yg::Grammar::WildCard&) {
         return 0;
     }
 
-    inline int32_t operator()(const Grammar::RangeClass& lhs, const Grammar::RangeClass& rhs) {
-        return Grammar::compare(lhs, rhs);
+    inline int32_t operator()(const yg::Grammar::RangeClass& lhs, const yg::Grammar::RangeClass& rhs) {
+        return yg::Grammar::compare(lhs, rhs);
     }
 
-    inline int32_t operator()(const Grammar::LargeEscClass& lhs, const Grammar::LargeEscClass& rhs) {
+    inline int32_t operator()(const yg::Grammar::LargeEscClass& lhs, const yg::Grammar::LargeEscClass& rhs) {
         if(lhs.checker == rhs.checker) {
             return 0;
         }
         return -2;
     }
 
-    inline int32_t operator()(const Grammar::ClassTransition& lhs, const Grammar::ClassTransition& rhs) {
-        return Grammar::compare(lhs.atom, rhs.atom);
+    inline int32_t operator()(const yg::Grammar::ClassTransition& lhs, const yg::Grammar::ClassTransition& rhs) {
+        return yg::Grammar::compare(lhs.atom, rhs.atom);
     }
 
-    inline int32_t operator()(const Grammar::ClosureTransition& lhs, const Grammar::ClosureTransition& rhs) {
+    inline int32_t operator()(const yg::Grammar::ClosureTransition& lhs, const yg::Grammar::ClosureTransition& rhs) {
         if(lhs.type == rhs.type) {
             switch(lhs.type) {
-            case Grammar::ClosureTransition::Type::Enter:
-            case Grammar::ClosureTransition::Type::Leave:
+            case yg::Grammar::ClosureTransition::Type::Enter:
+            case yg::Grammar::ClosureTransition::Type::Leave:
                 return 0;
-            case Grammar::ClosureTransition::Type::PreLoop:
-            case Grammar::ClosureTransition::Type::InLoop:
-            case Grammar::ClosureTransition::Type::PostLoop:
+            case yg::Grammar::ClosureTransition::Type::PreLoop:
+            case yg::Grammar::ClosureTransition::Type::InLoop:
+            case yg::Grammar::ClosureTransition::Type::PostLoop:
                 break;
             }
         }
         return -2;
     }
 
-    inline int32_t operator()(const Grammar::SlideTransition&, const Grammar::SlideTransition&) {
+    inline int32_t operator()(const yg::Grammar::SlideTransition&, const yg::Grammar::SlideTransition&) {
         return 0;
     }
 
@@ -260,12 +260,12 @@ struct CompareChecker {
 };
 }
 
-bool Grammar::Transition::isSubsetOf(const Transition& rhs) const {
+bool yg::Grammar::Transition::isSubsetOf(const Transition& rhs) const {
     SubsetChecker chk;
     return visitTransition(chk, *this, rhs);
 }
 
-int32_t Grammar::Transition::compare(const Transition& rhs) const {
+int32_t yg::Grammar::Transition::compare(const Transition& rhs) const {
     CompareChecker chk;
     return visitTransition(chk, *this, rhs);
 }

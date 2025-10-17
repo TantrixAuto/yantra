@@ -1,7 +1,7 @@
 #include "pch.hpp"
 #include "grammar_printer.hpp"
 
-void printGrammar(const Grammar& grammar, const std::filesystem::path& ofilename) {
+void printGrammar(const yg::Grammar& grammar, const std::filesystem::path& ofilename) {
     if(ofilename.empty() == true) {
         return;
     }

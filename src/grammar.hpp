@@ -11,6 +11,12 @@
 #include "error.hpp"
 #include "codeblock.hpp"
 
+/// @brief yg is short for Yantra Grammar
+/// The classes in this namespace are the core of Yantra
+/// The .y file is parsed into these classes, and
+/// the output files are generated from these classes.
+namespace yg {
+
 /// @brief This class contains the grammar's AST
 struct Grammar {
     struct Atom;
@@ -1911,3 +1917,5 @@ struct Grammar {
         }
     }
 };
+
+} // namespace yg

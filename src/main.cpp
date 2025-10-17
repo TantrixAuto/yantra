@@ -18,8 +18,8 @@ extern bool genLines;
 bool genLines = true;
 
 namespace {
-using LexerTable = Table<const Grammar::State*, std::string, std::string>;
-inline void generateLexerTable(std::ostream& os, const Grammar& g) {
+using LexerTable = Table<const yg::Grammar::State*, std::string, std::string>;
+inline void generateLexerTable(std::ostream& os, const yg::Grammar& g) {
     LexerTable pt;
     for(auto& t : g.transitions) {
         pt.addHeader(std::format("{}", t->str()));
@@ -35,8 +35,8 @@ inline void generateLexerTable(std::ostream& os, const Grammar& g) {
     print(os, "{}", s);
 }
 
-using ParserTable = Table<const Grammar::ItemSet*, std::string, std::string>;
-inline void generateParserTable(std::ostream& os, const Grammar& g) {
+using ParserTable = Table<const yg::Grammar::ItemSet*, std::string, std::string>;
+inline void generateParserTable(std::ostream& os, const yg::Grammar& g) {
     ParserTable pt;
     for(auto& rx : g.regexSets) {
         if(rx->usageCount() == 0) {
@@ -66,8 +66,8 @@ inline void generateParserTable(std::ostream& os, const Grammar& g) {
 
 inline void generateRuleSetAST(
     std::ostream& os,
-    const Grammar& g,
-    const Grammar::RuleSet& rs,
+    const yg::Grammar& g,
+    const yg::Grammar::RuleSet& rs,
     const std::string& indent,
     std::unordered_set<std::string>& seen,
     const std::string& path,
@@ -106,7 +106,7 @@ inline void generateRuleSetAST(
     }
 }
 
-inline void generateAbSynTree(std::ostream& os, const Grammar& g) {
+inline void generateAbSynTree(std::ostream& os, const yg::Grammar& g) {
     std::unordered_set<std::string> seen;
     auto& rs = g.getRuleSetByName(g.pos(), g.start);
     print(os, "AST_TREE");
@@ -122,7 +122,7 @@ inline void processInputEx(
 ) {
     Stream stream(is, filename);
 
-    Grammar g;
+    yg::Grammar g;
 
     if(charset == "utf8") {
         g.unicodeEnabled = true;
