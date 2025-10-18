@@ -265,8 +265,7 @@ struct Generator {
         xvars["MSG"] = msg;
         StringStreamWriter sw;
         _expand(sw, throwError.code, indent, true, xvars);
-        // tw.writeln("{}", s);
-        tw.swrite(sw);
+        tw.swriteln(sw);
     }
 
     /// @brief Checks if the \ref yg::Grammar::RuleSet contains a empty prooduction
