@@ -179,8 +179,8 @@ inline int help(const std::string& xname, const std::string& msg) {
     std::println("    -c <utf8|ascii> : select character set. utf8 implies unicode (default)");
     std::println("    -f <filename>   : read grammar from file <filename>");
     std::println("    -s <string>     : read grammar from <string> passed on commandline");
-    std::println("    -o <odir>       : output directory");
-    std::println("    -n <oname>      : output basename (oname.cpp and oname.hpp will be generated in odir)");
+    std::println("    -d <dir>        : output directory");
+    std::println("    -n <oname>      : output basename (oname.cpp and oname.hpp will be generated in dir)");
     std::println("    -a              : generate amalgamated file, including main(), which can be compiled into an executable");
     std::println("    -v              : verbose console messages");
     std::println("    -r              : don't generate #line messages");
@@ -244,7 +244,7 @@ int main(int argc, const char* argv[]) {
                 return help(argv[0], "invalid charset flag");
             }
             charset = argv[i];
-        }else if(a == "-o") {
+        }else if(a == "-d") {
             ++i;
             if(i >= argc) {
                 return help(argv[0], "invalid output dir");
