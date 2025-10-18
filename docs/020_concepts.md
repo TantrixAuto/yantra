@@ -83,8 +83,9 @@ Sometimes, operators should have the same precedence, e.g: PLUS and MINUS have t
 
 This is expressed as follows:
 ```
+%left PLUS MINUS;
 PLUS := "\+";
-MINUS := "-" [PLUS];
+MINUS := "-";
 ```
 This line indicates that the MINUS token has the same precedence as the PLUS token.
 
