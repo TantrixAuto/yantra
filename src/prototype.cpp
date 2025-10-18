@@ -137,6 +137,8 @@ throw TAG(CLASSQID)::Error(TAG(ROW), TAG(COL), TAG(SRC), TAG(MSG));
 #pragma clang diagnostic ignored "-Wunused-member-function"
 #pragma clang diagnostic ignored "-Wunused-function"
 #pragma clang diagnostic ignored "-Wtautological-unsigned-zero-compare"
+#elif defined(__GNUG__)
+#pragma GCC diagnostic ignored "-Wsubobject-linkage"
 #endif
 
 ///PROTOTYPE_INCLUDE:print
