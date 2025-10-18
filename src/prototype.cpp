@@ -22,6 +22,11 @@
 
 ///PROTOTYPE_ENTER:SKIP
 #include <stdint.h>
+#include <iostream>
+#include <format>
+#include "filepos.hpp"
+#include "nsutil.hpp"
+#include "print.hpp"
 #define TAG(X) X
 
 #define CLSNAME CLASSQID
@@ -134,33 +139,12 @@ throw TAG(CLASSQID)::Error(TAG(ROW), TAG(COL), TAG(SRC), TAG(MSG));
 #pragma clang diagnostic ignored "-Wtautological-unsigned-zero-compare"
 #endif
 
-#if __cplusplus < 202302L
-namespace std {
-template <typename ...ArgsT>
-[[maybe_unused]]
-static inline void print(std::ostream& os, const std::format_string<ArgsT...>& msg, ArgsT... args) {
-    auto rv = std::format(msg, std::forward<ArgsT>(args)...);
-    os << rv;
-    std::cout.flush();
-}
-
-template <typename ...ArgsT>
-[[maybe_unused]]
-static inline void print(const std::format_string<ArgsT...>& msg, ArgsT... args) {
-    return print(std::cout, msg, args...);
-}
-} // namespace std
-#endif
+///PROTOTYPE_INCLUDE:print
 
 namespace {
-    struct NonCopyable{
-        inline NonCopyable() = default;
-
-        inline NonCopyable(const NonCopyable&) = delete;
-        inline NonCopyable(NonCopyable&&) = delete;
-        inline NonCopyable& operator=(const NonCopyable&) = delete;
-        inline NonCopyable& operator=(NonCopyable&&) = delete;
-    };
+    ///PROTOTYPE_INCLUDE:nsutil
+    ///PROTOTYPE_INCLUDE:filepos
+    ///PROTOTYPE_INCLUDE:textWriter
 
     static std::ostream* _log = nullptr;
 
@@ -170,103 +154,6 @@ namespace {
     }
 
     struct TAG(AST);
-
-    template<typename T>
-    concept HasStr = requires(T x, std::ostream& os, const std::string& path, const bool& full) {
-        x.str(os, path, full);
-    };
-
-    template<typename... T>
-    [[maybe_unused]]
-    inline void unused(const T&...) {}
-
-    template<class... Ts> struct overload : Ts... { using Ts::operator()...; };
-
-    struct FilePos {
-        std::string file;
-        size_t row = 0;
-        size_t col = 0;
-        inline std::string str() const {
-            return std::format("{}({:03d},{:03d})", file, row, col);
-        }
-    };
-
-    struct TextFileWriter {
-        std::filesystem::path idir;
-        std::filesystem::path ifile;
-        std::ofstream ofs;
-        std::string indent;
-
-        inline std::string
-        buildOutputPath(
-            std::filesystem::path inf,
-            const std::filesystem::path& odir,
-            const std::string& ext
-        ) {
-            inf = std::filesystem::absolute(inf);
-            inf = inf.lexically_normal();
-            idir = inf.parent_path();
-            inf = odir / inf.filename();
-            inf.replace_extension(ext);
-            return inf.string();
-        }
-
-        inline bool is_open() const {
-            return ofs.is_open();
-        }
-
-        inline void
-        open(const std::filesystem::path& odir, const std::string_view& filename, const std::string& ext) {
-            std::print("opening:{}\n", filename);
-            if(filename.size() == 0) {
-                return;
-            }
-            auto ofilename = buildOutputPath(filename, odir, ext);
-            ofs.open(ofilename);
-            if(ofs.is_open() == false) {
-                throw std::runtime_error("unable to open output file:" + ofilename);
-            }
-        }
-
-        template <typename ...ArgsT>
-        [[maybe_unused]]
-        inline void
-        write(const std::format_string<ArgsT...>& msg, ArgsT... args) {
-            if(ofs.is_open() == false) {
-                return;
-            }
-            auto rv = std::format(msg, std::forward<ArgsT>(args)...);
-            ofs << indent << rv;
-            ofs.flush();
-        }
-
-        template <typename ...ArgsT>
-        [[maybe_unused]]
-        inline void
-        writeln(const std::format_string<ArgsT...>& msg, ArgsT... args) {
-            if(ofs.is_open() == false) {
-                return;
-            }
-            auto rv = std::format(msg, std::forward<ArgsT>(args)...);
-            ofs << indent << rv << "\n";
-            ofs.flush();
-        }
-    };
-
-    struct Indenter {
-        TextFileWriter& writer;
-        std::string indent;
-        inline Indenter(TextFileWriter& w) : writer(w) {
-            indent = writer.indent;
-            writer.indent += "    ";
-        }
-        inline ~Indenter() {
-            writer.indent = indent;
-        }
-        inline operator bool() const {
-            return true;
-        }
-    };
 
     struct TAG(AST) : public NonCopyable {
         using Error = TAG(CLASSQID)::Error;
@@ -591,18 +478,7 @@ struct Parser {
     template<typename NodeT>
     inline NodeT& create(const ValueItem& vi);
 
-    template<>
-    inline TAG(AST)::TAG(TOKEN)& create<TAG(AST)::TAG(TOKEN)>(const ValueItem& vi) {
-        auto& cel = ast.createToken(vi.token.pos, vi.token.text);
-        return cel;
-    }
-
     ///PROTOTYPE_ENTER:SKIP
-    template<>
-    inline TAG(AST)::TAG(START_RULE)& create<TAG(AST)::TAG(START_RULE)>(const ValueItem&) {
-        // control flow won't usually reach here
-        throw std::runtime_error("Don't do this please");
-    }
     struct START_RULE{
         inline START_RULE& go() {
             return *this;
@@ -610,40 +486,60 @@ struct Parser {
     };
     ///PROTOTYPE_LEAVE:SKIP
 
-    ///PROTOTYPE_SEGMENT:createASTNodes
-
-    inline void begin() {
-        values.clear();
-        valueStack.clear();
-        stateStack.clear();
-        stateStack.push_back(1);
-    }
-
-    inline bool parse(const Tolkien& k0) {
-        bool accepted = false;
-        Tolkien k = k0;
-        while (!accepted) {
-            printParserState(k);
-            assert(stateStack.size() > 0);
-            switch (stateStack.back()) {
-                ///PROTOTYPE_SEGMENT:parserTransitions
-            }
-        } // while(!accepted)
-        return accepted;
-    } // parse()
-
-    inline void leave() {
-        std::print(log(), "parse done\n");
-        printParserState();
-        if(valueStack.size() != 1) {
-            // control flow won't usually reach here
-            throw std::runtime_error("parse error");
-        }
-        auto& vi = *(valueStack.at(0));
-        auto& R_start = create<TAG(AST)::TAG(START_RULE)>(vi);
-        ast.R_start = &R_start;
-    }
+    inline void begin();
+    inline bool parse(const Tolkien& k0);
+    inline void leave();
 }; // Parser
+
+template<>
+inline TAG(AST)::TAG(TOKEN)& Parser::create<TAG(AST)::TAG(TOKEN)>(const ValueItem& vi) {
+    auto& cel = ast.createToken(vi.token.pos, vi.token.text);
+    return cel;
+}
+
+///PROTOTYPE_ENTER:SKIP
+template<>
+inline TAG(AST)::TAG(START_RULE)& Parser::create<TAG(AST)::TAG(START_RULE)>(const ValueItem&) {
+    // control flow won't usually reach here
+    throw std::runtime_error("Don't do this please");
+}
+///PROTOTYPE_LEAVE:SKIP
+
+///PROTOTYPE_SEGMENT:createASTNodesDecls
+
+///PROTOTYPE_SEGMENT:createASTNodesDefns
+
+inline void Parser::begin() {
+    values.clear();
+    valueStack.clear();
+    stateStack.clear();
+    stateStack.push_back(1);
+}
+
+inline bool Parser::parse(const Tolkien& k0) {
+    bool accepted = false;
+    Tolkien k = k0;
+    while (!accepted) {
+        printParserState(k);
+        assert(stateStack.size() > 0);
+        switch (stateStack.back()) {
+            ///PROTOTYPE_SEGMENT:parserTransitions
+        }
+    } // while(!accepted)
+    return accepted;
+} // parse()
+
+inline void Parser::leave() {
+    std::print(log(), "parse done\n");
+    printParserState();
+    if(valueStack.size() != 1) {
+        // control flow won't usually reach here
+        throw std::runtime_error("parse error");
+    }
+    auto& vi = *(valueStack.at(0));
+    auto& R_start = create<TAG(AST)::TAG(START_RULE)>(vi);
+    ast.R_start = &R_start;
+}
 
 struct Lexer {
     Parser& parser;

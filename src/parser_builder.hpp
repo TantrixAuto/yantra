@@ -1,4 +1,4 @@
 #pragma once
-#include "grammar.hpp"
+#include "grammar_yg.hpp"
 
 void buildParser(yg::Grammar& g);

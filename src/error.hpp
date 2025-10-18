@@ -11,6 +11,12 @@ class GeneratorError : public std::runtime_error {
         return p.filename().string();
     }
 
+    template <typename ...ArgsT>
+    static inline std::string
+    fmt(const std::format_string<ArgsT...>& msg, ArgsT... args) {
+        return std::format(msg, std::forward<ArgsT>(args)...);
+    }
+
     static inline std::string
     _fmt(const size_t& l, const std::string& f, const FilePos& p, const std::string& m) {
         auto ymsg = std::format("{}({:03d},{:03d}):{} ({}:{})", p.file, p.row, p.col, m, filename(f), l);

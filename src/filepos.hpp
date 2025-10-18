@@ -1,7 +1,9 @@
 /// @file filepos.hpp
 /// @brief Represent location on file
 
+///PROTOTYPE_ENTER:SKIP
 #pragma once
+///PROTOTYPE_LEAVE:SKIP
 
 /// @brief This class represents a location in a source file
 struct FilePos {

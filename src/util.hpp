@@ -1,37 +1,6 @@
 #pragma once
-
-template<typename... T> inline void unused(const T&...) {}
-
-template<class... Ts>
-struct overloaded : Ts... { using Ts::operator()...; };
-
-template <typename ...ArgsT>
-static inline std::string fmt(const std::format_string<ArgsT...>& msg, ArgsT... args) {
-    return std::format(msg, std::forward<ArgsT>(args)...);
-}
-
-template <typename ...ArgsT>
-static inline void print(const std::format_string<ArgsT...>& msg, ArgsT... args) {
-    auto rv = fmt(msg, args...);
-    std::cout << rv << std::endl;
-    std::cout.flush();
-}
-
-template <typename ...ArgsT>
-static inline void print(std::ostream& os, const std::format_string<ArgsT...>& msg, ArgsT... args) {
-    auto rv = fmt(msg, args...);
-    os << rv << std::endl;
-    os.flush();
-}
-
-struct NonCopyable{
-    inline NonCopyable() = default;
-
-    inline NonCopyable(const NonCopyable&) = delete;
-    inline NonCopyable(NonCopyable&&) = delete;
-    inline NonCopyable& operator=(const NonCopyable&) = delete;
-    inline NonCopyable& operator=(NonCopyable&&) = delete;
-};
+#include "nsutil.hpp"
+#include "print.hpp"
 
 inline std::string getChString(const uint32_t& ch, const bool& md = false) {
     if(ch > 255){

@@ -1,5 +1,5 @@
 #pragma once
-#include "grammar.hpp"
+#include "grammar_yg.hpp"
 
 /// @brief true if output should be amalgamated
 extern bool amalgamatedFile;
