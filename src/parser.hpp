@@ -4,7 +4,7 @@
 using char_t = int;
 
 #include "stream.hpp"
-#include "grammar.hpp"
+#include "grammar_yg.hpp"
 
 /// @brief entry function to parse a .y file
-void parseInput(Grammar& g, Stream& is);
+void parseInput(yg::Grammar& g, Stream& is);

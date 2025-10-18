@@ -4,8 +4,8 @@
 
 namespace {
 struct ParserStateMachineBuilder {
-    Grammar& grammar;
-    inline ParserStateMachineBuilder(Grammar& g) : grammar{g} {}
+    yg::Grammar& grammar;
+    inline ParserStateMachineBuilder(yg::Grammar& g) : grammar{g} {}
 
     inline void printRules(std::ostream& os, const std::string& msg) const {
         print(os, "--------------------------------");
@@ -25,14 +25,14 @@ struct ParserStateMachineBuilder {
 
     [[maybe_unused]]
     inline void
-    printConfigList(const std::string& msg, const std::vector<const Grammar::Config*>& cfgs) {
+    printConfigList(const std::string& msg, const std::vector<const ygp::Config*>& cfgs) {
         print("{}({})", msg, cfgs.size());
         for(auto& cfg : cfgs) {
             print("-cfg:{}", cfg->str());
         }
     }
 
-    inline bool hasRuleInConfigList(const std::vector<const Grammar::Config*>& configs, const Grammar::Rule& r) {
+    inline bool hasRuleInConfigList(const std::vector<const ygp::Config*>& configs, const ygp::Rule& r) {
         for(auto& c : configs) {
             if(&(c->rule) == &r) {
                 return true;
@@ -41,15 +41,15 @@ struct ParserStateMachineBuilder {
         return false;
     }
 
-    inline std::vector<const Grammar::Config*>
-    expandConfig(const std::vector<const Grammar::Config*>& initConfig) {
+    inline std::vector<const ygp::Config*>
+    expandConfig(const std::vector<const ygp::Config*>& initConfig) {
         // create all sub-configs
-        std::vector<const Grammar::Config*> configs;
+        std::vector<const ygp::Config*> configs;
 
         auto nexts = initConfig;
 
         while(nexts.size() > 0) {
-            std::vector<const Grammar::Config*> firsts;
+            std::vector<const ygp::Config*> firsts;
             for(auto& c : nexts) {
                 if(hasRuleInConfigList(configs, c->rule)) {
                     continue;
@@ -78,14 +78,14 @@ struct ParserStateMachineBuilder {
         return configs;
     }
 
-    inline char resolveAssoc(const Grammar::RegexSet& rx) const {
-        if(rx.assoc == Grammar::RegexSet::Assoc::Left) {
+    inline char resolveAssoc(const yglx::RegexSet& rx) const {
+        if(rx.assoc == yglx::RegexSet::Assoc::Left) {
             return 'R';
         }
         return 'S';
     }
 
-    inline char resolveConflict(const Grammar::RegexSet& rx, const Grammar::Config& cfg) const {
+    inline char resolveConflict(const yglx::RegexSet& rx, const ygp::Config& cfg) const {
         auto& r = cfg.rule;
 
         // if we are resolving a conflict against the END token,
@@ -103,43 +103,42 @@ struct ParserStateMachineBuilder {
     }
 
     inline void addReduce(
-        Grammar::ConfigSet& cs,
-        const Grammar::Config& config,
+        ygp::ConfigSet& cs,
+        const ygp::Config& config,
         const size_t& len,
         const std::string& indent
     ) {
-        print(Logger::log(), "{}addReduce:cfg={}, next=null", indent, config.str());
+        log("{}addReduce:cfg={}, next=null", indent, config.str());
         auto& rs = grammar.getRuleSetByName(config.rule.pos, config.rule.ruleSetName());
 
-        print(Logger::log(), "{}addReduce:rs={}", indent, rs.name);
+        log("{}addReduce:rs={}", indent, rs.name);
 
         for(auto& rx : rs.follows) {
             char p = resolveConflict(*rx, config);
             if(cs.hasShift(*rx) != nullptr) {
                 std::stringstream ss;
-                print(Logger::log(), "{}addReduce:{}: REDUCE-SHIFT conflict on:{}{}", indent, config.rule.pos.str(), rx->name, ss.str());
+                log("{}addReduce:{}: REDUCE-SHIFT conflict on:{}{}", indent, config.rule.pos.str(), rx->name, ss.str());
                 if(p == 'R') {
-                    print(Logger::log(), "{}addReduce: rx={}, p={}, R-S conflict, reducing", indent, rx->name, p);
-                    Logger::log().flush();
+                    log("{}addReduce: rx={}, p={}, R-S conflict, reducing", indent, rx->name, p);
                     cs.shifts.erase(rx);
                     assert(cs.hasReduce(*rx) == nullptr);
                     cs.addReduce(*rx, config, len);
 
-                    print(Logger::log(), "{}addReduce: Resolved in favor of REDUCE", indent);
+                    log("{}addReduce: Resolved in favor of REDUCE", indent);
                 }else{
-                    print(Logger::log(), "{}addReduce: rx={}, p={}, R-S conflict, shifting", indent, rx->name, p);
-                    print(Logger::log(), "{}addReduce: Resolved in favor of SHIFT", indent);
+                    log("{}addReduce: rx={}, p={}, R-S conflict, shifting", indent, rx->name, p);
+                    log("{}addReduce: Resolved in favor of SHIFT", indent);
                 }
                 return;
             }
 
             if(p == 'R') {
-                print(Logger::log(), "{}addReduce: rx={}, p={}, reducing, r={}", indent, rx->name, p, config.str());
+                log("{}addReduce: rx={}, p={}, reducing, r={}", indent, rx->name, p, config.str());
                 // if(auto c = cs.hasReduce(*rx); c != nullptr) {
-                //     print(Logger::log(), "{}addReduce: R-R conflict", indent);
+                //     log("{}addReduce: R-R conflict", indent);
                 //     if(c->next != &config) {
-                //         print(Logger::log(), "{}- prev-config={}", indent, c->next->str());
-                //         print(Logger::log(), "{}- next-config={}", indent, config.str());
+                //         log("{}- prev-config={}", indent, c->next->str());
+                //         log("{}- next-config={}", indent, config.str());
                 //         // throw GeneratorError(__LINE__, __FILE__, config.rule->pos, "REDUCE_REDUCE_CONFLICT:ON:{}", rx->name);
                 //         continue;
                 //     }
@@ -153,8 +152,8 @@ struct ParserStateMachineBuilder {
 
             // check if there are any matching configs
             auto& lastNode = *(config.rule.nodes.back());
-            print(Logger::log(), "{}addReduce R-S conflict:lastNode={}, rx={}", indent, lastNode.name, rx->name);
-            std::vector<const Grammar::Config*> ncfgs;
+            log("{}addReduce R-S conflict:lastNode={}, rx={}", indent, lastNode.name, rx->name);
+            std::vector<const ygp::Config*> ncfgs;
             for(auto& r : grammar.rules) {
                 if(r->nodes.size() < 2) {
                     continue;
@@ -175,21 +174,21 @@ struct ParserStateMachineBuilder {
                 if(grammar.autoResolve == false) {
                     throw GeneratorError(__LINE__, __FILE__, config.rule.pos, "REDUCE_SHIFT_CONFLICT:ON:{}{}", rx->name, ss.str());
                 }else if(grammar.warnResolve == true) {
-                    print(Logger::log(), "{}addReduce: {}: REDUCE-SHIFT conflict on:{}{}", indent, config.rule.pos.str(), rx->name, ss.str());
-                    print(Logger::log(), "Resolved in favor of SHIFT");
+                    log("{}addReduce: {}: REDUCE-SHIFT conflict on:{}{}", indent, config.rule.pos.str(), rx->name, ss.str());
+                    log("Resolved in favor of SHIFT");
                 }
-                print(Logger::log(), "{}addReduce: REDUCE-SHIFT:shifting {}", indent, rx->name);
+                log("{}addReduce: REDUCE-SHIFT:shifting {}", indent, rx->name);
                 cs.moveShifts(*rx, ncfgs, {});
                 continue;
             }
 
             // else reduce by default
-            print(Logger::log(), "{}addReduce: REDUCE-SHIFT:reducing {}, rx={}", indent, config.str(), rx->name);
+            log("{}addReduce: REDUCE-SHIFT:reducing {}, rx={}", indent, config.str(), rx->name);
             if(auto r = cs.hasReduce(*rx)) {
                 unused(r);
                 // assert(r->next != nullptr);
                 // auto& ocfg = *(r->next);
-                // print(Logger::log(), "{}addReduce: REDUCE-SHIFT:ocfg={}", indent, ocfg.str());
+                // log("{}addReduce: REDUCE-SHIFT:ocfg={}", indent, ocfg.str());
                 // assert(ocfg == &config);
                 continue;
             }
@@ -199,23 +198,23 @@ struct ParserStateMachineBuilder {
     }
 
     inline void addShift(
-        Grammar::Node& nextNode,
-        Grammar::ConfigSet& cs,
-        const Grammar::Config& config,
+        ygp::Node& nextNode,
+        ygp::ConfigSet& cs,
+        const ygp::Config& config,
         const size_t& cpos,
-        const std::vector<const Grammar::RuleSet*>& epsilons,
+        const std::vector<const ygp::RuleSet*>& epsilons,
         const std::string& indent
     ) {
-        print(Logger::log(), "{}addShift:cfg={}, next=regex", indent, config.str());
+        log("{}addShift:cfg={}, next=regex", indent, config.str());
         if(nextNode.name == grammar.empty) {
-            print(Logger::log(), "{}addShift:skip_empty", indent);
+            log("{}addShift:skip_empty", indent);
             return;
         }
         auto& rx = grammar.getRegexSet(nextNode);
         if(cs.hasReduce(rx) != nullptr) {
             std::stringstream ss;
             char p = resolveConflict(rx, config);
-            print(Logger::log(), "{}addShift: {}: SHIFT-REDUCE conflict on:{}{}, p={}", indent, config.rule.pos.str(), rx.name, ss.str(), p);
+            log("{}addShift: {}: SHIFT-REDUCE conflict on:{}{}, p={}", indent, config.rule.pos.str(), rx.name, ss.str(), p);
             if(p == 'R') {
                 return;
             }
@@ -237,13 +236,13 @@ struct ParserStateMachineBuilder {
     }
 
     inline void addGoto(
-        Grammar::Node& nextNode,
-        Grammar::ConfigSet& cs,
-        const Grammar::Config& config,
+        ygp::Node& nextNode,
+        ygp::ConfigSet& cs,
+        const ygp::Config& config,
         const size_t& cpos,
         const std::string& indent
     ) {
-        print(Logger::log(), "{}addGoto:cfg={}, cpos={}, nextNode={}", indent, config.str(), cpos, nextNode.str());
+        log("{}addGoto:cfg={}, cpos={}, nextNode={}", indent, config.str(), cpos, nextNode.str());
 
         // add GOTO for rule node
         auto& ncfg = grammar.createConfig(config.rule, cpos + 1);
@@ -252,40 +251,40 @@ struct ParserStateMachineBuilder {
         cs.gotos[&rs].push_back(&ncfg);
     }
 
-    inline void getNextConfigSet(Grammar::ItemSet& is, const std::string& indent) {
-        print(Logger::log(), "{}getNextConfigSet:is={}", indent, is.id);
-        Grammar::ConfigSet cs;
+    inline void getNextConfigSet(ygp::ItemSet& is, const std::string& indent) {
+        log("{}getNextConfigSet:is={}", indent, is.id);
+        ygp::ConfigSet cs;
 
         for(auto& c : is.configs) {
             auto& config = *c;
-            const Grammar::Node* epsilonNode = nullptr;
-            std::vector<const Grammar::RuleSet*> epsilons;
+            const ygp::Node* epsilonNode = nullptr;
+            std::vector<const ygp::RuleSet*> epsilons;
             auto cpos = config.cpos;
             do {
-                print(Logger::log(), "{}getNextConfigSet({}):cfg={}, cpos={}", indent, is.id, config.str(), cpos);
+                log("{}getNextConfigSet({}):cfg={}, cpos={}", indent, is.id, config.str(), cpos);
                 assert(cpos <= config.rule.nodes.size());
                 bool first = (epsilonNode == nullptr);
                 epsilonNode = nullptr;
                 auto nextNode = config.rule.getNodeAt(cpos);
                 if(nextNode == nullptr) {
                     auto len = config.rule.nodes.size() - (cpos - config.cpos);
-                    print(Logger::log(), "{}getNextConfigSet({}):is-end:len={}", indent, is.id, len);
+                    log("{}getNextConfigSet({}):is-end:len={}", indent, is.id, len);
                     addReduce(cs, config, len, indent);
                 }else if(nextNode->isRegex()) {
                     if(nextNode->name == grammar.empty) {
-                        print(Logger::log(), "{}getNextConfigSet({}):is-regex-empty:{}", indent, is.id, nextNode->name);
+                        log("{}getNextConfigSet({}):is-regex-empty:{}", indent, is.id, nextNode->name);
                     //     epsilonNode = nextNode;
                     }else if(nextNode->name == grammar.end) {
                         auto len = config.rule.nodes.size() - (cpos - config.cpos);
-                        print(Logger::log(), "{}getNextConfigSet({}):is-regex-end:{}, len={}, cfg={}", indent, is.id, nextNode->name, len, config.str(false));
+                        log("{}getNextConfigSet({}):is-regex-end:{}, len={}, cfg={}", indent, is.id, nextNode->name, len, config.str(false));
                         assert(len > 0);
                         addReduce(cs, config, len, indent);
                     }else{
-                        print(Logger::log(), "{}getNextConfigSet({}):is-regex:{}", indent, is.id, nextNode->name);
+                        log("{}getNextConfigSet({}):is-regex:{}", indent, is.id, nextNode->name);
                         addShift(*nextNode, cs, config, cpos, epsilons, indent);
                     }
                 }else if(nextNode->isRule()) {
-                    print(Logger::log(), "{}getNextConfigSet({}):is-rule:{}", indent, is.id, nextNode->name);
+                    log("{}getNextConfigSet({}):is-rule:{}", indent, is.id, nextNode->name);
                     if(first == true) {
                         addGoto(*nextNode, cs, config, cpos, indent);
                         auto& rs = grammar.getRuleSetByName(nextNode->pos, nextNode->name);
@@ -324,12 +323,12 @@ struct ParserStateMachineBuilder {
     inline void linkItemSets() {
         for(auto& pis : grammar.itemSets) {
             auto& is = *pis;
-            print(Logger::log(), "linkItemSets:is={}", is.id);
+            log("linkItemSets:is={}", is.id);
 
             for(auto& c : is.configSet.gotos) {
                 auto& rs = c.first;
                 auto& cfgs = c.second;
-                print(Logger::log(), "  goto: rs={}, next_sz={}", rs->name, cfgs.size());
+                log("  goto: rs={}, next_sz={}", rs->name, cfgs.size());
                 assert(cfgs.size() > 0);
                 auto& config = *(cfgs.at(0));
                 auto& nextNode = config.rule.getNode(0);
@@ -340,7 +339,7 @@ struct ParserStateMachineBuilder {
             for(auto& c : is.configSet.shifts) {
                 auto& rx = c.first;
                 auto& cfgs = c.second;
-                print(Logger::log(), "  shift: rx={}, next_sz={}", rx->name, cfgs.next.size());
+                log("  shift: rx={}, next_sz={}", rx->name, cfgs.next.size());
                 assert(cfgs.next.size() > 0);
                 auto& config = *(cfgs.next.at(0));
                 auto& nextNode = config.rule.getNode(0);
@@ -353,7 +352,7 @@ struct ParserStateMachineBuilder {
             for(auto& c : is.configSet.reduces) {
                 auto& rx = *(c.first);
                 auto& cfgs = c.second;
-                print(Logger::log(), "  reduce: rx={}, next_sz={}", rx.name, cfgs.next.size());
+                log("  reduce: rx={}, next_sz={}", rx.name, cfgs.next.size());
                 if(cfgs.next.size() != 1) {
                     // throw GeneratorError(__LINE__, __FILE__, config.rule->pos, "REDUCE_SHIFT_CONFLICT:ON:{}{}", rx->name, ss.str());
                 }
@@ -367,15 +366,15 @@ struct ParserStateMachineBuilder {
         }
     }
 
-    inline Grammar::ItemSet& createItemSet(const std::vector<const Grammar::Config*>& initConfig, const std::string& indent) {
+    inline ygp::ItemSet& createItemSet(const std::vector<const ygp::Config*>& initConfig, const std::string& indent) {
         auto configs = expandConfig(initConfig);
         if(auto xis = grammar.hasItemSet(configs)) {
-            print(Logger::log(), "{}Found Existing ItemSet:{}", indent, xis->id);
+            log("{}Found Existing ItemSet:{}", indent, xis->id);
             return *xis;
         }
 
         auto& is = grammar.createItemSet(configs);
-        print(Logger::log(), "{}Created ItemSet:{}", indent, is.id);
+        log("{}Created ItemSet:{}", indent, is.id);
         getNextConfigSet(is, indent);
 
         for(auto& c : is.configSet.shifts) {
@@ -394,12 +393,12 @@ struct ParserStateMachineBuilder {
     }
 
     struct Links {
-        const Grammar& grammar;
+        const yg::Grammar& grammar;
         std::unordered_map<std::string, std::set<std::string>> firsts;
         std::unordered_map<std::string, std::set<std::string>> follows;
         std::set<std::string> nullable;
 
-        inline Links(const Grammar& g) : grammar(g) {}
+        inline Links(const yg::Grammar& g) : grammar(g) {}
 
         static inline std::string str(const std::set<std::string>& set) {
             std::stringstream ss;
@@ -428,7 +427,7 @@ struct ParserStateMachineBuilder {
             return ss.str();
         }
 
-        inline bool isNullable(const Grammar::Node& node) const {
+        inline bool isNullable(const ygp::Node& node) const {
             if(nullable.contains(node.name) == true) {
                 return true;
             }
@@ -439,10 +438,10 @@ struct ParserStateMachineBuilder {
             return false;
         }
 
-        inline bool isRuleNullable(const Grammar::Rule& rule, const size_t& from, const size_t& to) const {
+        inline bool isRuleNullable(const ygp::Rule& rule, const size_t& from, const size_t& to) const {
             assert(to >= from);
-            assert((from >= 0) && (from <= rule.nodes.size()));
-            assert((to >= 0) && (to <= rule.nodes.size()));
+            assert(from <= rule.nodes.size());
+            assert(to <= rule.nodes.size());
             if(to == from) {
                 return false;
             }
@@ -649,10 +648,10 @@ struct ParserStateMachineBuilder {
             }
         }
 
-        printRules(Logger::log(), "final");
+        printRules(Logger::olog(), "final");
 
         // create Parser State Machine
-        std::vector<const Grammar::Config*> configs;
+        std::vector<const ygp::Config*> configs;
         for(auto& rule : grammar.rules) {
             if(rule->ruleSetName() == grammar.start) {
                 if(!hasRuleInConfigList(configs, *rule)) {
@@ -667,7 +666,7 @@ struct ParserStateMachineBuilder {
         }
 
         auto& sis = createItemSet(configs, "");
-        print(Logger::log(), "linking");
+        log("linking");
         linkItemSets();
 
         grammar.initialState = &sis;
@@ -675,7 +674,7 @@ struct ParserStateMachineBuilder {
 };
 }
 
-void buildParser(Grammar& g) {
+void buildParser(yg::Grammar& g) {
     ParserStateMachineBuilder psmb{g};
     psmb.process();
 }

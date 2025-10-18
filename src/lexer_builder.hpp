@@ -1,4 +1,4 @@
 #pragma once
-#include "grammar.hpp"
+#include "grammar_yg.hpp"
 
-void buildLexer(Grammar& g);
+void buildLexer(yg::Grammar& g);

@@ -25,19 +25,32 @@
 
 #include "pch.hpp"
 #include "cpp_generator.hpp"
+#include "text_writer.hpp"
 #include "logger.hpp"
 
 /// @brief This is the UNICODE encoding file, embedded as a raw C string
-extern const char* utf8Encoding;
+extern const char* cb_encoding_utf8;
 
 /// @brief This is the ASCII encoding file, embedded as a raw C string
-extern const char* asciiEncoding;
+extern const char* cb_encoding_ascii;
 
 /// @brief This is the prototype.cpp file, embedded as a raw C string
-extern const char* cbPrototype;
+extern const char* cb_prototype;
 
 /// @brief This is the stream.hpp file, embedded as a raw C string
-extern const char* cbStream;
+extern const char* cb_stream;
+
+/// @brief This is the text_writer.hpp file, embedded as a raw C string
+extern const char* cb_text_writer;
+
+/// @brief This is the print.hpp file, embedded as a raw C string
+extern const char* cb_print;
+
+/// @brief This is the nsutil.hpp file, embedded as a raw C string
+extern const char* cb_nsutil;
+
+/// @brief This is the filepos.hpp file, embedded as a raw C string
+extern const char* cb_filepos;
 
 /// @brief This is a flag that indicates whether to insert #line statements for codeblocks in the generated file
 extern bool genLines;
@@ -46,14 +59,21 @@ namespace {
 
 /// @brief This class generates the cpp parser
 struct Generator {
-    const Grammar& grammar;
+    const yg::Grammar& grammar;
     std::string qid;
     CodeBlock throwError;
 
-    inline Generator(const Grammar& g) : grammar{g} {}
+    inline Generator(const yg::Grammar& g) : grammar{g} {}
 
     /// @brief expands all variables in a codeblock and normalizes the indentation
-    inline std::string expand(const std::string_view& codeblock, const std::string_view& indent, const bool& autoIndent, const std::unordered_map<std::string, std::string>& vars) {
+    inline void
+    _expand(
+        StringStreamWriter& sw,
+        const std::string_view& codeblock,
+        const std::string_view& indent,
+        const bool& autoIndent,
+        const std::unordered_map<std::string, std::string>& vars
+    ) {
         enum class State {
             InitSpace0,
             InitSpace1,
@@ -76,7 +96,6 @@ struct Generator {
         State state = State::InitSpace0;
         size_t space0 = 0;
         size_t space1 = 0;
-        std::string rv;
         std::string key;
         for(auto& ch : codeblock) {
             switch(state) {
@@ -89,13 +108,13 @@ struct Generator {
                     ++space0;
                     continue;
                 }
-                rv += indent;
+                sw.write("{}", indent);
                 if (ch == 'T') {
                     state = State::Tag0;
                     key = "";
                     continue;
                 }
-                rv += ch;
+                sw.write(ch);
                 space1 = 0;
                 state = State::Code;
                 break;
@@ -104,7 +123,8 @@ struct Generator {
                     continue;
                 }
                 if(ch == '\n') {
-                    rv += ch;
+                    sw.write(ch);
+                    ++sw.row;
                     continue;
                 }
                 if(autoIndent && (std::isspace(ch)) && (ch != '\n')) {
@@ -113,13 +133,13 @@ struct Generator {
                         continue;
                     }
                 }
-                rv += indent;
+                sw.write("{}", indent);
                 if (ch == 'T') {
                     state = State::Tag0;
                     key = "";
                     continue;
                 }
-                rv += ch;
+                sw.write(ch);
                 state = State::Code;
                 break;
             case State::Code:
@@ -127,7 +147,8 @@ struct Generator {
                     continue;
                 }
                 if(ch == '\n') {
-                    rv += ch;
+                    sw.write(ch);
+                    ++sw.row;
                     space1 = 0;
                     state = State::InitSpace1;
                     continue;
@@ -137,7 +158,7 @@ struct Generator {
                     key = "";
                     continue;
                 }
-                rv += ch;
+                sw.write(ch);
                 state = State::Code;
                 break;
             case State::Tag0:
@@ -145,8 +166,7 @@ struct Generator {
                     state = State::Tag1;
                     continue;
                 }
-                rv += 'T';
-                rv += ch;
+                sw.write("T{}", ch);
                 state = State::Code;
                 break;
             case State::Tag1:
@@ -154,8 +174,7 @@ struct Generator {
                     state = State::Tag2;
                     continue;
                 }
-                rv += "TA";
-                rv += ch;
+                sw.write("TA{}", ch);
                 state = State::Code;
                 break;
             case State::Tag2:
@@ -163,68 +182,100 @@ struct Generator {
                     state = State::Tag3;
                     continue;
                 }
-                rv += "TAG";
-                rv += ch;
+                sw.write("TAG{}", ch);
                 state = State::Code;
                 break;
             case State::Tag3:
                 if (ch == ')') {
                     if (auto it = vars.find(key); it != vars.end()) {
-                        rv += it->second;
+                        sw.write("{}", it->second);
                     }else{
-                        rv += ("TAG(" + key + ")");
+                        sw.write("TAG({})", key);
                     }
                     state = State::Code;
                 }
                 else if ((isalpha(ch)) || (ch == '_')) {
                     key += ch;
                 }else{
-                    rv += ("TAG(" + key);
+                    sw.write("TAG({}", key);
                     state = State::Code;
                 }
                 break;
             }
         }
-
-        return rv;
     }
 
     /// @brief optionally appends a #line to an expanded codeblock
-    inline std::string expand(const CodeBlock& codeblock, const std::string_view& indent, const bool& autoIndent, const std::unordered_map<std::string, std::string>& vars) {
-        auto cb = expand(codeblock.code, indent, autoIndent, vars);
+    inline void
+    generateCodeBlock(
+        TextFileWriter& tw,
+        const CodeBlock& codeblock,
+        const std::string_view& indent,
+        const bool& autoIndent,
+        const std::unordered_map<std::string, std::string>& vars
+    ) {
+        StringStreamWriter sw;
+        _expand(sw, codeblock.code, indent, autoIndent, vars);
         if (codeblock.hasPos == false) {
-            return cb;
+            tw.swrite(sw);
+            return;
         }
 
         std::string pline = (genLines == false) ? "//" : "";
-        auto pos = std::format("{}{}#line {} \"{}\"", indent, pline, codeblock.pos.row, codeblock.pos.file);
-        return std::format("\n{}\n{}", pos, cb);
+
+        tw.writeln();
+        tw.writeln("{}{}#line {} \"{}\" //t={},s={}", indent, pline, codeblock.pos.row, codeblock.pos.file, tw.row, sw.row);
+        tw.swrite(sw);
+        tw.writeln("{}{}#line {} \"{}\" //t={},s={}", indent, pline, tw.row, tw.file.string(), tw.row, sw.row);
     }
 
     /// @brief writes expanded codeblock to output stream if the codeblock is not empty
-    inline void expand(std::ostream& os, const std::string_view& codeblock, const std::string_view& indent, const bool& autoIndent, const std::unordered_map<std::string, std::string>& vars) {
-        if(codeblock.empty() == true) {
-            return;
+    inline void
+    generatePrototypeLine(
+        TextFileWriter& tw,
+        const std::string_view& line,
+        const std::unordered_map<std::string, std::string>& vars
+    ) {
+        if(line.empty() == true) {
+            // print empty line as-is
+            tw.writeln();
+        }else{
+            StringStreamWriter sw;
+            _expand(sw, line, "", false, vars);
+            tw.swriteln(sw);
         }
-        print(os, "{}", expand(codeblock, indent, autoIndent, vars));
     }
 
-    /// @brief writes expanded codeblock to output stream if the codeblock is not empty
-    inline void expand(std::ostream& os, const CodeBlock& codeblock, const std::string_view& indent, const bool& autoIndent, const std::unordered_map<std::string, std::string>& vars) {
-        auto cb = expand(codeblock, indent, autoIndent, vars);
-        if (cb.empty() == true) {
-            return;
-        }
-        print(os, "{}", cb);
+    /// @brief writes expanded codeblock to throw an exception
+    /// This is called at various points in the generation code
+    inline void
+    generateError(
+        TextFileWriter& tw,
+        const std::string& line,
+        const std::string& col,
+        const std::string& file,
+        const std::string& msg,
+        const std::string_view& indent,
+        const std::unordered_map<std::string, std::string>& vars
+    ) {
+        auto xvars = vars;
+        xvars["ROW"] = line;
+        xvars["COL"] = col;
+        xvars["SRC"] = file;
+        xvars["MSG"] = msg;
+        StringStreamWriter sw;
+        _expand(sw, throwError.code, indent, true, xvars);
+        // tw.writeln("{}", s);
+        tw.swrite(sw);
     }
 
-    /// @brief Checks if the \ref Grammar::RuleSet contains a empty prooduction
-    inline bool hasEpsilon(const Grammar::RuleSet& rs) const {
+    /// @brief Checks if the \ref yg::Grammar::RuleSet contains a empty prooduction
+    inline bool hasEpsilon(const ygp::RuleSet& rs) const {
         return (rs.firstIncludes(grammar.empty) == true);
     }
 
     /// @brief Construct a full function name given a rule and a short function name
-    inline std::string getFunctionName(const Grammar::Rule& r, const std::string& fname) const {
+    inline std::string getFunctionName(const ygp::Rule& r, const std::string& fname) const {
         return std::format("{}_{}", r.ruleName, fname);
     }
 
@@ -232,7 +283,7 @@ struct Generator {
     /// If the node is a terminal, returns the default token class name
     /// If non-terminal, return the AST node name for the rule
     /// (which is the same as the rule name)
-    inline std::string getNodeType(const Grammar::Node& n) const {
+    inline std::string getNodeType(const ygp::Node& n) const {
         std::string nativeType;
         if(n.isRegex() == true) {
             nativeType = grammar.tokenClass;
@@ -244,13 +295,14 @@ struct Generator {
     }
 
     /// @brief generates a list of args for a semantic action function for a rule
-    inline std::string getArgs(
-        const Grammar::Rule& r,
-        const Grammar::Walker::FunctionSig& fsig,
-        const Grammar::Walker::CodeInfo* ci,
-        const std::string& indent
-        ) {
-        std::stringstream args;
+    inline void
+    getArgs(
+        StringStreamWriter& sw,
+        const ygp::Rule& r,
+        const yg::Walker::FunctionSig& fsig,
+        const yg::Walker::CodeInfo* ci,
+        const std::string_view& indent
+    ) {
         std::string sep;
 
         std::string isUnused;
@@ -271,13 +323,12 @@ struct Generator {
                 nativeTypeNode = std::format("WalkerNodeRef<{}>", n->name);
             }
 
-            args << std::format("{}{}{}& {}", sep, isUnused, nativeTypeNode, varName);
-            sep = "," + indent;
+            sw.writeln("{}    {}{}{}& {}", indent, sep, isUnused, nativeTypeNode, varName);
+            sep = ",";
         }
         if(fsig.args.size() > 0) {
-            args << std::format("{}{}", sep, fsig.args);
+            sw.writeln("{}    {}{}", indent, sep, fsig.args);
         }
-        return args.str();
     }
 
     /// @brief extract argument names into a comma-separated list
@@ -343,63 +394,53 @@ struct Generator {
         return ss.str();
     }
 
-    /// @brief writes expanded codeblock to throw an exception
-    /// This is called at various points in the generation code
-    inline std::string generateError(const std::string& line, const std::string& col, const std::string& file, const std::string& msg, const std::string_view& indent, const std::unordered_map<std::string, std::string>& vars) {
-        auto xvars = vars;
-        xvars["ROW"] = line;
-        xvars["COL"] = col;
-        xvars["SRC"] = file;
-        xvars["MSG"] = msg;
-        return expand(throwError.code, indent, true, xvars);
-    }
-
     /// @brief generates code to include PCH
-    inline void generatePchHeader(std::ostream& os, const std::string_view& indent) {
-        print(os, "{}#include \"{}\"", indent, grammar.pchHeader);
+    inline void generatePchHeader(TextFileWriter& tw, const std::string_view& indent) {
+        tw.writeln("{}#include \"{}\"", indent, grammar.pchHeader);
     }
 
     /// @brief generates code to include header files in the parser's header file
-    inline void generateHdrHeaders(std::ostream& os, const std::string_view& indent) {
+    inline void generateHdrHeaders(TextFileWriter& tw, const std::string_view& indent) {
         for (auto& h : grammar.hdrHeaders) {
-            print(os, "{}#include \"{}\"", indent, h);
+            tw.writeln("{}#include \"{}\"", indent, h);
         }
     }
 
     /// @brief generates code to include header files in the parser's source file
-    inline void generateSrcHeaders(std::ostream& os, const std::string_view& indent) {
+    inline void generateSrcHeaders(TextFileWriter& tw, const std::string_view& indent) {
         for (auto& h : grammar.srcHeaders) {
-            print(os, "{}#include \"{}\"", indent, h);
+            tw.writeln("{}#include \"{}\"", indent, h);
         }
     }
 
     /// @brief generates additional class members for the parser, if any are specified in the .y file
-    inline void generateClassMembers(std::ostream& os, const std::string_view& indent) {
+    inline void generateClassMembers(TextFileWriter& tw, const std::string_view& indent) {
         for (auto& m : grammar.classMembers) {
-            print(os, "{}{};", indent, m);
+            tw.writeln("{}{};", indent, m);
         }
     }
 
     /// @brief generates declarations for all AST nodes
-    inline void generateAstNodeDecls(std::ostream& os, const std::string_view& indent) {
+    inline void generateAstNodeDecls(TextFileWriter& tw, const std::string_view& indent) {
         for (auto& rs : grammar.ruleSets) {
-            print(os, "{}struct {};", indent, rs->name);
+            tw.writeln("{}struct {};", indent, rs->name);
         }
     }
 
     /// @brief generates definitions for all AST nodes
-    inline void generateAstNodeDefns(std::ostream& os, const std::string_view& indent) {
+    inline void generateAstNodeDefns(TextFileWriter& tw, const std::string_view& indent) {
         for (auto& rs : grammar.ruleSets) {
-            print(os, "{}struct {} : public NonCopyable {{", indent, rs->name);
-            print(os, "{}    const FilePos pos;", indent);
+            tw.writeln("{}struct {} : public NonCopyable {{", indent, rs->name);
+            tw.writeln("{}    const FilePos pos;", indent);
 
             if(hasEpsilon(*rs) == true) {
-                print(os, "{}    struct {}_r0 {{", indent, rs->name);
-                print(os, "{}    }};\n", indent);
+                tw.writeln("{}    struct {}_r0 {{", indent, rs->name);
+                tw.writeln("{}    }};", indent);
+                tw.writeln();
             }
 
             for (auto& r : rs->rules) {
-                print(os, "{}    struct {} : public NonCopyable {{", indent, r->ruleName);
+                tw.writeln("{}    struct {} : public NonCopyable {{", indent, r->ruleName);
                 std::ostringstream pos;
                 std::ostringstream ios;
                 std::string sep;
@@ -411,59 +452,63 @@ struct Generator {
                         varName = std::format("{}{}", n->name, idx);
                     }
                     auto rt = getNodeType(*n);
-                    print(os, "{}        {}& {};", indent, rt, varName);
+                    tw.writeln("{}        {}& {};", indent, rt, varName);
                     pos << std::format("{}{}& p{}", sep, rt, varName);
                     ios << std::format("{}{}(p{})", sep, varName, varName);
                     sep = ", ";
                     coln = " : ";
                 }
-                print(os, "{}        explicit inline {}({}){}{} {{}}", indent, r->ruleName, pos.str(), coln, ios.str());
-                print(os, "{}    }};\n", indent);
+                tw.writeln("{}        explicit inline {}({}){}{} {{}}", indent, r->ruleName, pos.str(), coln, ios.str());
+                tw.writeln("{}    }};", indent);
+                tw.writeln();
             }
 
             std::string sep;
-            print(os, "{}    using Rule = std::variant<", indent);
-            print(os, "{}        {}std::monostate", indent, sep);
+            tw.writeln("{}    using Rule = std::variant<", indent);
+            tw.writeln("{}        {}std::monostate", indent, sep);
             sep = ",";
             if(hasEpsilon(*rs) == true) {
-                print(os, "{}        {}{}_r0", indent, sep, rs->name);
+                tw.writeln("{}        {}{}_r0", indent, sep, rs->name);
                 sep = ",";
             }
             for (auto& r : rs->rules) {
-                print(os, "{}        {}{}", indent, sep, r->ruleName);
+                tw.writeln("{}        {}{}", indent, sep, r->ruleName);
                 sep = ",";
             }
-            print(os, "{}    >;\n", indent);
+            tw.writeln("{}    >;", indent);
+            tw.writeln();
 
-            print(os, "{}    const {}& anchor;", indent, grammar.tokenClass);
-            print(os, "{}    Rule rule;\n", indent);
+            tw.writeln("{}    const {}& anchor;", indent, grammar.tokenClass);
+            tw.writeln("{}    Rule rule;", indent);
+            tw.writeln();
 
             auto anchorArg = std::format(", const {}& a", grammar.tokenClass);
             auto anchorCtor = ", anchor(a)";
-            print(os, "{}    explicit inline {}(const FilePos& p{}) : pos(p){} {{}}", indent, rs->name, anchorArg, anchorCtor);
-            print(os, "{}}}; // struct {}\n", indent, rs->name);
+            tw.writeln("{}    explicit inline {}(const FilePos& p{}) : pos(p){} {{}}", indent, rs->name, anchorArg, anchorCtor);
+            tw.writeln("{}}}; // struct {}", indent, rs->name);
+            tw.writeln();
         }
     }
 
     /// @brief generates a variant that contains all AST nodes
-    inline void generateAstNodeItems(std::ostream& os, const std::string_view& indent) {
-        print(os, "{}using AstNode = std::variant<", indent);
-        print(os, "{}    {}", indent, grammar.tokenClass);
+    inline void generateAstNodeItems(TextFileWriter& tw, const std::string_view& indent) {
+        tw.writeln("{}using AstNode = std::variant<", indent);
+        tw.writeln("{}    {}", indent, grammar.tokenClass);
         for (auto& rs : grammar.ruleSets) {
-            print(os, "{}    ,{}", indent, rs->name);
+            tw.writeln("{}    ,{}", indent, rs->name);
         }
-        print(os, "{}>;", indent);
+        tw.writeln("{}>;", indent);
     }
 
     /// @brief generates member function corresponding to the semantic action for each rule
     inline void generateRuleHandler(
-        std::ostream& os,
-        const Grammar::Walker& walker,
-        const Grammar::Rule& r,
-        const Grammar::Walker::FunctionSig& fsig,
+        TextFileWriter& tw,
+        const yg::Walker& walker,
+        const ygp::Rule& r,
+        const yg::Walker::FunctionSig& fsig,
         const std::string& isVirtual,
         const std::string& isOverride,
-        const Grammar::Walker::CodeInfo* ci,
+        const yg::Walker::CodeInfo* ci,
         const std::unordered_map<std::string, std::string>& vars,
         const std::string_view& indent
     ) {
@@ -471,43 +516,44 @@ struct Generator {
         std::string returnType = fsig.type;
 
         // infer indent for function args
-        print(os, "{}//RULE_HANDLER({}):{}", indent, walker.name, r.str(false));
-        auto xindent = std::format("\n    {}", indent);
+        tw.writeln("{}//RULE_HANDLER({}):{}", indent, walker.name, r.str(false));
 
         // get args list as indented string
-        auto args = getArgs(r, fsig, ci, xindent);
+        StringStreamWriter sw;
+        getArgs(sw, r, fsig, ci, indent);
 
         // open function
-        if(args.size() > 0) {
-            print(os, "{}{} {}", indent, isVirtual, returnType);
-            print(os, "{}{}(", indent, fname);
-            print(os, "{}    {}", indent, args);
-            print(os, "{}){} {{", indent, isOverride);
+        if(sw.wrote == true) {
+            tw.writeln("{}{} {}", indent, isVirtual, returnType);
+            tw.writeln("{}{}(", indent, fname);
+            tw.swrite(sw);
+            tw.writeln("{}){} {{", indent, isOverride);
         }else{
-            print(os, "{}{} {} {}(){} {{", indent, isVirtual, returnType, fname, isOverride);
+            tw.writeln("{}{} {} {}(){} {{", indent, isVirtual, returnType, fname, isOverride);
         }
 
         // generate function body, if any
         if(ci != nullptr) {
-            expand(os, ci->codeblock, std::string(indent) + "    ", true, vars);
+            generateCodeBlock(tw, ci->codeblock, std::string(indent) + "    ", true, vars);
         }
 
         // close function
-        print(os, "{}}}\n", indent);
+        tw.writeln("{}}}", indent);
+        tw.writeln();
     }
 
     /// @brief generates visitor overload to invoke the corresponding member function
     inline void generateRuleVisitorBody(
-        std::ostream& os,
-        const Grammar::Walker& walker,
-        const Grammar::Walker::FunctionSig& fsig,
-        const Grammar::RuleSet& rs,
-        const Grammar::Rule& r,
+        TextFileWriter& tw,
+        const yg::Walker& walker,
+        const yg::Walker::FunctionSig& fsig,
+        const ygp::RuleSet& rs,
+        const ygp::Rule& r,
         const std::string& called,
         const std::string& xparams,
         const std::string_view& indent
     ) {
-        std::stringstream wnodes;
+        StringStreamWriter wnodes;
         std::stringstream wcalls;
         std::stringstream params;
         std::stringstream ss;
@@ -525,18 +571,18 @@ struct Generator {
             if (n->varName.size() > 0) {
                 if(fsig.isUDF == false) {
                     if(n->isRule() == true) {
-                        wnodes << std::format("{}            WalkerNodeRef<{}> {}(_n.{}, {});/*wvar1u*/\n", indent, n->name, n->varName, n->varName, called);
+                        wnodes.writeln("{}            WalkerNodeRef<{}> {}(_n.{}, {});/*wvar1u*/", indent, n->name, n->varName, n->varName, called);
                         wcalls << std::format("{}            if({}.called == false) {}({});/*wvar1*/\n", indent, n->varName, fsig.func, n->varName);
                     }else{
-                        wnodes << std::format("{}            const {}& {} = _n.{};/*wvar1x*/\n", indent, grammar.tokenClass, n->varName, n->varName);
+                        wnodes.writeln("{}            const {}& {} = _n.{};/*wvar1x*/", indent, grammar.tokenClass, n->varName, n->varName);
                     }
                     params << std::format("{}{}/*wvar1*/", sep, n->varName);
                     rnode_used = true;
                 }else {
                     if(n->isRule() == true) {
-                        wnodes << std::format("{}            WalkerNodeRef<{}> {}(_n.{}, {});/*gvar2u*/\n", indent, n->name, n->varName, n->varName, called);
+                        wnodes.writeln("{}            WalkerNodeRef<{}> {}(_n.{}, {});/*gvar2u*/", indent, n->name, n->varName, n->varName, called);
                     }else{
-                        wnodes << std::format("{}            const {}& {} = _n.{};/*gvar2x*/\n", indent, grammar.tokenClass, n->varName, n->varName);
+                        wnodes.writeln("{}            const {}& {} = _n.{};/*gvar2x*/", indent, grammar.tokenClass, n->varName, n->varName);
                     }
                     params << std::format("{}{}/*gvar2*/", sep, n->varName);
                     rnode_used = true;
@@ -549,7 +595,7 @@ struct Generator {
                 if(fsig.isUDF == false) {
                     if(n->name != grammar.end) {
                         if(n->isRule() == true) {
-                            wnodes << std::format("{}            WalkerNodeRef<{}> {}(_n.{}, {});/*nwvar1u*/\n", indent, n->name, n->idxName, n->idxName, called);
+                            wnodes.writeln("{}            WalkerNodeRef<{}> {}(_n.{}, {});/*nwvar1u*/\n", indent, n->name, n->idxName, n->idxName, called);
                             wcalls << std::format("{}            {}({});/*nwvar1*/\n", indent, fsig.func, n->idxName);
                             rnode_used = true;
                         }
@@ -567,89 +613,94 @@ struct Generator {
         std::string node_unused = (rnode_used == false)?"[[maybe_unused]]":"";
         auto iname = getFunctionName(r, fsig.func);
 
-        print(os, "{}        [&]({}const {}::{}& _n) -> {} {{", indent, node_unused, rs.name, r.ruleName, fsig.type);
+        tw.writeln("{}        [&]({}const {}::{}& _n) -> {} {{", indent, node_unused, rs.name, r.ruleName, fsig.type);
 
-        print(os, "{}", wnodes.str());
+        tw.swrite(wnodes);
 
         // call the handler
         if(fsig.isUDF == false) {
-            print(os, "{}            {}({});/*call3*/", indent, iname, params.str());
+            tw.writeln("{}            {}({});/*call3*/", indent, iname, params.str());
         }else{
-            print(os, "{}            return {}({});/*call4*/", indent, iname, params.str());
+            tw.writeln("{}            return {}({});/*call4*/", indent, iname, params.str());
         }
 
-        if(walker.traversalMode == Grammar::Walker::TraversalMode::TopDown) {
-            print(os, "{}", wcalls.str());
+        if(walker.traversalMode == yg::Walker::TraversalMode::TopDown) {
+            tw.writeln("{}", wcalls.str());
         }
-        print(os, "{}        }},\n", indent);
+        tw.writeln("{}        }},", indent);
+        tw.writeln();
     }
 
     /// @brief generates ruleset handler
     /// This function implements a visitor that calls the
     /// specific rule handler
     inline void generateRuleSetVisitor(
-        std::ostream& os,
-        const Grammar::Walker& walker,
-        const Grammar::RuleSet& rs,
-        const Grammar::Walker::FunctionSig& fsig,
+        TextFileWriter& tw,
+        const yg::Walker& walker,
+        const ygp::RuleSet& rs,
+        const yg::Walker::FunctionSig& fsig,
         const std::string_view& indent
     ) {
-        print(os, "{}//RULESET_VISITOR({}):{}:{}", indent, walker.name, rs.name, fsig.type);
+        tw.writeln("{}//RULESET_VISITOR({}):{}:{}", indent, walker.name, rs.name, fsig.type);
 
         std::string args;
         if(fsig.args.size() > 0) {
             args = std::format(", {}", fsig.args);
         }
-        print(os, "{}inline {}", indent, fsig.type);
-        print(os, "{}{}(WalkerNodeRef<{}>& node{}) {{", indent, fsig.func, rs.name, args);
+        tw.writeln("{}inline {}", indent, fsig.type);
+        tw.writeln("{}{}(WalkerNodeRef<{}>& node{}) {{", indent, fsig.func, rs.name, args);
         if(fsig.isUDF == false) {
-            print(os, "{}    WalkerNodeCommit<{}> _wc(node);", indent, rs.name);
+            tw.writeln("{}    WalkerNodeCommit<{}> _wc(node);", indent, rs.name);
         }
 
         auto xparams = extractParams(fsig.args);
 
         std::string called;
-        if(walker.traversalMode == Grammar::Walker::TraversalMode::Manual) {
+        if(walker.traversalMode == yg::Walker::TraversalMode::Manual) {
             called = "true";
         }else{
             called = "false";
         }
 
         // generate Visitor
-        print(os, "{}    return std::visit(overload{{", indent);
+        tw.writeln("{}    return std::visit(overload{{", indent);
 
         if(true) {
-            print(os, "{}        [&](const std::monostate&) -> {} {{", indent, fsig.type);
-            print(os, "{}            throw std::runtime_error(\"internal_error\"); //should never reach here", indent);
-            print(os, "{}        }},\n", indent);
+            tw.writeln("{}        [&](const std::monostate&) -> {} {{", indent, fsig.type);
+            tw.writeln("{}            throw std::runtime_error(\"internal_error\"); //should never reach here", indent);
+            tw.writeln("{}        }},", indent);
+            tw.writeln();
         }
 
         if(hasEpsilon(rs) == true) {
-            print(os, "{}        [&](const {}::{}_r0&) -> {} {{", indent, rs.name, rs.name, fsig.type);
-            print(os, "{}            //throw std::runtime_error(\"internal_error(epsilon)\"); //should never reach here", indent);
-            print(os, "{}        }},\n", indent);
+            tw.writeln("{}        [&](const {}::{}_r0&) -> {} {{", indent, rs.name, rs.name, fsig.type);
+            tw.writeln("{}            //throw std::runtime_error(\"internal_error(epsilon)\"); //should never reach here", indent);
+            tw.writeln("{}        }},", indent);
+            tw.writeln();
         }
 
         // generate handlers for all rules in ruleset
         for (auto& r : rs.rules) {
-            generateRuleVisitorBody(os, walker, fsig, rs, *r, called, xparams, indent);
+            generateRuleVisitorBody(tw, walker, fsig, rs, *r, called, xparams, indent);
         }
-        print(os, "{}    }}, node.node.rule);", indent);
+        tw.writeln("{}    }}, node.node.rule);", indent);
 
-        print(os, "{}}}\n", indent);
+        tw.writeln("{}}}", indent);
+        tw.writeln();
     }
 
     /// @brief generates all ruleset handlers
     inline void generateRuleSetVisitors(
-        std::ostream& os,
-        const Grammar::Walker& walker,
+        TextFileWriter& tw,
+        const yg::Walker& walker,
         const std::unordered_map<std::string, std::string>& vars,
         const std::string_view& indent
     ) {
         if(grammar.isRootWalker(walker) == true) {
-            print(os, "{}inline {}& {}({}& node) const {{", indent, grammar.tokenClass, walker.defaultFunctionName, grammar.tokenClass);
-            print(os, "{}    return node;", indent);
-            print(os, "{}}}\n", indent);
+            tw.writeln("{}inline {}& {}({}& node) const {{", indent, grammar.tokenClass, walker.defaultFunctionName, grammar.tokenClass);
+            tw.writeln("{}    return node;", indent);
+            tw.writeln("{}}}", indent);
+            tw.writeln();
         }
 
         std::string isVirtual = (grammar.isBaseWalker(walker) == true)?"virtual":"inline";
@@ -677,12 +728,12 @@ struct Generator {
                     if((grammar.isDerivedWalker(walker) == true) && (ci == nullptr)) {
                         continue;
                     }
-                    generateRuleHandler(os, walker, r, fi, isv, iso, ci, vars, indent);
+                    generateRuleHandler(tw, walker, r, fi, isv, iso, ci, vars, indent);
                 }
 
                 if((grammar.isRootWalker(walker) == true) || (fi.isUDF == true)) {
-                    print(os, "{}//RULE_VISITOR({}):{}", indent, walker.name, rs.name);
-                    generateRuleSetVisitor(os, walker, rs, fi, indent);
+                    tw.writeln("{}//RULE_VISITOR({}):{}", indent, walker.name, rs.name);
+                    generateRuleSetVisitor(tw, walker, rs, fi, indent);
                 }
             }
         }
@@ -690,27 +741,28 @@ struct Generator {
 
     /// @brief generates writer for Walker
     inline void generateWriter(
-        std::ostream& os,
-        const Grammar::Walker& walker,
+        TextFileWriter& tw,
+        const yg::Walker& walker,
         const std::string_view& indent
     ) {
-        if(walker.outputType == Grammar::Walker::OutputType::TextFile) {
-            print(os, "{}//GEN_FILE", indent);
-            print(os, "{}TextFileWriter {};\n", indent, walker.writerName);
+        if(walker.outputType == yg::Walker::OutputType::TextFile) {
+            tw.writeln("{}//GEN_FILE", indent);
+            tw.writeln("{}TextFileWriter {};", indent, walker.writerName);
+            tw.writeln();
 
-            print(os, "{}inline void open(const std::filesystem::path& odir, const std::string_view& filename) {{", indent);
-            print(os, "{}    {}.open(odir, filename, \"{}\");", indent, walker.writerName, walker.ext);
-            print(os, "{}}}", indent);
+            tw.writeln("{}inline void open(const std::filesystem::path& odir, const std::string_view& filename) {{", indent);
+            tw.writeln("{}    {}.open(odir, filename, \"{}\");", indent, walker.writerName, walker.ext);
+            tw.writeln("{}}}", indent);
         }else{
-            print(os, "{}inline void open(const std::filesystem::path& odir, const std::string_view& filename) {{", indent);
-            print(os, "{}    unused(odir, filename);", indent);
-            print(os, "{}}}", indent);
+            tw.writeln("{}inline void open(const std::filesystem::path& odir, const std::string_view& filename) {{", indent);
+            tw.writeln("{}    unused(odir, filename);", indent);
+            tw.writeln("{}}}", indent);
         }
     }
 
     /// @brief generates all Walker's
     inline void generateWalkers(
-        std::ostream& os,
+        TextFileWriter& tw,
         const std::unordered_map<std::string, std::string>& vars,
         const std::string_view& indent
     ) {
@@ -721,46 +773,47 @@ struct Generator {
         for (auto& pwalker : grammar.walkers) {
             auto& walker = *pwalker;
             auto wname = std::format("Walker_{}", walker.name);
-            print(os, "\n{}//walker:{}", indent, walker.name);
+            tw.writeln();
+            tw.writeln("{}//walker:{}", indent, walker.name);
             if(grammar.isRootWalker(walker) == true) {
                 first = wname;
-                print(os, "{}struct {} : public NonCopyable {{", indent, wname);
-                print(os, "{}{}& mod;", xindent, grammar.className);
-                print(os, "{}explicit inline {}({}& m) : mod(m) {{}}", xindent, wname, grammar.className);
+                tw.writeln("{}struct {} : public NonCopyable {{", indent, wname);
+                tw.writeln("{}{}& mod;", xindent, grammar.className);
+                tw.writeln("{}explicit inline {}({}& m) : mod(m) {{}}", xindent, wname, grammar.className);
                 if(grammar.walkers.size() > 1) {
-                    print(os, "{}virtual ~{}() {{}}", xindent, wname);
+                    tw.writeln("{}virtual ~{}() {{}}", xindent, wname);
                 }
 
-                generateWriter(os, walker, xindent);
-                expand(os, walker.xmembers, xindent, true, vars);
-                generateRuleSetVisitors(os, walker, vars, xindent);
-                print(os, "{}}}; //walker:{}", indent, walker.name);
+                generateWriter(tw, walker, xindent);
+                generateCodeBlock(tw, walker.xmembers, xindent, true, vars);
+                generateRuleSetVisitors(tw, walker, vars, xindent);
+                tw.writeln("{}}}; //walker:{}", indent, walker.name);
             }else{
                 assert(walker.base != nullptr);
-                print(os, "{}struct {} : public {} {{", indent, wname, first);
-                print(os, "{}explicit inline {}({}& m) : {}(m) {{}}", xindent, wname, grammar.className, first);
-                generateWriter(os, walker, xindent);
-                expand(os, walker.xmembers, xindent, true, vars);
-                generateRuleSetVisitors(os, walker, vars, xindent);
-                print(os, "{}}}; //walker:{}", indent, walker.name);
+                tw.writeln("{}struct {} : public {} {{", indent, wname, first);
+                tw.writeln("{}explicit inline {}({}& m) : {}(m) {{}}", xindent, wname, grammar.className, first);
+                generateWriter(tw, walker, xindent);
+                generateCodeBlock(tw, walker.xmembers, xindent, true, vars);
+                generateRuleSetVisitors(tw, walker, vars, xindent);
+                tw.writeln("{}}}; //walker:{}", indent, walker.name);
             }
         }
     }
 
     /// @brief generates code to add default Walker, if none specified
-    inline void generateInitWalkers(std::ostream& os, const std::string_view& indent) {
+    inline void generateInitWalkers(TextFileWriter& tw, const std::string_view& indent) {
         for (auto& pwalker : grammar.walkers) {
             auto& walker = *pwalker;
             if(grammar.isBaseWalker(walker) == true) {
                 continue;
             }
-            print(os, "{}walkers.push_back(\"{}\");", indent, walker.name);
+            tw.writeln("{}walkers.push_back(\"{}\");", indent, walker.name);
             break;
         }
     }
 
     /// @brief generates code to invoke specified Walker
-    inline void generateWalkerCalls(std::ostream& os, const std::string_view& indent) {
+    inline void generateWalkerCalls(TextFileWriter& tw, const std::string_view& indent) {
         if(grammar.walkers.size() == 0) {
             return;
         }
@@ -771,53 +824,62 @@ struct Generator {
                 continue;
             }
             auto wname = std::format("Walker_{}", walker.name);
-            print(os, "{}else if(w == \"{}\") {{", indent, walker.name);
-            print(os, "{}    {}::{} walker(module);", indent, grammar.astClass, wname);
-            print(os, "{}    walker.open(odir, filename);", indent);
-            print(os, "{}    {}::WalkerNodeRef<{}::{}> s(start);", indent, grammar.astClass, grammar.astClass, grammar.start);
-            print(os, "{}    walker.go(s);", indent);
-            print(os, "{}}}", indent);
+            tw.writeln("{}else if(w == \"{}\") {{", indent, walker.name);
+            tw.writeln("{}    {}::{} walker(module);", indent, grammar.astClass, wname);
+            tw.writeln("{}    walker.open(odir, filename);", indent);
+            tw.writeln("{}    {}::WalkerNodeRef<{}::{}> s(start);", indent, grammar.astClass, grammar.astClass, grammar.start);
+            tw.writeln("{}    walker.go(s);", indent);
+            tw.writeln("{}}}", indent);
         }
-        print(os, "{}else {{", indent);
-        print(os, "{}    throw std::runtime_error(\"unknown walker: \" + w);", indent);
-        print(os, "{}}}", indent);
+        tw.writeln("{}else {{", indent);
+        tw.writeln("{}    throw std::runtime_error(\"unknown walker: \" + w);", indent);
+        tw.writeln("{}}}", indent);
     }
 
     /// @brief generates all Token IDs inside an enum in the prototype file
-    inline void generateTokenIDs(std::ostream& os, const std::unordered_set<std::string>& tnames) {
+    inline void generateTokenIDs(TextFileWriter& tw, const std::unordered_set<std::string>& tnames) {
         for (auto& t : tnames) {
-            print(os, "        {},", t);
+            tw.writeln("        {},", t);
         }
     }
 
     /// @brief generates the string names for all Token IDs inside a map in the prototype file
-    inline void generateTokenIDNames(std::ostream& os, const std::unordered_set<std::string>& tnames) {
+    inline void generateTokenIDNames(TextFileWriter& tw, const std::unordered_set<std::string>& tnames) {
         for (auto& t : tnames) {
-            print(os, "        {{ID::{}, \"{}\"}},", t, t);
+            tw.writeln("            {{ID::{}, \"{}\"}},", t, t);
         }
     }
 
-    /// @brief generates functions to create each AST node
-    /// These functions are called by the Parser on REDUCE actions
-    inline void generateCreateASTNodes(std::ostream& os, const std::unordered_map<std::string, std::string>& vars) {
+    /// @brief generates function declarations to create each AST node
+    inline void generateCreateASTNodesDecls(TextFileWriter& tw) {
         for (auto& rs : grammar.ruleSets) {
-            print(os, "    template<>");
-            print(os, "    inline {}::{}& create<{}::{}>(const ValueItem& vi) {{", grammar.astClass, rs->name, grammar.astClass, rs->name);
-            print(os, "        switch(vi.ruleID) {{");
+            tw.writeln("template<>");
+            tw.writeln("inline {}::{}& Parser::create<{}::{}>(const ValueItem& vi);", grammar.astClass, rs->name, grammar.astClass, rs->name);
+            tw.writeln();
+        }
+    }
+
+    /// @brief generates functions definitions to create each AST node
+    /// These functions are called by the Parser on REDUCE actions
+    inline void generateCreateASTNodesDefns(TextFileWriter& tw, const std::unordered_map<std::string, std::string>& vars) {
+        for (auto& rs : grammar.ruleSets) {
+            tw.writeln("template<>");
+            tw.writeln("inline {}::{}& Parser::create<{}::{}>(const ValueItem& vi) {{", grammar.astClass, rs->name, grammar.astClass, rs->name);
+            tw.writeln("    switch(vi.ruleID) {{");
             if(hasEpsilon(*rs) == true) {
-                print(os, "        case 0: {{");
-                print(os, "            // EPSILON-C");
-                print(os, "            auto& _cv_anchor = vi;");
-                print(os, "            auto& anchor = create<{}::{}>(_cv_anchor);", grammar.astClass, grammar.tokenClass);
-                print(os, "            auto& cel = ast.createAstNode<{}::{}>(vi.token.pos, anchor);", grammar.astClass, rs->name);
-                print(os, "            cel.rule.emplace<{}::{}::{}_r0>();", grammar.astClass, rs->name, rs->name);
-                print(os, "            return cel;");
-                print(os, "        }} // case");
+                tw.writeln("    case 0: {{");
+                tw.writeln("        // EPSILON-C");
+                tw.writeln("        auto& _cv_anchor = vi;");
+                tw.writeln("        auto& anchor = create<{}::{}>(_cv_anchor);", grammar.astClass, grammar.tokenClass);
+                tw.writeln("        auto& cel = ast.createAstNode<{}::{}>(vi.token.pos, anchor);", grammar.astClass, rs->name);
+                tw.writeln("        cel.rule.emplace<{}::{}::{}_r0>();", grammar.astClass, rs->name, rs->name);
+                tw.writeln("        return cel;");
+                tw.writeln("    }} // case");
             }
             for (auto& r : rs->rules) {
-                print(os, "        case {}: {{", r->id);
-                print(os, "            //{}", r->str(false));
-                print(os, "            assert(vi.childs.size() == {});", r->nodes.size());
+                tw.writeln("    case {}: {{", r->id);
+                tw.writeln("        //{}", r->str(false));
+                tw.writeln("        assert(vi.childs.size() == {});", r->nodes.size());
 
                 // generate parameter variables
                 std::ostringstream ss;
@@ -831,139 +893,140 @@ struct Generator {
                     }
 
                     auto rt = getNodeType(*n);
-                    print(os, "            auto& _cv_{} = *(vi.childs.at({}));", varName, idx);
-                    print(os, "            auto& p{} = create<{}::{}>(_cv_{});", varName, grammar.astClass, rt, varName);
+                    tw.writeln("        auto& _cv_{} = *(vi.childs.at({}));", varName, idx);
+                    tw.writeln("        auto& p{} = create<{}::{}>(_cv_{});", varName, grammar.astClass, rt, varName);
                     if (idx == r->anchor) {
-                        print(os, "            auto& anchor = create<{}::{}>(_cv_{});", grammar.astClass, grammar.tokenClass, varName);
+                        tw.writeln("        auto& anchor = create<{}::{}>(_cv_{});", grammar.astClass, grammar.tokenClass, varName);
                         hasAnchor = ", anchor";
                     }
                     ss << std::format("{}p{}", sep, varName);
                     sep = ", ";
                 }
 
-                print(os, "            auto& cel = ast.createAstNode<{}::{}>(vi.token.pos{});", grammar.astClass, rs->name, hasAnchor);
-                print(os, "            cel.rule.emplace<{}::{}::{}>({});", grammar.astClass, rs->name, r->ruleName, ss.str());
-                print(os, "            return cel;");
-                print(os, "        }} // case");
+                tw.writeln("        auto& cel = ast.createAstNode<{}::{}>(vi.token.pos{});", grammar.astClass, rs->name, hasAnchor);
+                tw.writeln("        cel.rule.emplace<{}::{}::{}>({});", grammar.astClass, rs->name, r->ruleName, ss.str());
+                tw.writeln("        return cel;");
+                tw.writeln("    }} // case");
             }
-            print(os, "        }} // switch");
-            print(os, "{}", generateError("vi.token.pos.row", "vi.token.pos.col", "vi.token.pos.file", "std::format(\"ASTGEN_ERROR:{}\", vi.ruleID)", "        ", vars));
-            print(os, "    }}\n");
+            tw.writeln("    }} // switch");
+            generateError(tw, "vi.token.pos.row", "vi.token.pos.col", "vi.token.pos.file", "std::format(\"ASTGEN_ERROR:{}\", vi.ruleID)", "    ", vars);
+            tw.writeln("}}");
+            tw.writeln();
         }
     }
 
     /// @brief generates case statements for the Parser
     /// Each case block checks the next Token received from the Lexer
     /// and decides whether to SHIFT, REDUCE or GOTO to the next state
-    inline void generateParserTransitions(std::ostream& os, const std::unordered_map<std::string, std::string>& vars) {
+    inline void generateParserTransitions(TextFileWriter& tw, const std::unordered_map<std::string, std::string>& vars) {
         for (auto& ps : grammar.itemSets) {
             auto& itemSet = *ps;
             assert((itemSet.shifts.size() > 0) || (itemSet.reduces.size() > 0) || (itemSet.gotos.size() > 0));
             bool breaked = false;
 
-            print(os, "            case {}:", itemSet.id);
-            print(os, "                std::print(log(), \"{{}}\", \"{}\\n\");", itemSet.str("", "\\n", true));
-            print(os, "                switch(k.id) {{");
+            tw.writeln("            case {}:", itemSet.id);
+            tw.writeln("                std::print(log(), \"{{}}\", \"{}\\n\");", itemSet.str("", "\\n", true));
+            tw.writeln("                switch(k.id) {{");
             for (auto& c : itemSet.shifts) {
                 for(auto& fb : c.first->fallbacks) {
                     if ((itemSet.hasShift(*fb)) || (itemSet.hasReduce(*fb))) {
                         continue;
                     }
-                    print(os, "                case Tolkien::ID::{}: // SHIFT(fallback)", fb->name);
+                    tw.writeln("                case Tolkien::ID::{}: // SHIFT(fallback)", fb->name);
                 }
 
-                print(os, "                case Tolkien::ID::{}: // SHIFT", c.first->name);
+                tw.writeln("                case Tolkien::ID::{}: // SHIFT", c.first->name);
                 for(auto& e : c.second.epsilons) {
-                    print(os, "                    shift(k.pos, Tolkien::ID::{}); //EPSILON-S", e->name);
-                    print(os, "                    stateStack.push_back(0);");
-                    print(os, "                    reduce(0, 1, 0, Tolkien::ID::{}, \"{}\");", e->name, e->name);
-                    print(os, "                    stateStack.push_back(0);");
+                    tw.writeln("                    shift(k.pos, Tolkien::ID::{}); //EPSILON-S", e->name);
+                    tw.writeln("                    stateStack.push_back(0);");
+                    tw.writeln("                    reduce(0, 1, 0, Tolkien::ID::{}, \"{}\");", e->name, e->name);
+                    tw.writeln("                    stateStack.push_back(0);");
                 }
-                print(os, "                    std::print(log(), \"SHIFT {}: t={}\\n\");", c.second.next->id, c.first->name);
-                print(os, "                    shift(k);");
-                print(os, "                    stateStack.push_back({});", c.second.next->id);
-                print(os, "                    return accepted;");
+                tw.writeln("                    std::print(log(), \"SHIFT {}: t={}\\n\");", c.second.next->id, c.first->name);
+                tw.writeln("                    shift(k);");
+                tw.writeln("                    stateStack.push_back({});", c.second.next->id);
+                tw.writeln("                    return accepted;");
             }
             for (auto& rd : itemSet.reduces) {
                 auto& c = *(rd.second.next);
                 auto& r = c.rule;
-                print(os, "                case Tolkien::ID::{}: // REDUCE", rd.first->name);
-                print(os, "                    std::print(log(), \"REDUCE:{}:{{}}/{}\\n\", \"{}\");", rd.first->name, r.nodes.size(), c.str());
+                tw.writeln("                case Tolkien::ID::{}: // REDUCE", rd.first->name);
+                tw.writeln("                    std::print(log(), \"REDUCE:{}:{{}}/{}\\n\", \"{}\");", rd.first->name, r.nodes.size(), c.str());
                 auto len = rd.second.len;
                 while(len < r.nodes.size()) {
-                    print(os, "                    //shift-epsilon: len={}", len);
-                    print(os, "                    shift(k.pos, Tolkien::ID::{}); //EPSILON-R", grammar.empty);
-                    print(os, "                    stateStack.push_back(0);");
+                    tw.writeln("                    //shift-epsilon: len={}", len);
+                    tw.writeln("                    shift(k.pos, Tolkien::ID::{}); //EPSILON-R", grammar.empty);
+                    tw.writeln("                    stateStack.push_back(0);");
                     ++len;
                 }
 
                 if ((r.ruleSetName() == grammar.start) && (rd.first->name == grammar.end)) {
-                    print(os, "                    shift(k.pos, Tolkien::ID::{}); //END", grammar.end);
-                    print(os, "                    stateStack.push_back(0);");
+                    tw.writeln("                    shift(k.pos, Tolkien::ID::{}); //END", grammar.end);
+                    tw.writeln("                    stateStack.push_back(0);");
                 }
-                print(os, "                    reduce({}, {}, {}, Tolkien::ID::{}, \"{}\");", r.id, len, r.anchor, r.ruleSetName(), r.ruleSetName());
-                print(os, "                    k.id = Tolkien::ID::{};", r.ruleSetName());
+                tw.writeln("                    reduce({}, {}, {}, Tolkien::ID::{}, \"{}\");", r.id, len, r.anchor, r.ruleSetName(), r.ruleSetName());
+                tw.writeln("                    k.id = Tolkien::ID::{};", r.ruleSetName());
                 if (r.ruleSetName() == grammar.start) {
-                    print(os, "                    accepted = true;");
-                    print(os, "                    return accepted;");
+                    tw.writeln("                    accepted = true;");
+                    tw.writeln("                    return accepted;");
                 }else{
-                    print(os, "                    break;");
+                    tw.writeln("                    break;");
                     breaked = true;
                 }
             }
             for (auto& c : itemSet.gotos) {
-                print(os, "                case Tolkien::ID::{}: // GOTO", c.first->name);
-                print(os, "                    std::print(log(), \"GOTO {}:id={}, rule={}\\n\");", c.second->id, c.first->id, c.first->name);
-                print(os, "                    stateStack.push_back({});", c.second->id);
-                print(os, "                    k = k0;");
-                print(os, "                    break;");
+                tw.writeln("                case Tolkien::ID::{}: // GOTO", c.first->name);
+                tw.writeln("                    std::print(log(), \"GOTO {}:id={}, rule={}\\n\");", c.second->id, c.first->id, c.first->name);
+                tw.writeln("                    stateStack.push_back({});", c.second->id);
+                tw.writeln("                    k = k0;");
+                tw.writeln("                    break;");
                 breaked = true;
             }
-            print(os, "                default:");
-            print(os, "{}", generateError("k.pos.row", "k.pos.col", "k.pos.file", "\"SYNTAX_ERROR\"", "                    ", vars));
-            print(os, "                }} // switch(k.id)");
+            tw.writeln("                default:");
+            generateError(tw, "k.pos.row", "k.pos.col", "k.pos.file", "\"SYNTAX_ERROR\"", "                    ", vars);
+            tw.writeln("                }} // switch(k.id)");
             if(breaked == true) {
-                print(os, "                break;");
+                tw.writeln("                break;");
             }
         }
     }
 
     /// @brief class to calculate transitions from one Lexer state to the next
     struct TransitionSet {
-        const Grammar::Transition* wildcard = nullptr;
+        const yglx::Transition* wildcard = nullptr;
 
-        std::vector<std::pair<const Grammar::Transition*, const Grammar::RangeClass*>> smallRanges;
-        std::vector<std::pair<const Grammar::Transition*, const Grammar::RangeClass*>> largeRanges;
-        std::vector<std::pair<const Grammar::Transition*, const Grammar::LargeEscClass*>> largeEscClasses;
+        std::vector<std::pair<const yglx::Transition*, const yglx::RangeClass*>> smallRanges;
+        std::vector<std::pair<const yglx::Transition*, const yglx::RangeClass*>> largeRanges;
+        std::vector<std::pair<const yglx::Transition*, const yglx::LargeEscClass*>> largeEscClasses;
 
-        std::vector<std::pair<const Grammar::Transition*, const Grammar::ClassTransition*>> classes;
+        std::vector<std::pair<const yglx::Transition*, const yglx::ClassTransition*>> classes;
 
-        std::pair<const Grammar::Transition*, const Grammar::ClosureTransition*> enterClosure = {nullptr, nullptr};
-        std::pair<const Grammar::Transition*, const Grammar::ClosureTransition*> preLoop = {nullptr, nullptr};
-        std::pair<const Grammar::Transition*, const Grammar::ClosureTransition*> inLoop = {nullptr, nullptr};
-        std::pair<const Grammar::Transition*, const Grammar::ClosureTransition*> postLoop = {nullptr, nullptr};
-        std::pair<const Grammar::Transition*, const Grammar::ClosureTransition*> leaveClosure = {nullptr, nullptr};
+        std::pair<const yglx::Transition*, const yglx::ClosureTransition*> enterClosure = {nullptr, nullptr};
+        std::pair<const yglx::Transition*, const yglx::ClosureTransition*> preLoop = {nullptr, nullptr};
+        std::pair<const yglx::Transition*, const yglx::ClosureTransition*> inLoop = {nullptr, nullptr};
+        std::pair<const yglx::Transition*, const yglx::ClosureTransition*> postLoop = {nullptr, nullptr};
+        std::pair<const yglx::Transition*, const yglx::ClosureTransition*> leaveClosure = {nullptr, nullptr};
 
-        std::pair<const Grammar::Transition*, const Grammar::SlideTransition*> slide = {nullptr, nullptr};
+        std::pair<const yglx::Transition*, const yglx::SlideTransition*> slide = {nullptr, nullptr};
 
         struct Visitor {
-            const Grammar& grammar;
+            const yg::Grammar& grammar;
             TransitionSet& tset;
-            const Grammar::Transition& tx;
+            const yglx::Transition& tx;
 
-            inline Visitor(const Grammar& g, TransitionSet& s, const Grammar::Transition& x)
+            inline Visitor(const yg::Grammar& g, TransitionSet& s, const yglx::Transition& x)
                 : grammar(g), tset(s), tx(x) {}
 
-            inline void operator()(const Grammar::WildCard&) {
+            inline void operator()(const yglx::WildCard&) {
                 assert(tset.wildcard == nullptr);
                 tset.wildcard = &tx;
             }
 
-            inline void operator()(const Grammar::LargeEscClass& t) {
+            inline void operator()(const yglx::LargeEscClass& t) {
                 tset.largeEscClasses.push_back(std::make_pair(&tx, &t));
             }
 
-            inline void operator()(const Grammar::RangeClass& t) {
+            inline void operator()(const yglx::RangeClass& t) {
                 bool isSmallRange = ((t.ch2 - t.ch1) <= grammar.smallRangeSize);
                 if (isSmallRange) {
                     tset.smallRanges.push_back(std::make_pair(&tx, &t));
@@ -972,46 +1035,46 @@ struct Generator {
                 }
             }
 
-            inline void operator()(const Grammar::PrimitiveTransition& t) {
+            inline void operator()(const yglx::PrimitiveTransition& t) {
                 std::visit(*this, t.atom.atom);
             }
 
-            inline void operator()(const Grammar::ClassTransition& t) {
+            inline void operator()(const yglx::ClassTransition& t) {
                 tset.classes.push_back(std::make_pair(&tx, &t));
             }
 
-            inline void operator()(const Grammar::ClosureTransition& t) {
+            inline void operator()(const yglx::ClosureTransition& t) {
                 switch(t.type) {
-                case Grammar::ClosureTransition::Type::Enter:
+                case yglx::ClosureTransition::Type::Enter:
                     assert(tset.enterClosure.first == nullptr);
                     tset.enterClosure = std::make_pair(&tx, &t);
                     break;
-                case Grammar::ClosureTransition::Type::PreLoop:
+                case yglx::ClosureTransition::Type::PreLoop:
                     assert(tset.preLoop.first == nullptr);
                     tset.preLoop = std::make_pair(&tx, &t);
                     break;
-                case Grammar::ClosureTransition::Type::InLoop:
+                case yglx::ClosureTransition::Type::InLoop:
                     assert(tset.inLoop.first == nullptr);
                     tset.inLoop = std::make_pair(&tx, &t);
                     break;
-                case Grammar::ClosureTransition::Type::PostLoop:
+                case yglx::ClosureTransition::Type::PostLoop:
                     assert(tset.postLoop.first == nullptr);
                     tset.postLoop = std::make_pair(&tx, &t);
                     break;
-                case Grammar::ClosureTransition::Type::Leave:
+                case yglx::ClosureTransition::Type::Leave:
                     assert(tset.leaveClosure.first == nullptr);
                     tset.leaveClosure = std::make_pair(&tx, &t);
                     break;
                 }
             }
 
-            inline void operator()(const Grammar::SlideTransition& t) {
+            inline void operator()(const yglx::SlideTransition& t) {
                 assert(tset.slide.first == nullptr);
                 tset.slide = std::make_pair(&tx, &t);
             }
         };
 
-        inline void process(const Grammar& g, const std::vector<Grammar::Transition*>& txs) {
+        inline void process(const yg::Grammar& g, const std::vector<yglx::Transition*>& txs) {
             for (auto& tx : txs) {
                 Visitor v(g, *this, *tx);
                 std::visit(v, tx->t);
@@ -1020,18 +1083,18 @@ struct Generator {
     };
 
     /// @brief generate code to transition from one Lexer state to another
-    inline void generateStateChange(std::ostream& os, const Grammar::Transition& t, const Grammar::State* nextState, const std::string& indent) {
+    inline void generateStateChange(TextFileWriter& tw, const yglx::Transition& t, const yglx::State* nextState, const std::string& indent) {
         if (t.capture) {
-            print(os, "                {}token.addText(ch);", indent);
+            tw.writeln("                {}token.addText(ch);", indent);
         }
-        print(os, "                {}stream.consume();", indent);
-        print(os, "                {}state = {};", indent, nextState->id);
+        tw.writeln("                {}stream.consume();", indent);
+        tw.writeln("                {}state = {};", indent, nextState->id);
     }
 
     /// @brief generate Lexer states
-    inline void generateLexerStates(std::ostream& os, const std::unordered_map<std::string, std::string>& vars) {
-        print(os, "            case 0:");
-        print(os, "{}", generateError("stream.pos.row", "stream.pos.col", "stream.pos.file", "\"SYNTAX_ERROR\"", "                ", vars));
+    inline void generateLexerStates(TextFileWriter& tw, const std::unordered_map<std::string, std::string>& vars) {
+        tw.writeln("            case 0:");
+        generateError(tw, "stream.pos.row", "stream.pos.col", "stream.pos.file", "\"SYNTAX_ERROR\"", "                ", vars);
 
         for (auto& ps : grammar.states) {
             auto& state = *ps;
@@ -1041,9 +1104,9 @@ struct Generator {
             tset.process(grammar, state.superTransitions);
             tset.process(grammar, state.shadowTransitions);
 
-            print(os, "            case {}:", state.id);
+            tw.writeln("            case {}:", state.id);
             if(state.isRoot == true) {
-                print(os, "                token = Tolkien(stream.pos);");
+                tw.writeln("                token = Tolkien(stream.pos);");
             }
 
             if (tset.inLoop.first != nullptr) {
@@ -1056,13 +1119,13 @@ struct Generator {
                 assert(tset.leaveClosure.first == nullptr);
 
                 auto& tx = *(tset.inLoop.second);
-                print(os, "                assert(counts.size() > 0);");
+                tw.writeln("                assert(counts.size() > 0);");
                 if (tset.preLoop.first != nullptr) {
-                    print(os, "                if(count() < {}) {{", tx.atom.min);
-                    print(os, "                    ++counts.back();");
-                    print(os, "                    state = {};", tset.preLoop.first->next->id);
-                    print(os, "                    continue; //precount");
-                    print(os, "                }}");
+                    tw.writeln("                if(count() < {}) {{", tx.atom.min);
+                    tw.writeln("                    ++counts.back();");
+                    tw.writeln("                    state = {};", tset.preLoop.first->next->id);
+                    tw.writeln("                    continue; //precount");
+                    tw.writeln("                }}");
                 }
 
                 std::string chkx;
@@ -1073,67 +1136,68 @@ struct Generator {
                     chkx = std::format("count() < {}", mrc);
                 }
 
-                print(os, "                if({}) {{", chkx);
-                print(os, "                    ++counts.back();");
-                print(os, "                    state = {};", tset.inLoop.first->next->id);
-                print(os, "                    continue; //inLoop");
-                print(os, "                }}");
+                tw.writeln("                if({}) {{", chkx);
+                tw.writeln("                    ++counts.back();");
+                tw.writeln("                    state = {};", tset.inLoop.first->next->id);
+                tw.writeln("                    continue; //inLoop");
+                tw.writeln("                }}");
 
                 assert(tset.postLoop.first != nullptr);
-                print(os, "                assert(count() == {});", mrc);
-                print(os, "                counts.pop_back();");
-                print(os, "                state = {};", tset.postLoop.first->next->id);
-                print(os, "                continue; //postLoop");
+                tw.writeln("                assert(count() == {});", mrc);
+                tw.writeln("                counts.pop_back();");
+                tw.writeln("                state = {};", tset.postLoop.first->next->id);
+                tw.writeln("                continue; //postLoop");
 
                 continue;
             }
 
             // END check must always be the second one
             if (state.checkEOF) {
-                print(os, "                if(ch == static_cast<char_t>(EOF)) {{");
-                print(os, "                    token.id = Tolkien::ID::{};", grammar.end);
-                print(os, "                    parser.parse(token);\n");
-                print(os, "                    // at EOF, call parse() repeatedly until all final reductions are complete");
-                print(os, "                    while(parser.isClean() == false) {{");
-                print(os, "                        parser.parse(token);");
-                print(os, "                    }}");
-                print(os, "                    state = 0;");
-                print(os, "                    stream.consume();");
-                print(os, "                    continue; //EOF");
-                print(os, "                }}");
+                tw.writeln("                if(ch == static_cast<char_t>(EOF)) {{");
+                tw.writeln("                    token.id = Tolkien::ID::{};", grammar.end);
+                tw.writeln("                    parser.parse(token);");
+                tw.writeln();
+                tw.writeln("                    // at EOF, call parse() repeatedly until all final reductions are complete");
+                tw.writeln("                    while(parser.isClean() == false) {{");
+                tw.writeln("                        parser.parse(token);");
+                tw.writeln("                    }}");
+                tw.writeln("                    state = 0;");
+                tw.writeln("                    stream.consume();");
+                tw.writeln("                    continue; //EOF");
+                tw.writeln("                }}");
             }
 
             // generate switch cases for small ranges
             if (tset.smallRanges.size() > 0) {
-                print(os, "                switch(ch) {{");
+                tw.writeln("                switch(ch) {{");
 
                 for (auto& t : tset.smallRanges) {
                     assert(t.second->ch2 >= t.second->ch1);
                     for (auto c = t.second->ch1; c <= t.second->ch2; ++c) {
-                        print(os, "                case {}:", getChString(c));
+                        tw.writeln("                case {}:", getChString(c));
                     }
-                    generateStateChange(os, *(t.first), t.first->next, "    ");
-                    print(os, "                    continue; //smallRange");
+                    generateStateChange(tw, *(t.first), t.first->next, "    ");
+                    tw.writeln("                    continue; //smallRange");
                 }
 
-                print(os, "                }}");
+                tw.writeln("                }}");
             }
 
             // generate checks for large escape classes
             for (auto& t : tset.largeEscClasses) {
-                print(os, "                if({}(ch)) {{", t.second->checker);
-                generateStateChange(os, *(t.first), t.first->next, "    ");
-                print(os, "                    continue; //largeEsc");
-                print(os, "                }}");
+                tw.writeln("                if({}(ch)) {{", t.second->checker);
+                generateStateChange(tw, *(t.first), t.first->next, "    ");
+                tw.writeln("                    continue; //largeEsc");
+                tw.writeln("                }}");
             }
 
             // generate checks for large ranges
             for (auto& t : tset.largeRanges) {
-                print(os, "                // id={}, large", state.id);
-                print(os, "                if(contains(ch, {}, {})) {{", getChString(t.second->ch1), getChString(t.second->ch2));
-                generateStateChange(os, *(t.first), t.first->next, "    ");
-                print(os, "                    continue; //largeRange");
-                print(os, "                }}");
+                tw.writeln("                // id={}, large", state.id);
+                tw.writeln("                if(contains(ch, {}, {})) {{", getChString(t.second->ch1), getChString(t.second->ch2));
+                generateStateChange(tw, *(t.first), t.first->next, "    ");
+                tw.writeln("                    continue; //largeRange");
+                tw.writeln("                }}");
             }
 
             // generate checks for classes
@@ -1143,75 +1207,75 @@ struct Generator {
                 std::string sepx = (t.second->atom.negate?" && ":" || ");
                 std::string negate = (t.second->atom.negate?"!":"");
                 for(auto& ax : t.second->atom.atoms) {
-                    std::visit(overloaded{
-                        [&negate, &ss, &sep](const Grammar::WildCard&) {
+                    std::visit(overload{
+                        [&negate, &ss, &sep](const yglx::WildCard&) {
                             ss << std::format("{}({}true)", sep, negate);
                         },
-                        [&negate, &ss, &sep](const Grammar::LargeEscClass& a) {
+                        [&negate, &ss, &sep](const yglx::LargeEscClass& a) {
                             ss << std::format("{}({}{}(ch))", sep, negate, a.checker);
                         },
-                        [&negate, &ss, &sep](const Grammar::RangeClass& a) {
+                        [&negate, &ss, &sep](const yglx::RangeClass& a) {
                             ss << std::format("{}({}contains(ch, {}, {}))", sep, negate, getChString(a.ch1), getChString(a.ch2));
                         },
                     }, ax);
                     sep = sepx;
                 }
-                print(os, "                if((ch != static_cast<char_t>(EOF)) && ({})) {{", ss.str());
-                generateStateChange(os, *(t.first), t.first->next, "    ");
-                print(os, "                    continue; //Class");
-                print(os, "                }}");
+                tw.writeln("                if((ch != static_cast<char_t>(EOF)) && ({})) {{", ss.str());
+                generateStateChange(tw, *(t.first), t.first->next, "    ");
+                tw.writeln("                    continue; //Class");
+                tw.writeln("                }}");
             }
 
             // the sequence of checks in this if-ladder is significant
             if (tset.wildcard != nullptr) {
-                generateStateChange(os, *(tset.wildcard), tset.wildcard->next, "");
-                print(os, "                continue; //wildcard");
+                generateStateChange(tw, *(tset.wildcard), tset.wildcard->next, "");
+                tw.writeln("                continue; //wildcard");
             }else if (tset.slide.first != nullptr) {
                 assert(tset.wildcard == nullptr);
-                print(os, "                state = {};", tset.slide.first->next->id);
-                print(os, "                continue; //slide");
+                tw.writeln("                state = {};", tset.slide.first->next->id);
+                tw.writeln("                continue; //slide");
             }else if (tset.enterClosure.first != nullptr) {
-                print(os, "                counts.push_back({});", tset.enterClosure.second->initialCount);
-                print(os, "                state = {};", tset.enterClosure.first->next->id);
-                print(os, "                continue; //enterClosure");
+                tw.writeln("                counts.push_back({});", tset.enterClosure.second->initialCount);
+                tw.writeln("                state = {};", tset.enterClosure.first->next->id);
+                tw.writeln("                continue; //enterClosure");
             }else if (state.matchedRegex) {
                 size_t nextStateID = 0;
                 switch(state.matchedRegex->modeChange) {
-                case Grammar::Regex::ModeChange::None:
+                case yglx::Regex::ModeChange::None:
                     break;
-                case Grammar::Regex::ModeChange::Next: {
+                case yglx::Regex::ModeChange::Next: {
                     auto& mode = grammar.getRegexNextMode(*(state.matchedRegex));
                     assert(mode.root);
                     nextStateID = mode.root->id;
-                    print(os, "                modes.push_back({}); // MATCH, -> {}", nextStateID, state.matchedRegex->nextMode);
+                    tw.writeln("                modes.push_back({}); // MATCH, -> {}", nextStateID, state.matchedRegex->nextMode);
                     break;
                 }
-                case Grammar::Regex::ModeChange::Back:
-                    print(os, "                assert(modes.size() > 0);");
-                    print(os, "                modes.pop_back();");
+                case yglx::Regex::ModeChange::Back:
+                    tw.writeln("                assert(modes.size() > 0);");
+                    tw.writeln("                modes.pop_back();");
                     break;
-                case Grammar::Regex::ModeChange::Init:
-                    print(os, "                assert(modes.size() > 0);");
-                    print(os, "                modes.clear();");
-                    print(os, "                modes.push_back(1);");
+                case yglx::Regex::ModeChange::Init:
+                    tw.writeln("                assert(modes.size() > 0);");
+                    tw.writeln("                modes.clear();");
+                    tw.writeln("                modes.push_back(1);");
                     break;
                 }
-                print(os, "                state = modeRoot();");
+                tw.writeln("                state = modeRoot();");
 
                 if (state.matchedRegex->usageCount > 0) {
-                    print(os, "                token.id = Tolkien::ID::{};", state.matchedRegex->regexName);
-                    print(os, "                parser.parse(token);");
+                    tw.writeln("                token.id = Tolkien::ID::{};", state.matchedRegex->regexName);
+                    tw.writeln("                parser.parse(token);");
                 }else{
-                    print(os, "                token = Tolkien(stream.pos);");
+                    tw.writeln("                token = Tolkien(stream.pos);");
                 }
-                print(os, "                continue;");
+                tw.writeln("                continue;");
             }else if (tset.leaveClosure.first != nullptr) {
                 assert(tset.wildcard == nullptr);
                 assert(tset.slide.first == nullptr);
-                print(os, "                state = {};", tset.leaveClosure.first->next->id);
-                print(os, "                continue; //leaveClosure");
+                tw.writeln("                state = {};", tset.leaveClosure.first->next->id);
+                tw.writeln("                continue; //leaveClosure");
             }else{
-                print(os, "{}", generateError("stream.pos.row", "stream.pos.col", "stream.pos.file", "\"SYNTAX_ERROR\"", "                ", vars));
+                generateError(tw, "stream.pos.row", "stream.pos.col", "stream.pos.file", "\"SYNTAX_ERROR\"", "                ", vars);
             }
         }
     }
@@ -1221,7 +1285,7 @@ struct Generator {
     /// and acts on each meta command found in the file.
     inline void includeCodeBlock(
         const char* codeBlock,
-        std::ofstream& srcx,
+        TextFileWriter& tw,
         const std::unordered_map<std::string, std::string>& vars,
         const std::unordered_set<std::string>& tnames,
         const std::filesystem::path& filebase,
@@ -1318,14 +1382,17 @@ struct Generator {
                 token = Token::Line;
             }
 
-//#define PRINT(...) print(__VA_ARGS__)
+//#define PRINT(...) std::println(__VA_ARGS__)
 #define PRINT(...)
+
+            // static int x = 0;
+            // assert(++x < 10);
 
             switch (token) {
             case Token::EnterBlock: {
                 PRINT("Init::EB:{}", line);
                 if (eblockName != "SKIP") {
-                    print(srcx, "{}", line);
+                    tw.writeln("{}", line);
                 }
                 if (eblockName == "stdHeaders") {
                     if (grammar.stdHeadersEnabled == true) {
@@ -1338,7 +1405,7 @@ struct Generator {
 
                 if (eblockName == "repl") {
                     if (amalgamatedFile == true) {
-                        print(srcx, "#define HAS_REPL {}", (grammar.hasREPL == true)?1:0);
+                        tw.writeln("#define HAS_REPL {}", (grammar.hasREPL == true)?1:0);
                         skip = false;
                     }else{
                         skip = true;
@@ -1375,7 +1442,7 @@ struct Generator {
             case Token::LeaveBlock: {
                 PRINT("Line::LB:{}, eb={}, lb={}", line, eblockName, lblockName);
                 if (eblockName != "SKIP") {
-                    print(srcx, "{}", line);
+                    tw.writeln("{}", line);
                 }
                 assert(lblockName == eblockName);
                 skip = false;
@@ -1389,66 +1456,78 @@ struct Generator {
             }
             case Token::Segment: {
                 PRINT("Line::SEGMENT:{}", line);
-                print(srcx, "{}:BEGIN", line);
+                tw.writeln("{}:BEGIN //{}", line, tw.row);
                 if (segmentName == "pchHeader") {
-                    generatePchHeader(srcx, indent);
+                    generatePchHeader(tw, indent);
                 }else if (segmentName == "hdrHeaders") {
-                    generateHdrHeaders(srcx, indent);
+                    generateHdrHeaders(tw, indent);
                 }else if (segmentName == "srcHeaders") {
-                    generateSrcHeaders(srcx, indent);
+                    generateSrcHeaders(tw, indent);
                 }else if (segmentName == "classMembers") {
-                    generateClassMembers(srcx, indent);
+                    generateClassMembers(tw, indent);
                 }else if (segmentName == "astNodeDecls") {
-                    generateAstNodeDecls(srcx, indent);
+                    generateAstNodeDecls(tw, indent);
                 }else if (segmentName == "astNodeDefns") {
-                    generateAstNodeDefns(srcx, indent);
+                    generateAstNodeDefns(tw, indent);
                 }else if (segmentName == "astNodeItems") {
-                    generateAstNodeItems(srcx, indent);
+                    generateAstNodeItems(tw, indent);
                 }else if (segmentName == "walkers") {
-                    generateWalkers(srcx, vars, indent);
+                    generateWalkers(tw, vars, indent);
                 }else if (segmentName == "prologue") {
-                    expand(srcx, grammar.prologue, indent, true, vars);
+                    tw.writeln("{}:XX-1 //{}", line, tw.row);
+                    generateCodeBlock(tw, grammar.prologue, indent, true, vars);
+                    tw.writeln("{}:XX-2 //{}", line, tw.row);
                 }else if (segmentName == "initWalkers") {
                     if(amalgamatedFile) {
-                        generateInitWalkers(srcx, indent);
+                        generateInitWalkers(tw, indent);
                     }
                 }else if (segmentName == "walkerCalls") {
-                    generateWalkerCalls(srcx, indent);
+                    generateWalkerCalls(tw, indent);
                 }else if (segmentName == "epilogue") {
-                    expand(srcx, grammar.epilogue, indent, true, vars);
+                    generateCodeBlock(tw, grammar.epilogue, indent, true, vars);
                 }else if (segmentName == "tokenIDs") {
-                    generateTokenIDs(srcx, tnames);
+                    generateTokenIDs(tw, tnames);
                 }else if (segmentName == "tokenIDNames") {
-                    generateTokenIDNames(srcx, tnames);
-                }else if (segmentName == "createASTNodes") {
-                    generateCreateASTNodes(srcx, vars);
+                    generateTokenIDNames(tw, tnames);
+                }else if (segmentName == "createASTNodesDecls") {
+                    generateCreateASTNodesDecls(tw);
+                }else if (segmentName == "createASTNodesDefns") {
+                    generateCreateASTNodesDefns(tw, vars);
                 }else if (segmentName == "parserTransitions") {
-                    generateParserTransitions(srcx, vars);
+                    generateParserTransitions(tw, vars);
                 }else if (segmentName == "lexerStates") {
-                    generateLexerStates(srcx, vars);
+                    generateLexerStates(tw, vars);
                 }else{
                     throw GeneratorError(__LINE__, __FILE__, grammar.pos(), "UNKNOWN_SEGMENT:{}", segmentName);
                 }
-                print(srcx, "{}:END", line);
+                tw.writeln("{}:END //{}", line, tw.row);
                 break;
             }
             case Token::Include: {
                 PRINT("Line::INCLUDE:{}", line);
-                print(srcx, "{}:BEGIN", line);
+                tw.writeln("{}:BEGIN", line);
                 if (includeName == "utf8Encoding") {
                     if (grammar.unicodeEnabled == true) {
-                        includeCodeBlock(utf8Encoding, srcx, vars, tnames, filebase, srcName);
+                        includeCodeBlock(cb_encoding_utf8, tw, vars, tnames, filebase, srcName);
                     }
                 }else if (includeName == "asciiEncoding") {
                     if (grammar.unicodeEnabled == false) {
-                        includeCodeBlock(asciiEncoding, srcx, vars, tnames, filebase, srcName);
+                        includeCodeBlock(cb_encoding_ascii, tw, vars, tnames, filebase, srcName);
                     }
                 }else if (includeName == "stream") {
-                    includeCodeBlock(cbStream, srcx, vars, tnames, filebase, srcName);
+                    includeCodeBlock(cb_stream, tw, vars, tnames, filebase, srcName);
+                }else if (includeName == "textWriter") {
+                    includeCodeBlock(cb_text_writer, tw, vars, tnames, filebase, srcName);
+                }else if (includeName == "print") {
+                    includeCodeBlock(cb_print, tw, vars, tnames, filebase, srcName);
+                }else if (includeName == "nsutil") {
+                    includeCodeBlock(cb_nsutil, tw, vars, tnames, filebase, srcName);
+                }else if (includeName == "filepos") {
+                    includeCodeBlock(cb_filepos, tw, vars, tnames, filebase, srcName);
                 }else{
                     throw GeneratorError(__LINE__, __FILE__, grammar.pos(), "UNKNOWN_INCLUDE:{}", includeName);
                 }
-                print(srcx, "{}:END", line);
+                tw.writeln("{}:END", line);
                 break;
             }
             case Token::Target: {
@@ -1457,23 +1536,18 @@ struct Generator {
                     auto hdrName = srcName;
                     auto nsrcName = filebase.string() + ".cpp";
                     PRINT("reopening:{}", nsrcName);
-                    srcx = std::ofstream(nsrcName);
-                    if (srcx.is_open() == false) {
+                    tw.open(nsrcName);
+                    if (tw.isOpen() == false) {
                         throw GeneratorError(__LINE__, __FILE__, grammar.pos(), "ERROR_OPENING_SRC:{}", nsrcName);
                     }
-                    print(srcx, "#include \"{}\"", std::filesystem::path(hdrName).filename().string());
+                    tw.writeln("#include \"{}\"", std::filesystem::path(hdrName).filename().string());
                 }
                 break;
             }
             case Token::Line: {
-                PRINT("Init::LINE:{}, eblockName={}", line, eblockName);
+                PRINT("Init::LINE:{}, eblockName=[{}]", line, eblockName);
                 if (skip == false) {
-                    if(line.size() == 0) {
-                        // print empty line as-is
-                        print(srcx, "{}", line);
-                    }else{
-                        expand(srcx, line, "", false, vars);
-                    }
+                    generatePrototypeLine(tw, line, vars);
                 }else if(eblockName == "throwError") {
                     tblock += line;
                 }
@@ -1507,12 +1581,13 @@ struct Generator {
         if(amalgamatedFile) {
             srcName = filebase.string() + ".cpp";
         }
-        auto srcx = std::ofstream(srcName);
-        if (srcx.is_open() == false) {
+        TextFileWriter tw;
+        tw.open(srcName);
+        if (tw.isOpen() == false) {
             throw GeneratorError(__LINE__, __FILE__, grammar.pos(), "ERROR_OPENING_SRC:{}", srcName);
         }
         if(amalgamatedFile == false) {
-            print(srcx, "#pragma once");
+            tw.writeln("#pragma once");
         }
 
         // token IDs
@@ -1553,12 +1628,12 @@ struct Generator {
             {"AST", grammar.astClass},
         };
 
-        includeCodeBlock(cbPrototype, srcx, vars, tnames, filebase, srcName);
+        includeCodeBlock(cb_prototype, tw, vars, tnames, filebase, srcName);
     }
 };
 }
 
-void generateGrammar(const Grammar& g, const std::filesystem::path& of) {
+void generateGrammar(const yg::Grammar& g, const std::filesystem::path& of) {
     Generator gen(g);
     gen.generate(of);
 }

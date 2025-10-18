@@ -1,5 +1,5 @@
 #include "pch.hpp"
-#include "grammar.hpp"
+#include "grammar_yg.hpp"
 #include "parser.hpp"
 #include "logger.hpp"
 #include "lexer_builder.hpp"
@@ -18,8 +18,8 @@ extern bool genLines;
 bool genLines = true;
 
 namespace {
-using LexerTable = Table<const Grammar::State*, std::string, std::string>;
-inline void generateLexerTable(std::ostream& os, const Grammar& g) {
+using LexerTable = Table<const yglx::State*, std::string, std::string>;
+inline void generateLexerTable(std::ostream& os, const yg::Grammar& g) {
     LexerTable pt;
     for(auto& t : g.transitions) {
         pt.addHeader(std::format("{}", t->str()));
@@ -32,11 +32,11 @@ inline void generateLexerTable(std::ostream& os, const Grammar& g) {
         }
     }
     auto s = pt.genMD();
-    print(os, "{}", s);
+    std::println(os, "{}", s);
 }
 
-using ParserTable = Table<const Grammar::ItemSet*, std::string, std::string>;
-inline void generateParserTable(std::ostream& os, const Grammar& g) {
+using ParserTable = Table<const ygp::ItemSet*, std::string, std::string>;
+inline void generateParserTable(std::ostream& os, const yg::Grammar& g) {
     ParserTable pt;
     for(auto& rx : g.regexSets) {
         if(rx->usageCount() == 0) {
@@ -61,20 +61,20 @@ inline void generateParserTable(std::ostream& os, const Grammar& g) {
         }
     }
     auto s = pt.genMD();
-    print(os, "{}", s);
+    std::println(os, "{}", s);
 }
 
 inline void generateRuleSetAST(
     std::ostream& os,
-    const Grammar& g,
-    const Grammar::RuleSet& rs,
+    const yg::Grammar& g,
+    const ygp::RuleSet& rs,
     const std::string& indent,
     std::unordered_set<std::string>& seen,
     const std::string& path,
     const std::string& nodeName
 ) {
     for(auto& r : rs.rules) {
-        print(os, "{}R:{}", indent, r->str(false));
+        std::println(os, "{}R:{}", indent, r->str(false));
         auto xindent = indent + "|---";
         for(auto& n : r->nodes) {
             if(n->isRule() == true) {
@@ -91,7 +91,7 @@ inline void generateRuleSetAST(
                     }else{
                         part = nodeName;
                     }
-                    print(os, "{}RS:{}: {}", xindent, crs.name, part);
+                    std::println(os, "{}RS:{}: {}", xindent, crs.name, part);
                     generateRuleSetAST(os, g, crs, indent + "|    ", seen, part, n->varName);
                 }
             }else{
@@ -100,16 +100,16 @@ inline void generateRuleSetAST(
                 if (n->varName.size() > 0) {
                     part = std::format("({}): {}/{}", n->varName, path, n->varName);
                 }
-                print(os, "{}T:{}{}", xindent, n->name, part);
+                std::println(os, "{}T:{}{}", xindent, n->name, part);
             }
         }
     }
 }
 
-inline void generateAbSynTree(std::ostream& os, const Grammar& g) {
+inline void generateAbSynTree(std::ostream& os, const yg::Grammar& g) {
     std::unordered_set<std::string> seen;
     auto& rs = g.getRuleSetByName(g.pos(), g.start);
-    print(os, "AST_TREE");
+    std::println(os, "AST_TREE");
     generateRuleSetAST(os, g, rs, "", seen, "", "/");
 }
 
@@ -122,7 +122,7 @@ inline void processInputEx(
 ) {
     Stream stream(is, filename);
 
-    Grammar g;
+    yg::Grammar g;
 
     if(charset == "utf8") {
         g.unicodeEnabled = true;
@@ -132,19 +132,19 @@ inline void processInputEx(
 
     // parse input file
     if(verbose == true) {
-        print("Parsing");
+        std::println("Parsing");
     }
     parseInput(g, stream);
 
     if(verbose == true) {
-        print("Processing");
+        std::println("Processing");
     }
     buildLexer(g);
     buildParser(g);
 
-    generateLexerTable(Logger::log(), g);
-    generateParserTable(Logger::log(), g);
-    generateAbSynTree(Logger::log(), g);
+    generateLexerTable(Logger::olog(), g);
+    generateParserTable(Logger::olog(), g);
+    generateAbSynTree(Logger::olog(), g);
 
     std::filesystem::path d(odir);
     auto f = d / oname;
@@ -152,39 +152,40 @@ inline void processInputEx(
     printGrammar(g, gfilename);
 
     if(verbose == true) {
-        print("Generating: {}", f.string());
+        std::println("Generating: {}", f.string());
     }
     generateGrammar(g, f);
 }
 
-inline int processInput(std::istream& is, const std::string& filename, const std::string& charset, const std::filesystem::path& odir, const std::string& oname) {
+inline int
+processInput(std::istream& is, const std::string& filename, const std::string& charset, const std::filesystem::path& odir, const std::string& oname) {
     try {
         processInputEx(is, filename, charset, odir, oname);
         return 0;
     }catch(const GeneratorError& e) {
-        print("{}:{}:{}: error: {} ({}:{})", e.pos.file, e.pos.row, e.pos.col, e.msg, e.file, e.line);
+        std::println("{}:{}:{}: error: {} ({}:{})", e.pos.file, e.pos.row, e.pos.col, e.msg, e.file, e.line);
     }catch(const std::exception& e) {
-        print("{}: error: {}", filename, e.what());
+        std::println("{}: error: {}", filename, e.what());
     }catch(...) {
-        print("{}: unknown error", filename);
+        std::println("{}: unknown error", filename);
     }
     return 1;
 }
 
 inline int help(const std::string& xname, const std::string& msg) {
     auto xxname = std::filesystem::path(xname).filename();
-    print("== {} ==", msg);
-    print("{} -c <utf8|ascii> -f <filename> -s <string> -o <odir> -n <oname> -a -g <gfilename>", xxname.string());
-    print("    -c <utf8|ascii> : select character set. utf8 implies unicode (default)");
-    print("    -f <filename>   : read grammar from file <filename>");
-    print("    -s <string>     : read grammar from <string> passed on commandline");
-    print("    -o <odir>       : output directory");
-    print("    -n <oname>      : output basename (oname.cpp and oname.hpp will be generated in odir)");
-    print("    -a              : generate amalgamated file, including main(), which can be compiled into an executable");
-    print("    -v              : verbose console messages");
-    print("    -r              : don't generate #line messages");
-    print("    -l <logname>    : generate log file to <logname>, use - for console");
-    print("    -g <gfilename>  : generate grammar file to <gfilename>");
+    std::println("== {} ==", msg);
+    std::println("{} -c <utf8|ascii> -f <filename> -s <string> -o <odir> -n <oname> -a -g <gfilename>", xxname.string());
+    std::println("    -c <utf8|ascii> : select character set. utf8 implies unicode (default)");
+    std::println("    -f <filename>   : read grammar from file <filename>");
+    std::println("    -s <string>     : read grammar from <string> passed on commandline");
+    std::println("    -o <odir>       : output directory");
+    std::println("    -n <oname>      : output basename (oname.cpp and oname.hpp will be generated in odir)");
+    std::println("    -a              : generate amalgamated file, including main(), which can be compiled into an executable");
+    std::println("    -v              : verbose console messages");
+    std::println("    -r              : don't generate #line messages");
+    std::println("    -l <logname>    : generate log file to <logname>, use - for console");
+    std::println("    -g <gfilename>  : generate grammar file to <gfilename>");
     return 1;
 }
 
@@ -192,7 +193,7 @@ std::ofstream logfile;
 std::ostream* logc = nullptr;
 }
 
-std::ostream& Logger::log() {
+std::ostream& Logger::olog() {
     if(logc != nullptr) {
         return *logc;
     }
@@ -316,18 +317,18 @@ int main(int argc, const char* argv[]) {
     if(filename.size() > 0) {
         std::ifstream ifs(filename);
         if(!ifs) {
-            print("cannot open file: {}", filename);
+            std::println("cannot open file: {}", filename);
             return 1;
         }
 
-        print(Logger::log(), "compiling file: {}", filename);
+        log("compiling file: {}", filename);
         if(auto r = processInput(ifs, filename, charset, d, oname)) {
             return r;
         }
     }else if(string.size() > 0) {
         std::istringstream iss(string);
 
-        print(Logger::log(), "compiling string: {}", string);
+        log("compiling string: {}", string);
         if(auto r = processInput(iss, "str", charset, d, oname)) {
             return r;
         }

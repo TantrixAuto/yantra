@@ -157,14 +157,14 @@ struct Tracer {
     [[maybe_unused]]
     inline Tracer(const size_t& l, const std::string& n) : lvl{l}, name{n} {
 #if DO_TRACER
-        print(Logger::log(), "{}:{}: enter", lvl, name);
+        log("{}:{}: enter", lvl, name);
 #endif
     }
 
     [[maybe_unused]]
     inline ~Tracer() {
 #if DO_TRACER
-        print(Logger::log(), "{}:{}: leave", lvl, name);
+        log("{}:{}: leave", lvl, name);
 #endif
     }
 };
@@ -429,7 +429,7 @@ struct Lexer {
 #endif
         while(!stream.eof()) {
             int ch = stream.peek();
-            print(Logger::log(), "{:>3}:  lexer: s={}, ch={}, ch={}, text={}, tpos={}, classDepth={}, groupDepth={}"
+            log("{:>3}:  lexer: s={}, ch={}, ch={}, text={}, tpos={}, classDepth={}, groupDepth={}"
                   , stream.pos.str()
                   , sname(state)
                   , isprint(ch)?static_cast<char>(ch):' '
@@ -1069,10 +1069,10 @@ struct Parser {
         Token rs;
 
         /// @brief The rule, if this is a codeblock
-        const Grammar::Rule* rule = nullptr;
+        const ygp::Rule* rule = nullptr;
 
         /// @brief The associated Walker
-        Grammar::Walker* walker = nullptr;
+        yg::Walker* walker = nullptr;
 
         /// @brief whether this is a user-defined function
         bool isUDF = false;
@@ -1090,8 +1090,8 @@ struct Parser {
         Token data;
     };
 
-    /// @brief The Grammar class that is updated by this parser
-    Grammar& grammar;
+    /// @brief The yg::Grammar class that is updated by this parser
+    yg::Grammar& grammar;
 
     /// @brief The Lexer class used by this Parser
     Lexer& lexer;
@@ -1120,7 +1120,7 @@ struct Parser {
     /// @brief list of codeblocks with a rule
     std::vector<RuleSetType> rsWalkerCodeblocks;
 
-    inline Parser(Grammar& g, Lexer& l) : grammar{g}, lexer{l} {}
+    inline Parser(yg::Grammar& g, Lexer& l) : grammar{g}, lexer{l} {}
 
     /// @brief get fallback entry for a token.
     /// create a new entry if not found.
@@ -1138,8 +1138,8 @@ struct Parser {
     hasWalkerData(
         std::vector<RuleSetType>& list,
         const Token& rs,
-        const Grammar::Rule* rule,
-        Grammar::Walker& w,
+        const ygp::Rule* rule,
+        yg::Walker& w,
         const std::string& f
     ) {
         for(auto& rt : list) {
@@ -1155,8 +1155,8 @@ struct Parser {
     _addRsWalkerData(
         std::vector<RuleSetType>& list,
         const Token& rs,
-        const Grammar::Rule* rule,
-        Grammar::Walker& w,
+        const ygp::Rule* rule,
+        yg::Walker& w,
         const bool& u,
         const std::string& f,
         const std::string& a,
@@ -1178,7 +1178,7 @@ struct Parser {
     /// @brief Add function sig to the ruleset list
     inline void addRsWalkerType(
         const Token& rs,
-        Grammar::Walker& w,
+        yg::Walker& w,
         const std::string& f,
         const std::string& a,
         const bool& autowalk,
@@ -1193,8 +1193,8 @@ struct Parser {
     /// @brief Add codeblock to the rule list
     inline void addRsWalkerCode(
         const Token& rs,
-        Grammar::Rule* rule,
-        Grammar::Walker& w,
+        ygp::Rule* rule,
+        yg::Walker& w,
         const bool& n,
         const std::string& f,
         const Token& t
@@ -1231,7 +1231,7 @@ struct Parser {
     }
 
     /// @brief add a rule to the grammar
-    inline void addRule(const Token& t, const Token& name, std::unique_ptr<Grammar::Rule>& rule, const bool& anchorSet) {
+    inline void addRule(const Token& t, const Token& name, std::unique_ptr<ygp::Rule>& rule, const bool& anchorSet) {
         assert(rule);
 
         // there are no nodes in the rule, add an empty node
@@ -1246,24 +1246,24 @@ struct Parser {
     inline const Token& peek(const Tracer& tr) {
         auto& t = lexer.peek();
         unused(tr);
-        print(Logger::log(), "{:>3}:>parser: lvl={}, s={}, tok={}, text=[{}], pos={}", lexer.stream.pos.str(), lvl, tr.name, Token::sname(t), t.text, t.pos.str());
+        log("{:>3}:>parser: lvl={}, s={}, tok={}, text=[{}], pos={}", lexer.stream.pos.str(), lvl, tr.name, Token::sname(t), t.text, t.pos.str());
         return t;
     }
 
     /// @brief create a regex atom instance
-    inline std::unique_ptr<Grammar::Atom> make_atom(Grammar::Atom_t&& a) {
-        return std::make_unique<Grammar::Atom>(std::move(a));
+    inline std::unique_ptr<yglx::Atom> make_atom(yglx::Atom_t&& a) {
+        return std::make_unique<yglx::Atom>(std::move(a));
     }
 
     /// @brief create a regex atom instance and advance the lexer to next token
-    inline std::unique_ptr<Grammar::Atom> make_atom_leaf(Grammar::Atom_t&& a) {
+    inline std::unique_ptr<yglx::Atom> make_atom_leaf(yglx::Atom_t&& a) {
         lexer.next();
         return make_atom(std::move(a));
     }
 
     /// @brief read a regex primitive atom
     /// includes single chars, char ranges, esc classes, hex digits, etc
-    inline Grammar::Primitive::Atom_t primitive_atomx(const Token& t) {
+    inline yglx::Primitive::Atom_t primitive_atomx(const Token& t) {
         Tracer tr{lvl, "primitive_atomx"};
 
         switch(t.id) {
@@ -1281,45 +1281,45 @@ struct Parser {
                 }
                 ch = (ch * 16) + static_cast<uint32_t>(c);
             }
-            return Grammar::RangeClass(ch, ch);
+            return yglx::RangeClass(ch, ch);
         }
         case Token::ID::RX_WILDCARD: {
-            return Grammar::WildCard();
+            return yglx::WildCard();
         }
         case Token::ID::RX_CLASS_RANGE: {
             uint32_t ch1 = static_cast<uint32_t>(t.text.at(0));
             uint32_t ch2 = static_cast<uint32_t>(t.text.at(1));
-            return Grammar::RangeClass(ch1, ch2);
+            return yglx::RangeClass(ch1, ch2);
         }
         case Token::ID::RX_ESC_CLASS_DIGIT: {
-            return Grammar::LargeEscClass(grammar, "isDigit");
+            return yglx::LargeEscClass(grammar, "isDigit");
         }
         case Token::ID::RX_ESC_CLASS_NOT_DIGIT: {
-            return Grammar::LargeEscClass(grammar, "!isDigit");
+            return yglx::LargeEscClass(grammar, "!isDigit");
         }
         case Token::ID::RX_ESC_CLASS_LETTER: {
-            return Grammar::LargeEscClass(grammar, "isLetter");
+            return yglx::LargeEscClass(grammar, "isLetter");
         }
         case Token::ID::RX_ESC_CLASS_NOT_LETTER: {
-            return Grammar::LargeEscClass(grammar, "!isLetter");
+            return yglx::LargeEscClass(grammar, "!isLetter");
         }
         case Token::ID::RX_ESC_CLASS_WORD: {
-            return Grammar::LargeEscClass(grammar, "isWord");
+            return yglx::LargeEscClass(grammar, "isWord");
         }
         case Token::ID::RX_ESC_CLASS_NOT_WORD: {
-            return Grammar::LargeEscClass(grammar, "!isWord");
+            return yglx::LargeEscClass(grammar, "!isWord");
         }
         case Token::ID::RX_ESC_CLASS_SPACE: {
-            return Grammar::LargeEscClass(grammar, "isSpace");
+            return yglx::LargeEscClass(grammar, "isSpace");
         }
         case Token::ID::RX_ESC_CLASS_NOT_SPACE: {
-            return Grammar::LargeEscClass(grammar, "!isSpace");
+            return yglx::LargeEscClass(grammar, "!isSpace");
         }
         case Token::ID::RX_ESC_CLASS_WBOUNDARY: {
-            return Grammar::LargeEscClass(grammar, "isWBoundary");
+            return yglx::LargeEscClass(grammar, "isWBoundary");
         }
         case Token::ID::RX_ESC_CLASS_NOT_WBOUNDARY: {
-            return Grammar::LargeEscClass(grammar, "!isWBoundary");
+            return yglx::LargeEscClass(grammar, "!isWBoundary");
         }
         default:
             throw GeneratorError(__LINE__, __FILE__, lexer.stream.pos, "INVALID_INPUT");
@@ -1327,7 +1327,7 @@ struct Parser {
     }
 
     /// @brief read a regex primitive and create a leaf atom
-    inline std::unique_ptr<Grammar::Atom> primitive_atom() {
+    inline std::unique_ptr<yglx::Atom> primitive_atom() {
         Tracer tr{lvl, "primitive_atom"};
 
         Token t = peek(tr);
@@ -1335,12 +1335,12 @@ struct Parser {
             throw GeneratorError(__LINE__, __FILE__, lexer.stream.pos, "INVALID_INPUT");
         }
         auto ax = primitive_atomx(t);
-        return make_atom_leaf(Grammar::Primitive(t.pos, std::move(ax)));
+        return make_atom_leaf(yglx::Primitive(t.pos, std::move(ax)));
     }
 
     /// @brief read a regex class
     /// [a-z], [^a-z], etc
-    inline std::unique_ptr<Grammar::Atom> class_atoms() {
+    inline std::unique_ptr<yglx::Atom> class_atoms() {
         Tracer tr{lvl, "class_atoms"};
 
         Token t;
@@ -1353,22 +1353,22 @@ struct Parser {
                 negate = true;
             }
 
-            std::vector<Grammar::Primitive::Atom_t> atoms;
+            std::vector<yglx::Primitive::Atom_t> atoms;
             while((t = peek(tr)).id != Token::ID::RX_CLASS_LEAVE) {
                 ++classDepth;
-                Grammar::Primitive::Atom_t rhs = primitive_atomx(t);
+                yglx::Primitive::Atom_t rhs = primitive_atomx(t);
                 --classDepth;
                 atoms.push_back(rhs);
                 lexer.next();
             }
-            return make_atom_leaf(Grammar::Class{t.pos, negate, std::move(atoms)});
+            return make_atom_leaf(yglx::Class{t.pos, negate, std::move(atoms)});
         }
         return primitive_atom();
     }
 
     /// @brief read a regex class
     /// (abc), (!abc), etc
-    inline std::unique_ptr<Grammar::Atom> group_atoms() {
+    inline std::unique_ptr<yglx::Atom> group_atoms() {
         Tracer tr{lvl, "group_atoms"};
 
         Token t;
@@ -1386,14 +1386,14 @@ struct Parser {
                 throw GeneratorError(__LINE__, __FILE__, lexer.stream.pos, "INVALID_INPUT");
             }
 
-            return make_atom_leaf(Grammar::Group{t.pos, capture, std::move(atom)});
+            return make_atom_leaf(yglx::Group{t.pos, capture, std::move(atom)});
         }
         return class_atoms();
     }
 
     /// @brief read a regex closure
     /// a*, a+, a?, etc
-    inline std::unique_ptr<Grammar::Atom> atom_closure() {
+    inline std::unique_ptr<yglx::Atom> atom_closure() {
         Tracer tr{lvl, "atom_closure"};
 
         auto lhs = group_atoms();
@@ -1401,15 +1401,15 @@ struct Parser {
         if((t = peek(tr)).id != Token::ID::RX_DBLQUOTE) {
             switch(t.id) {
             case Token::ID::RX_CLOSURE_STAR: {
-                lhs = make_atom_leaf(Grammar::Closure{grammar, t.pos, std::move(lhs), 0, grammar.maxRepCount});
+                lhs = make_atom_leaf(yglx::Closure{grammar, t.pos, std::move(lhs), 0, grammar.maxRepCount});
                 break;
             }
             case Token::ID::RX_CLOSURE_PLUS: {
-                lhs = make_atom_leaf(Grammar::Closure{grammar, t.pos, std::move(lhs), 1, grammar.maxRepCount});
+                lhs = make_atom_leaf(yglx::Closure{grammar, t.pos, std::move(lhs), 1, grammar.maxRepCount});
                 break;
             }
             case Token::ID::RX_CLOSURE_QUESTION: {
-                lhs = make_atom_leaf(Grammar::Closure{grammar, t.pos, std::move(lhs), 0, 1});
+                lhs = make_atom_leaf(yglx::Closure{grammar, t.pos, std::move(lhs), 0, 1});
                 break;
             }
             case Token::ID::RX_CLOSURE_ENTER: {
@@ -1433,7 +1433,7 @@ struct Parser {
                     max = std::stoul(t.text);
                     min = 0;
                 }
-                lhs = make_atom_leaf(Grammar::Closure{grammar, t.pos, std::move(lhs), min, max});
+                lhs = make_atom_leaf(yglx::Closure{grammar, t.pos, std::move(lhs), min, max});
                 break;
             }
             default:
@@ -1445,7 +1445,7 @@ struct Parser {
 
     /// @brief read two consequtive atoms
     /// ab, (abc)(def), etc
-    inline std::unique_ptr<Grammar::Atom> atom_and_atom() {
+    inline std::unique_ptr<yglx::Atom> atom_and_atom() {
         Tracer tr{lvl, "atom_and_atom"};
 
         auto lhs = atom_closure();
@@ -1472,7 +1472,7 @@ struct Parser {
             case Token::ID::RX_ESC_CLASS_NOT_WBOUNDARY:
             case Token::ID::RX_ESC_CLASS_HEX: {
                 auto rhs = atomx();
-                lhs = make_atom(Grammar::Sequence{t.pos, std::move(lhs), std::move(rhs)});
+                lhs = make_atom(yglx::Sequence{t.pos, std::move(lhs), std::move(rhs)});
                 break;
             }
             default:
@@ -1484,7 +1484,7 @@ struct Parser {
 
     /// @brief read two alternate atoms
     /// a|b, (abc)|(def), etc
-    inline std::unique_ptr<Grammar::Atom> atom_or_atom() {
+    inline std::unique_ptr<yglx::Atom> atom_or_atom() {
         Tracer tr{lvl, "atom_or_atom"};
 
         auto lhs = atom_and_atom();
@@ -1492,13 +1492,13 @@ struct Parser {
         while((t = peek(tr)).id == Token::ID::RX_DISJUNCT) {
             lexer.next();
             auto rhs = atomx();
-            lhs = make_atom(Grammar::Disjunct{t.pos, std::move(lhs), std::move(rhs)});
+            lhs = make_atom(yglx::Disjunct{t.pos, std::move(lhs), std::move(rhs)});
         }
         return lhs;
     }
 
     /// @brief read a regex atom recursively, incrementing the current lvl
-    inline std::unique_ptr<Grammar::Atom> atomx() {
+    inline std::unique_ptr<yglx::Atom> atomx() {
         Tracer tr{lvl, "atomx"};
         ++lvl;
         auto lhs = atom_or_atom();
@@ -1616,7 +1616,7 @@ struct Parser {
             // cppServer(X)
             // ^
             auto walkerID = t;
-            const Grammar::Walker* base = nullptr;
+            const yg::Walker* base = nullptr;
 
             lexer.next();
             t = peek(tr);
@@ -1720,9 +1720,9 @@ struct Parser {
         }
 
         if(t.text == "manual") {
-            walker->setTraversalMode(Grammar::Walker::TraversalMode::Manual);
+            walker->setTraversalMode(yg::Walker::TraversalMode::Manual);
         }else if(t.text == "top_down") {
-            walker->setTraversalMode(Grammar::Walker::TraversalMode::TopDown);
+            walker->setTraversalMode(yg::Walker::TraversalMode::TopDown);
         }else{
             throw GeneratorError(__LINE__, __FILE__, t.pos, "UNKNOWN_TRAVERSAL_MODE:{}", t.text);
         }
@@ -1756,7 +1756,7 @@ struct Parser {
     }
 
     /// @brief read explicitly specified token precdence values
-    inline void set_precedence(const Grammar::RegexSet::Assoc& assoc, const Token& s) {
+    inline void set_precedence(const yglx::RegexSet::Assoc& assoc, const Token& s) {
         Tracer tr{lvl, s.text};
 
         Token t;
@@ -2086,15 +2086,15 @@ struct Parser {
         }
 
         if(t.text == "left") {
-            return set_precedence(Grammar::RegexSet::Assoc::Left, t);
+            return set_precedence(yglx::RegexSet::Assoc::Left, t);
         }
 
         if(t.text == "right") {
-            return set_precedence(Grammar::RegexSet::Assoc::Right, t);
+            return set_precedence(yglx::RegexSet::Assoc::Right, t);
         }
 
         if(t.text == "token") {
-            return set_precedence(Grammar::RegexSet::Assoc::None, t);
+            return set_precedence(yglx::RegexSet::Assoc::None, t);
         }
 
         if(t.text == "fallback") {
@@ -2113,7 +2113,7 @@ struct Parser {
     }
 
     /// @brief read a single node of a rule
-    inline void parse_node(Grammar::Rule& rule) {
+    inline void parse_node(ygp::Rule& rule) {
         Tracer tr{lvl, "parse_node"};
 
         //rule(myrule) := ^node1;
@@ -2124,11 +2124,11 @@ struct Parser {
             throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
         }
 
-        auto& node = rule.addNode(t.pos, t.text, Grammar::Node::NodeType::RegexRef);
+        auto& node = rule.addNode(t.pos, t.text, ygp::Node::NodeType::RegexRef);
         if(isRegexName(t.text) == true) {
-            node.type = Grammar::Node::NodeType::RegexRef;
+            node.type = ygp::Node::NodeType::RegexRef;
         }else if(isRuleName(t.text) == true) {
-            node.type = Grammar::Node::NodeType::RuleRef;
+            node.type = ygp::Node::NodeType::RuleRef;
         }else{
             throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_RULE_NAME");
         }
@@ -2207,7 +2207,7 @@ struct Parser {
             throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
         }
         lexer.next();
-        auto rule = std::make_unique<Grammar::Rule>();
+        auto rule = std::make_unique<ygp::Rule>();
         rule->pos = ruleName.pos;
         rule->ruleName = nativeName;
         bool anchorSet = false;
@@ -2345,22 +2345,22 @@ struct Parser {
         Tracer tr{lvl, "parse_regex"};
 
         Token t = peek(tr);
-        auto assoc = Grammar::RegexSet::Assoc::Right;
+        auto assoc = yglx::RegexSet::Assoc::Right;
         switch(t.id) {
         case Token::ID::COLONEQ:
-            assoc = Grammar::RegexSet::Assoc::Right;
+            assoc = yglx::RegexSet::Assoc::Right;
             break;
         case Token::ID::COLONEQGT:
-            assoc = Grammar::RegexSet::Assoc::Left;
+            assoc = yglx::RegexSet::Assoc::Left;
             break;
         case Token::ID::COLONEQEQ:
-            assoc = Grammar::RegexSet::Assoc::None;
+            assoc = yglx::RegexSet::Assoc::None;
             break;
         default:
             throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
         }
 
-        auto regex = std::make_unique<Grammar::Regex>();
+        auto regex = std::make_unique<yglx::Regex>();
         regex->pos = ruleName.pos;
         regex->regexName = ruleName.text;
         regex->mode = lexerMode;
@@ -2391,16 +2391,16 @@ struct Parser {
             lexer.next();
             t = peek(tr);
 
-            regex->modeChange = Grammar::Regex::ModeChange::Init;
+            regex->modeChange = yglx::Regex::ModeChange::Init;
             regex->nextMode = "";
 
             if(t.id == Token::ID::ID) {
-                regex->modeChange = Grammar::Regex::ModeChange::Next;
+                regex->modeChange = yglx::Regex::ModeChange::Next;
                 regex->nextMode = t.text;
                 lexer.next();
                 t = peek(tr);
             }else if(t.id == Token::ID::CARET){
-                regex->modeChange = Grammar::Regex::ModeChange::Back;
+                regex->modeChange = yglx::Regex::ModeChange::Back;
                 regex->nextMode = "";
                 lexer.next();
                 t = peek(tr);
@@ -2491,10 +2491,10 @@ struct Parser {
 };
 }
 
-void parseInput(Grammar& g, Stream& is) {
+void parseInput(yg::Grammar& g, Stream& is) {
     // create virtual regex for END and EPSILON
-    g.addRegexByName(g.end, Grammar::RegexSet::Assoc::Right);
-    g.addRegexByName(g.empty, Grammar::RegexSet::Assoc::Right);
+    g.addRegexByName(g.end, yglx::RegexSet::Assoc::Right);
+    g.addRegexByName(g.empty, yglx::RegexSet::Assoc::Right);
 
     g.addWalker(g.defaultWalkerClassName, nullptr);
 
@@ -2543,7 +2543,7 @@ void parseInput(Grammar& g, Stream& is) {
         }
     }
 
-    std::vector<Grammar::Regex*> unuseds;
+    std::vector<yglx::Regex*> unuseds;
     for(auto& regex : g.regexes) {
         if((regex->unused == false) && (regex->usageCount == 0) && (regex->regexName != g.empty)) {
             unuseds.push_back(regex.get());
