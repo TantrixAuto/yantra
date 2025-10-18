@@ -32,6 +32,9 @@ STRINGIFY(
     "filepos.hpp"
 )
 
+configure_file(config.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/config.hpp @ONLY)
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
+
 add_executable(ycc
     "${CMAKE_CURRENT_BINARY_DIR}/cb_prototype.cpp"
     "${CMAKE_CURRENT_BINARY_DIR}/cb_encoding_utf8.cpp"

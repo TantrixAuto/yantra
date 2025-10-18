@@ -7,6 +7,7 @@
 #include "cpp_generator.hpp"
 #include "tx_table.hpp"
 #include "grammar_printer.hpp"
+#include "config.hpp"
 
 /// @brief filename where the AST is logged in markdown format
 static std::string gfilename;
@@ -182,7 +183,8 @@ inline int help(const std::string& xname, const std::string& msg) {
     std::println("    -d <dir>        : output directory");
     std::println("    -n <oname>      : output basename (oname.cpp and oname.hpp will be generated in dir)");
     std::println("    -a              : generate amalgamated file, including main(), which can be compiled into an executable");
-    std::println("    -v              : verbose console messages");
+    std::println("    -m              : print console messages");
+    std::println("    -v (--version)  : print Yantra version");
     std::println("    -r              : don't generate #line messages");
     std::println("    -l <logname>    : generate log file to <logname>, use - for console");
     std::println("    -g <gfilename>  : generate grammar file to <gfilename>");
@@ -264,8 +266,11 @@ int main(int argc, const char* argv[]) {
             logname = argv[i];
         }else if(a == "-a") {
             amalgamatedFile = true;
-        }else if(a == "-v") {
+        }else if(a == "-m") {
             verbose = true;
+        }else if((a == "-v") || (a == "--version")) {
+            std::println("{}", YANTRA_VERSION_STRING);
+            return 0;
         }else if(a == "-r") {
             genLines = false;
         }else if(a == "-g") {
