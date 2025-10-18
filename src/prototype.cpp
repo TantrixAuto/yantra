@@ -642,7 +642,7 @@ struct TAG(CLASSQID)::Impl {
         if(walking == true) {
             throw std::runtime_error("Cannot read stream while walking");
         }
-        // lexer.begin();
+        lexer.begin();
         parser.begin();
     }
 
@@ -727,11 +727,7 @@ inline bool doREPL(TAG(CLASSQID)& mp, const std::string& input) {
         return false;
     }
 
-    try {
-        mp.readString(input, "<cmd>");
-    }catch(const std::exception& ex) {
-        std::print("err:{}\n", ex.what());
-    }
+    mp.readString(input, "<cmd>");
     return true;
 }
 #endif
@@ -854,10 +850,14 @@ int main(int argc, char* argv[]) {
         for(auto& f : filenames) {
             if(verbose) std::print("compiling file: {}\n", f);
 
-            // instance of the module
-            TAG(CLASSQID) mp("main", log);
-            mp.readFile(f);
-            mp.walk(walkers, outf, f);
+            try {
+                // instance of the module
+                TAG(CLASSQID) mp("main", log);
+                mp.readFile(f);
+                mp.walk(walkers, outf, f);
+            }catch(const std::exception& ex) {
+                std::print("err:{}\n", ex.what());
+            }
         }
 
         // read all strings
@@ -867,10 +867,14 @@ int main(int argc, char* argv[]) {
             ++idx;
             if(verbose) std::print("compiling string: {}\n", inn);
 
-            // instance of the module
-            TAG(CLASSQID) mp("main", log);
-            mp.readString(f, inn);
-            mp.walk(walkers);
+            try {
+                // instance of the module
+                TAG(CLASSQID) mp("main", log);
+                mp.readString(f, inn);
+                mp.walk(walkers);
+            }catch(const std::exception& ex) {
+                std::print("err:{}\n", ex.what());
+            }
         }
         return EXIT_SUCCESS;
     }
@@ -884,25 +888,37 @@ int main(int argc, char* argv[]) {
         for(auto& f : filenames) {
             if(verbose) std::print("compiling file: {}\n", f);
 
-            mp.readFile(f);
-            // mp.generate(outf, "", generators);
-            mp.walk(walkers);
+            try {
+                mp.readFile(f);
+                mp.walk(walkers);
+            }catch(const std::exception& ex) {
+                std::print("err:{}\n", ex.what());
+            }
         }
 
         // read all strings
         for(auto& f : strings) {
-            if(verbose) std::print("compiling string\n", f); //NOTE: not actually printing the string here (no {} in fmt-string)
-            mp.readString(f, "<str>");
-            // mp.generate(outf, "", generators);
-            mp.walk(walkers);
+            //NOTE: not printing the actual string here (there's no {} in fmt-string)
+            if(verbose) std::print("compiling string\n", f);
+
+            try {
+                mp.readString(f, "<str>");
+                mp.walk(walkers);
+            }catch(const std::exception& ex) {
+                std::print("err:{}\n", ex.what());
+            }
         }
 
         std::string input;
         while(true) {
             std::cout << ">";
             std::getline(std::cin, input);
-            if(doREPL(mp, input) == false) {
-                break;
+            try {
+                if(doREPL(mp, input) == false) {
+                    break;
+                }
+            }catch(const std::exception& ex) {
+                std::print("err:{}\n", ex.what());
             }
         }
     }
