@@ -922,6 +922,8 @@ struct Generator {
             auto& itemSet = *ps;
             assert((itemSet.shifts.size() > 0) || (itemSet.reduces.size() > 0) || (itemSet.gotos.size() > 0));
             bool breaked = false;
+            std::stringstream xss;
+            std::string xsep;
 
             tw.writeln("            case {}:", itemSet.id);
             tw.writeln("                std::print(log(), \"{{}}\", \"{}\\n\");", itemSet.str("", "\\n", true));
@@ -945,6 +947,8 @@ struct Generator {
                 tw.writeln("                    shift(k);");
                 tw.writeln("                    stateStack.push_back({});", c.second.next->id);
                 tw.writeln("                    return accepted;");
+                xss << xsep << c.first->name;
+                xsep = ", ";
             }
             for (auto& rd : itemSet.reduces) {
                 auto& c = *(rd.second.next);
@@ -972,6 +976,8 @@ struct Generator {
                     tw.writeln("                    break;");
                     breaked = true;
                 }
+                xss << xsep << rd.first->name;
+                xsep = ", ";
             }
             for (auto& c : itemSet.gotos) {
                 tw.writeln("                case Tolkien::ID::{}: // GOTO", c.first->name);
@@ -982,7 +988,8 @@ struct Generator {
                 breaked = true;
             }
             tw.writeln("                default:");
-            generateError(tw, "k.pos.row", "k.pos.col", "k.pos.file", "\"SYNTAX_ERROR\"", "                    ", vars);
+            auto msg = std::format("\"SYNTAX_ERROR:received:\" + k.str() + \", expected:{}\"", xss.str());
+            generateError(tw, "k.pos.row", "k.pos.col", "k.pos.file", msg, "                    ", vars);
             tw.writeln("                }} // switch(k.id)");
             if(breaked == true) {
                 tw.writeln("                break;");
