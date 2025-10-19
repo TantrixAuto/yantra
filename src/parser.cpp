@@ -1761,11 +1761,12 @@ struct Parser {
 
         Token t;
 
+        auto precedence = grammar.getNextPrecedence();
         while((t = peek(tr)).id == Token::ID::ID) {
             if(isRegexName(t.text) == false) {
                 throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_PRAGMA_VALUE:{}, should be TOKEN name", t.text);
             }
-            grammar.addRegexSet(t.text, assoc);
+            grammar.addRegexSet(t.text, assoc, precedence);
             lexer.next();
         }
 
