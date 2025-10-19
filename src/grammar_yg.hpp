@@ -265,6 +265,7 @@ struct Grammar {
     std::vector<std::unique_ptr<Walker>> walkers;
     std::vector<std::unique_ptr<yglx::Regex>> regexes;
     std::vector<std::unique_ptr<yglx::RegexSet>> regexSets;
+    size_t nextPrecedence = 0;
 
     std::unordered_map<std::string, std::unique_ptr<yglx::LexerMode>> lexerModes;
     std::vector<std::unique_ptr<yglx::State>> states;
@@ -503,12 +504,16 @@ struct Grammar {
         return nullptr;
     }
 
-    inline yglx::RegexSet* addRegexSet(const std::string& name, const yglx::RegexSet::Assoc& assoc) {
+    inline size_t getNextPrecedence() {
+        return ++nextPrecedence;
+    }
+
+    inline yglx::RegexSet* addRegexSet(const std::string& name, const yglx::RegexSet::Assoc& assoc, const size_t& precedence) {
         regexSets.push_back(std::make_unique<yglx::RegexSet>());
         auto& regexSet = regexSets.back();
         regexSet->id = regexSets.size();
         regexSet->name = name;
-        regexSet->precedence = regexSets.size();
+        regexSet->precedence = precedence;
         regexSet->assoc = assoc;
         return regexSet.get();
     }
@@ -520,7 +525,8 @@ struct Grammar {
 
         auto regexSet = hasRegexSet(regex.regexName);
         if(regexSet == nullptr) {
-            regexSet = addRegexSet(regex.regexName, assoc);
+            auto precedence = getNextPrecedence();
+            regexSet = addRegexSet(regex.regexName, assoc, precedence);
         }
 
         regex.regexSet = regexSet;

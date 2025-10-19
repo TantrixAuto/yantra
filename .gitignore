@@ -3,6 +3,7 @@
 .DS_Store
 .vscode/
 /build/*
+/out/*
 *.user
 .vs/
 CppProperties.json

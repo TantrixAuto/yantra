@@ -8,27 +8,27 @@ struct ParserStateMachineBuilder {
     inline ParserStateMachineBuilder(yg::Grammar& g) : grammar{g} {}
 
     inline void printRules(std::ostream& os, const std::string& msg) const {
-        print(os, "--------------------------------");
-        print(os, "GRAMMAR({}):{}", grammar.rules.size(), msg);
+        std::println(os, "--------------------------------");
+        std::println(os, "GRAMMAR({}):{}", grammar.rules.size(), msg);
         for(auto& rs : grammar.regexSets) {
-            print(os, "TOKEN: T{}: name={} [{}]", rs->id, rs->name, rs->precedence);
+            std::println(os, "REGEXSET({}): name={} [{}]", rs->id, rs->name, rs->precedence);
             for(auto& rx : rs->regexes) {
-                print(os, "  REGEX: X{}: name={} [{}]", rx->id, rx->regexName, rx->regexSet->precedence);
+                std::println(os, "  REGEX({}): name={} [{}]", rx->id, rx->regexName, rx->regexSet->precedence);
             }
         }
 
 
         for(auto& rule : grammar.rules) {
-            print(os, "RULE<{}>: {}", rule->ruleSet->name, rule->str());
+            std::println(os, "RULE<{}>: {}", rule->ruleSet->name, rule->str());
         }
     }
 
     [[maybe_unused]]
     inline void
     printConfigList(const std::string& msg, const std::vector<const ygp::Config*>& cfgs) {
-        print("{}({})", msg, cfgs.size());
+        std::println("{}({})", msg, cfgs.size());
         for(auto& cfg : cfgs) {
-            print("-cfg:{}", cfg->str());
+            std::println("-cfg:{}", cfg->str());
         }
     }
 
@@ -108,32 +108,32 @@ struct ParserStateMachineBuilder {
         const size_t& len,
         const std::string& indent
     ) {
-        log("{}addReduce:cfg={}, next=null", indent, config.str());
+        log("{}addReduce(1):cfg={}, next=null", indent, config.str());
         auto& rs = grammar.getRuleSetByName(config.rule.pos, config.rule.ruleSetName());
 
-        log("{}addReduce:rs={}", indent, rs.name);
+        log("{}addReduce(2):rs={}", indent, rs.name);
 
         for(auto& rx : rs.follows) {
             char p = resolveConflict(*rx, config);
             if(cs.hasShift(*rx) != nullptr) {
                 std::stringstream ss;
-                log("{}addReduce:{}: REDUCE-SHIFT conflict on:{}{}", indent, config.rule.pos.str(), rx->name, ss.str());
+                log("{}addReduce(3):{}: REDUCE-SHIFT-CONFLICT: on {}{}", indent, config.rule.pos.str(), rx->name, ss.str());
                 if(p == 'R') {
-                    log("{}addReduce: rx={}, p={}, R-S conflict, reducing", indent, rx->name, p);
+                    log("{}addReduce(4): REDUCE-SHIFT-CONFLICT: rx={}, p={}, R-S conflict, reducing", indent, rx->name, p);
                     cs.shifts.erase(rx);
                     assert(cs.hasReduce(*rx) == nullptr);
                     cs.addReduce(*rx, config, len);
 
-                    log("{}addReduce: Resolved in favor of REDUCE", indent);
+                    log("{}addReduce(5): REDUCE-SHIFT-CONFLICT: Resolved in favor of REDUCE", indent);
                 }else{
-                    log("{}addReduce: rx={}, p={}, R-S conflict, shifting", indent, rx->name, p);
-                    log("{}addReduce: Resolved in favor of SHIFT", indent);
+                    log("{}addReduce(6): REDUCE-SHIFT-CONFLICT: rx={}, p={}, R-S conflict, shifting", indent, rx->name, p);
+                    log("{}addReduce(7): REDUCE-SHIFT-CONFLICT: Resolved in favor of SHIFT", indent);
                 }
                 return;
             }
 
             if(p == 'R') {
-                log("{}addReduce: rx={}, p={}, reducing, r={}", indent, rx->name, p, config.str());
+                log("{}addReduce(8): rx={}, p={}, reducing, r={}", indent, rx->name, p, config.str());
                 // if(auto c = cs.hasReduce(*rx); c != nullptr) {
                 //     log("{}addReduce: R-R conflict", indent);
                 //     if(c->next != &config) {
@@ -152,7 +152,7 @@ struct ParserStateMachineBuilder {
 
             // check if there are any matching configs
             auto& lastNode = *(config.rule.nodes.back());
-            log("{}addReduce R-S conflict:lastNode={}, rx={}", indent, lastNode.name, rx->name);
+            log("{}addReduce(9): REDUCE-SHIFT-CONFLICT: lastNode={}, rx={}", indent, lastNode.name, rx->name);
             std::vector<const ygp::Config*> ncfgs;
             for(auto& r : grammar.rules) {
                 if(r->nodes.size() < 2) {
@@ -174,17 +174,17 @@ struct ParserStateMachineBuilder {
                 if(grammar.autoResolve == false) {
                     throw GeneratorError(__LINE__, __FILE__, config.rule.pos, "REDUCE_SHIFT_CONFLICT:ON:{}{}", rx->name, ss.str());
                 }else if(grammar.warnResolve == true) {
-                    log("{}addReduce: {}: REDUCE-SHIFT conflict on:{}{}", indent, config.rule.pos.str(), rx->name, ss.str());
-                    log("Resolved in favor of SHIFT");
+                    log("{}addReduce(10): REDUCE-SHIFT-CONFLICT: {} on:{}{}", indent, config.rule.pos.str(), rx->name, ss.str());
+                    log("{}addReduce(11): REDUCE-SHIFT-CONFLICT: Resolved in favor of SHIFT", indent);
                 }
-                log("{}addReduce: REDUCE-SHIFT:shifting {}", indent, rx->name);
+                log("{}addReduce(12): REDUCE-SHIFT-CONFLICT: shifting {}", indent, rx->name);
                 cs.moveShifts(*rx, ncfgs, {});
                 continue;
             }
 
             // else reduce by default
-            log("{}addReduce: REDUCE-SHIFT:reducing {}, rx={}", indent, config.str(), rx->name);
             if(auto r = cs.hasReduce(*rx)) {
+                log("{}addReduce(13): REDUCE-SHIFT-CONFLICT: reducing {}, rx={}", indent, config.str(), rx->name);
                 unused(r);
                 // assert(r->next != nullptr);
                 // auto& ocfg = *(r->next);
@@ -192,6 +192,7 @@ struct ParserStateMachineBuilder {
                 // assert(ocfg == &config);
                 continue;
             }
+            log("{}addReduce(14): reducing {}, rx={}", indent, config.str(), rx->name);
             assert(cs.hasReduce(*rx) == nullptr);
             cs.addReduce(*rx, config, len);
         }
