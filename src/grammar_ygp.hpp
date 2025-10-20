@@ -147,6 +147,9 @@ struct RuleSet : public NonCopyable {
     /// @brief all the rules in this ruleset
     std::vector<Rule*> rules;
 
+    /// @brief whether this ruleset has an empty production
+    bool hasEpsilon = false;
+
     /// @brief all the tokens in the FIRST-SET of this ruleset
     /// used for constructing the LALR state machine
     std::vector<yglx::RegexSet*> firsts;

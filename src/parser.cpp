@@ -1234,11 +1234,13 @@ struct Parser {
     inline void addRule(const Token& t, const Token& name, std::unique_ptr<ygp::Rule>& rule, const bool& anchorSet) {
         assert(rule);
 
+        bool isEmpty = false;
         // there are no nodes in the rule, add an empty node
         if(rule->nodes.size() == 0) {
             rule->addRegexNode(t.pos, grammar.empty);
+            isEmpty = true;
         }
-        grammar.addRule(name.text, rule, anchorSet);
+        grammar.addRule(t.pos, name.text, rule, anchorSet, isEmpty);
     }
 
     /// @brief peek current token in the lexer.

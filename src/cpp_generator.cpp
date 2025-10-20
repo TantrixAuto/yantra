@@ -268,11 +268,6 @@ struct Generator {
         tw.swriteln(sw);
     }
 
-    /// @brief Checks if the \ref yg::Grammar::RuleSet contains a empty prooduction
-    inline bool hasEpsilon(const ygp::RuleSet& rs) const {
-        return (rs.firstIncludes(grammar.empty) == true);
-    }
-
     /// @brief Construct a full function name given a rule and a short function name
     inline std::string getFunctionName(const ygp::Rule& r, const std::string& fname) const {
         return std::format("{}_{}", r.ruleName, fname);
@@ -432,12 +427,6 @@ struct Generator {
             tw.writeln("{}struct {} : public NonCopyable {{", indent, rs->name);
             tw.writeln("{}    const FilePos pos;", indent);
 
-            if(hasEpsilon(*rs) == true) {
-                tw.writeln("{}    struct {}_r0 {{", indent, rs->name);
-                tw.writeln("{}    }};", indent);
-                tw.writeln();
-            }
-
             for (auto& r : rs->rules) {
                 tw.writeln("{}    struct {} : public NonCopyable {{", indent, r->ruleName);
                 std::ostringstream pos;
@@ -466,10 +455,6 @@ struct Generator {
             tw.writeln("{}    using Rule = std::variant<", indent);
             tw.writeln("{}        {}std::monostate", indent, sep);
             sep = ",";
-            if(hasEpsilon(*rs) == true) {
-                tw.writeln("{}        {}{}_r0", indent, sep, rs->name);
-                sep = ",";
-            }
             for (auto& r : rs->rules) {
                 tw.writeln("{}        {}{}", indent, sep, r->ruleName);
                 sep = ",";
@@ -652,13 +637,6 @@ struct Generator {
         if(true) {
             tw.writeln("{}        [&](const std::monostate&) -> {} {{", indent, fsig.type);
             tw.writeln("{}            throw std::runtime_error(\"internal_error\"); //should never reach here", indent);
-            tw.writeln("{}        }},", indent);
-            tw.writeln();
-        }
-
-        if(hasEpsilon(rs) == true) {
-            tw.writeln("{}        [&](const {}::{}_r0&) -> {} {{", indent, rs.name, rs.name, fsig.type);
-            tw.writeln("{}            //throw std::runtime_error(\"internal_error(epsilon)\"); //should never reach here", indent);
             tw.writeln("{}        }},", indent);
             tw.writeln();
         }
@@ -849,40 +827,44 @@ struct Generator {
             tw.writeln("template<>");
             tw.writeln("inline {}::{}& Parser::create<{}::{}>(const ValueItem& vi) {{", grammar.astClass, rs->name, grammar.astClass, rs->name);
             tw.writeln("    switch(vi.ruleID) {{");
-            if(hasEpsilon(*rs) == true) {
-                tw.writeln("    case 0: {{");
-                tw.writeln("        // EPSILON-C");
-                tw.writeln("        auto& _cv_anchor = vi;");
-                tw.writeln("        auto& anchor = create<{}::{}>(_cv_anchor);", grammar.astClass, grammar.tokenClass);
-                tw.writeln("        auto& cel = ast.createAstNode<{}::{}>(vi.token.pos, anchor);", grammar.astClass, rs->name);
-                tw.writeln("        cel.rule.emplace<{}::{}::{}_r0>();", grammar.astClass, rs->name, rs->name);
-                tw.writeln("        return cel;");
-                tw.writeln("    }} // case");
-            }
+
             for (auto& r : rs->rules) {
                 tw.writeln("    case {}: {{", r->id);
                 tw.writeln("        //{}", r->str(false));
-                tw.writeln("        assert(vi.childs.size() == {});", r->nodes.size());
+                if(r->id > 0) {
+                    tw.writeln("        assert(vi.childs.size() == {});", r->nodes.size());
+                }else{
+                    assert(rs->hasEpsilon == true);
+                }
 
                 // generate parameter variables
                 std::ostringstream ss;
                 std::string sep;
                 std::string hasAnchor;
-                for (size_t idx = 0; idx < r->nodes.size(); ++idx) {
-                    auto& n = r->nodes.at(idx);
-                    auto varName = n->varName;
-                    if (n->varName.size() == 0) {
-                        varName = std::format("{}{}", n->name, idx);
-                    }
+                if(r->id > 0) {
+                    for (size_t idx = 0; idx < r->nodes.size(); ++idx) {
+                        auto& n = r->nodes.at(idx);
+                        auto varName = n->varName;
+                        if (n->varName.size() == 0) {
+                            varName = std::format("{}{}", n->name, idx);
+                        }
 
-                    auto rt = getNodeType(*n);
-                    tw.writeln("        auto& _cv_{} = *(vi.childs.at({}));", varName, idx);
-                    tw.writeln("        auto& p{} = create<{}::{}>(_cv_{});", varName, grammar.astClass, rt, varName);
-                    if (idx == r->anchor) {
-                        tw.writeln("        auto& anchor = create<{}::{}>(_cv_{});", grammar.astClass, grammar.tokenClass, varName);
-                        hasAnchor = ", anchor";
+                        auto rt = getNodeType(*n);
+                        tw.writeln("        auto& _cv_{} = *(vi.childs.at({}));", varName, idx);
+                        tw.writeln("        auto& p{} = create<{}::{}>(_cv_{});", varName, grammar.astClass, rt, varName);
+                        if (idx == r->anchor) {
+                            tw.writeln("        auto& anchor = create<{}::{}>(_cv_{});", grammar.astClass, grammar.tokenClass, varName);
+                            hasAnchor = ", anchor";
+                        }
+                        ss << std::format("{}p{}", sep, varName);
+                        sep = ", ";
                     }
-                    ss << std::format("{}p{}", sep, varName);
+                }else{
+                    assert(rs->hasEpsilon == true);
+                    tw.writeln("        auto& p{}0 = create<{}::{}>(vi);", grammar.empty, grammar.astClass, grammar.tokenClass);
+                    tw.writeln("        auto& anchor = p{}0;", grammar.empty);
+                    hasAnchor = ", anchor";
+                    ss << std::format("{}p{}0", sep, grammar.empty);
                     sep = ", ";
                 }
 

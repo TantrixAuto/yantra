@@ -593,7 +593,7 @@ struct Grammar {
         return *mode;
     }
 
-    inline ygp::Rule& addRule(const std::string& name, std::unique_ptr<ygp::Rule>& prule, const bool& anchorSet) {
+    inline ygp::Rule& addRule(const FilePos& npos, const std::string& name, std::unique_ptr<ygp::Rule>& prule, const bool& anchorSet, const bool& isEmpty) {
         ygp::RuleSet* ruleSet = nullptr;
         for(auto& rs : ruleSets) {
             if(rs->name == name) {
@@ -608,11 +608,22 @@ struct Grammar {
             ruleSet->name = name;
         }
 
+        if(isEmpty == true) {
+            if(ruleSet->hasEpsilon == true) {
+                throw GeneratorError(__LINE__, __FILE__, npos, "MULTIPLE_EMPTY_RULES:{}", ruleSet->name);
+            }
+            ruleSet->hasEpsilon = true;
+        }
+
         rules.push_back(std::move(prule));
         auto& rule = *(rules.back());
         rule.ruleSet = ruleSet;
         ruleSet->rules.push_back(&rule);
-        rule.id = ruleSet->rules.size();
+        if(isEmpty == true) {
+            rule.id = 0;
+        }else{
+            rule.id = ruleSet->rules.size();
+        }
 
         // if anchor is not explicitly set, then set it to first regex node
         // if there are no regexes, leave it at first node.
