@@ -176,7 +176,8 @@ processInput(std::istream& is, const std::string& filename, const std::string& c
 inline int help(const std::string& xname, const std::string& msg) {
     auto xxname = std::filesystem::path(xname).filename();
     std::println("== {} ==", msg);
-    std::println("{} -c <utf8|ascii> -f <filename> -s <string> -o <odir> -n <oname> -a -g <gfilename>", xxname.string());
+    std::println("{} <options>", xxname.string());
+    std::println("options:");
     std::println("    -c <utf8|ascii> : select character set. utf8 implies unicode (default)");
     std::println("    -f <filename>   : read grammar from file <filename>");
     std::println("    -s <string>     : read grammar from <string> passed on commandline");

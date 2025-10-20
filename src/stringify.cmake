@@ -1,3 +1,8 @@
+# this file has the following arguments:
+# ${PROTOTYPE_FILE} : this is the input file (typically XXX.cpp or XXX.hpp)
+# ${CODEBLOCK_FILE} : this is the output file (typically cb_XXX.cpp)
+# ${VARNAME}        : variable name
+
 set(BLOCK_SIZE 0)
 
 function(FlushChunk)
@@ -20,7 +25,9 @@ endfunction()
 
 message("PROTOTYPE_FILE: ${PROTOTYPE_FILE}")
 
-file(STRINGS ${PROTOTYPE_FILE} LINES)
+# empty lines are skipped if the NEWLINE_CONSUME parameter is not given
+# (this is in contradiction to the cmake documented behaviour)
+file(STRINGS ${PROTOTYPE_FILE} LINES NEWLINE_CONSUME)
 
 file(WRITE ${CODEBLOCK_FILE} "")
 WriteLine("extern const char* ${VARNAME};")

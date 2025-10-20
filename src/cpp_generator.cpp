@@ -511,7 +511,7 @@ struct Generator {
         const std::unordered_map<std::string, std::string>& vars,
         const std::string_view& indent
     ) {
-        auto fname = getFunctionName(r, fsig.func);
+        auto hname = getFunctionName(r, fsig.func);
         std::string returnType = fsig.type;
 
         // infer indent for function args
@@ -524,11 +524,11 @@ struct Generator {
         // open function
         if(sw.wrote == true) {
             tw.writeln("{}{} {}", indent, isVirtual, returnType);
-            tw.writeln("{}{}(", indent, fname);
+            tw.writeln("{}{}(", indent, hname);
             tw.swrite(sw);
             tw.writeln("{}){} {{", indent, isOverride);
         }else{
-            tw.writeln("{}{} {} {}(){} {{", indent, isVirtual, returnType, fname, isOverride);
+            tw.writeln("{}{} {} {}(){} {{", indent, isVirtual, returnType, hname, isOverride);
         }
 
         // generate function body, if any
@@ -552,56 +552,18 @@ struct Generator {
         const std::string& xparams,
         const std::string_view& indent
     ) {
-        StringStreamWriter wnodes;
-        std::stringstream wcalls;
+        // handler function name
+        auto hname = getFunctionName(r, fsig.func);
+
+        // generate param list
         std::stringstream params;
-        std::stringstream ss;
-        bool rnode_used = false;
-
-        // generate invocation code
+        std::string node_unused = "[[maybe_unused]]";
         std::string sep;
-        std::string nsep;
         for (auto& n : r.nodes) {
-            auto nrt = grammar.tokenClass;
-            if(n->isRule() == true) {
-                nrt = n->name;
-            }
-
             if (n->varName.size() > 0) {
-                if(fsig.isUDF == false) {
-                    if(n->isRule() == true) {
-                        wnodes.writeln("{}            WalkerNodeRef<{}> {}(_n.{}, {});/*wvar1u*/", indent, n->name, n->varName, n->varName, called);
-                        wcalls << std::format("{}            if({}.called == false) {}({});/*wvar1*/\n", indent, n->varName, fsig.func, n->varName);
-                    }else{
-                        wnodes.writeln("{}            const {}& {} = _n.{};/*wvar1x*/", indent, grammar.tokenClass, n->varName, n->varName);
-                    }
-                    params << std::format("{}{}/*wvar1*/", sep, n->varName);
-                    rnode_used = true;
-                }else {
-                    if(n->isRule() == true) {
-                        wnodes.writeln("{}            WalkerNodeRef<{}> {}(_n.{}, {});/*gvar2u*/", indent, n->name, n->varName, n->varName, called);
-                    }else{
-                        wnodes.writeln("{}            const {}& {} = _n.{};/*gvar2x*/", indent, grammar.tokenClass, n->varName, n->varName);
-                    }
-                    params << std::format("{}{}/*gvar2*/", sep, n->varName);
-                    rnode_used = true;
-                }
+                params << std::format("{}{}", sep, n->varName);
+                node_unused.clear();
                 sep = ", ";
-
-                ss << std::format("{}{}", nsep, n->varName);
-                nsep = ", ";
-            }else{
-                if(fsig.isUDF == false) {
-                    if(n->name != grammar.end) {
-                        if(n->isRule() == true) {
-                            wnodes.writeln("{}            WalkerNodeRef<{}> {}(_n.{}, {});/*nwvar1u*/\n", indent, n->name, n->idxName, n->idxName, called);
-                            wcalls << std::format("{}            {}({});/*nwvar1*/\n", indent, fsig.func, n->idxName);
-                            rnode_used = true;
-                        }
-                        ss << std::format("{}{}", nsep, n->idxName);
-                        nsep = ", ";
-                    }
-                }
             }
         }
 
@@ -609,23 +571,46 @@ struct Generator {
             params << std::format("{}{}", sep, xparams);
         }
 
-        std::string node_unused = (rnode_used == false)?"[[maybe_unused]]":"";
-        auto iname = getFunctionName(r, fsig.func);
-
+        // open anonymous function
         tw.writeln("{}        [&]({}const {}::{}& _n) -> {} {{", indent, node_unused, rs.name, r.ruleName, fsig.type);
 
-        tw.swrite(wnodes);
+        // generate node-refs
+        for (auto& n : r.nodes) {
+            if(n->name == grammar.end) {
+                continue;
+            }
+
+            if (n->varName.size() > 0) {
+                if(n->isRule() == true) {
+                    tw.writeln("{}            WalkerNodeRef<{}> {}(_n.{}, {}); /*var-1*/", indent, n->name, n->varName, n->varName, called);
+                }else{
+                    tw.writeln("{}            const {}& {} = _n.{}; /*var-2*/", indent, grammar.tokenClass, n->varName, n->varName);
+                }
+            }
+        }
 
         // call the handler
         if(fsig.isUDF == false) {
-            tw.writeln("{}            {}({});/*call3*/", indent, iname, params.str());
+            tw.writeln("{}            {}({});/*call-1*/", indent, hname, params.str());
         }else{
-            tw.writeln("{}            return {}({});/*call4*/", indent, iname, params.str());
+            tw.writeln("{}            return {}({});/*call-2*/", indent, hname, params.str());
         }
 
+        // if top-down traversal, invoke all nodes that were not invoked in the handler
         if(walker.traversalMode == yg::Walker::TraversalMode::TopDown) {
-            tw.writeln("{}", wcalls.str());
+            for (auto& n : r.nodes) {
+                if((n->name != grammar.end) && (n->isRule() == true) && (fsig.isUDF == false)) {
+                    if (n->varName.size() > 0) {
+                        tw.writeln("{}            if({}.called == false) {}({});", indent, n->varName, fsig.func, n->varName);
+                    }else{
+                        tw.writeln("{}            WalkerNodeRef<{}> {}(_n.{}, {}); /*var-3*/", indent, n->name, n->idxName, n->idxName, called);
+                        tw.writeln("{}            {}({});", indent, fsig.func, n->idxName);
+                    }
+                }
+            }
         }
+
+        // close anonymous function
         tw.writeln("{}        }},", indent);
         tw.writeln();
     }
@@ -768,14 +753,12 @@ struct Generator {
         auto xindent = std::string(indent) + "    ";
 
         // generate Walkers
-        std::string first;
         for (auto& pwalker : grammar.walkers) {
             auto& walker = *pwalker;
             auto wname = std::format("Walker_{}", walker.name);
             tw.writeln();
             tw.writeln("{}//walker:{}", indent, walker.name);
             if(grammar.isRootWalker(walker) == true) {
-                first = wname;
                 tw.writeln("{}struct {} : public NonCopyable {{", indent, wname);
                 tw.writeln("{}{}& mod;", xindent, grammar.className);
                 tw.writeln("{}explicit inline {}({}& m) : mod(m) {{}}", xindent, wname, grammar.className);
@@ -789,8 +772,9 @@ struct Generator {
                 tw.writeln("{}}}; //walker:{}", indent, walker.name);
             }else{
                 assert(walker.base != nullptr);
-                tw.writeln("{}struct {} : public {} {{", indent, wname, first);
-                tw.writeln("{}explicit inline {}({}& m) : {}(m) {{}}", xindent, wname, grammar.className, first);
+                auto bname = std::format("Walker_{}", walker.base->name);
+                tw.writeln("{}struct {} : public {} {{", indent, wname, bname);
+                tw.writeln("{}explicit inline {}({}& m) : {}(m) {{}}", xindent, wname, grammar.className, bname);
                 generateWriter(tw, walker, xindent);
                 generateCodeBlock(tw, walker.xmembers, xindent, true, vars);
                 generateRuleSetVisitors(tw, walker, vars, xindent);
@@ -1324,6 +1308,11 @@ struct Generator {
         const std::string_view cb(codeBlock);
         auto it = cb.begin();
         auto ite = cb.end();
+
+        // skip initial empty lines, if any
+        while ((it != ite) && ((*it == '\r') || (*it == '\n'))) {
+            ++it;
+        }
 
         bool skip = false;
         std::vector<std::string_view> eblockNames;
