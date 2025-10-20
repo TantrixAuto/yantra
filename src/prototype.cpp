@@ -846,6 +846,8 @@ int main(int argc, char* argv[]) {
     outf = outf.lexically_normal();
 
     if(repl == false) {
+        int errs = 0;
+
         // read all files
         for(auto& f : filenames) {
             if(verbose) std::print("compiling file: {}\n", f);
@@ -856,6 +858,7 @@ int main(int argc, char* argv[]) {
                 mp.readFile(f);
                 mp.walk(walkers, outf, f);
             }catch(const std::exception& ex) {
+                ++errs;
                 std::print("err:{}\n", ex.what());
             }
         }
@@ -874,9 +877,10 @@ int main(int argc, char* argv[]) {
                 mp.walk(walkers);
             }catch(const std::exception& ex) {
                 std::print("err:{}\n", ex.what());
+                ++errs;
             }
         }
-        return EXIT_SUCCESS;
+        return errs;
     }
 
 #if HAS_REPL
