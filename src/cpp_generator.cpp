@@ -234,14 +234,15 @@ struct Generator {
     generatePrototypeLine(
         TextFileWriter& tw,
         const std::string_view& line,
-        const std::unordered_map<std::string, std::string>& vars
+        const std::unordered_map<std::string, std::string>& vars,
+        const std::string_view& indent
     ) {
         if(line.empty() == true) {
             // print empty line as-is
             tw.writeln();
         }else{
             StringStreamWriter sw;
-            _expand(sw, line, "", false, vars);
+            _expand(sw, line, indent, false, vars);
             tw.swriteln(sw);
         }
     }
@@ -1282,7 +1283,8 @@ struct Generator {
         const std::unordered_map<std::string, std::string>& vars,
         const std::unordered_set<std::string>& tnames,
         const std::filesystem::path& filebase,
-        const std::string& srcName
+        const std::string& srcName,
+        const std::string& outerIndent
     ) {
         const std::string_view prefixEnterBlock = "///PROTOTYPE_ENTER:";
         const std::string_view prefixLeaveBlock = "///PROTOTYPE_LEAVE:";
@@ -1342,7 +1344,7 @@ struct Generator {
             }
 
             std::string_view line(itb, it);
-            std::string_view indent(itb, itl);
+            std::string_view innerIndent(itb, itl);
             std::string_view tline(itl, it);
 
             Token token = Token::Line;
@@ -1383,8 +1385,7 @@ struct Generator {
 //#define PRINT(...) std::println(__VA_ARGS__)
 #define PRINT(...)
 
-            // static int x = 0;
-            // assert(++x < 10);
+            auto indent = outerIndent + std::string(innerIndent);
 
             switch (token) {
             case Token::EnterBlock: {
@@ -1472,9 +1473,7 @@ struct Generator {
                 }else if (segmentName == "walkers") {
                     generateWalkers(tw, vars, indent);
                 }else if (segmentName == "prologue") {
-                    tw.writeln("{}:XX-1 //{}", line, tw.row);
                     generateCodeBlock(tw, grammar.prologue, indent, true, vars);
-                    tw.writeln("{}:XX-2 //{}", line, tw.row);
                 }else if (segmentName == "initWalkers") {
                     if(amalgamatedFile) {
                         generateInitWalkers(tw, indent);
@@ -1506,22 +1505,22 @@ struct Generator {
                 tw.writeln("{}:BEGIN", line);
                 if (includeName == "utf8Encoding") {
                     if (grammar.unicodeEnabled == true) {
-                        includeCodeBlock(cb_encoding_utf8, tw, vars, tnames, filebase, srcName);
+                        includeCodeBlock(cb_encoding_utf8, tw, vars, tnames, filebase, srcName, indent);
                     }
                 }else if (includeName == "asciiEncoding") {
                     if (grammar.unicodeEnabled == false) {
-                        includeCodeBlock(cb_encoding_ascii, tw, vars, tnames, filebase, srcName);
+                        includeCodeBlock(cb_encoding_ascii, tw, vars, tnames, filebase, srcName, indent);
                     }
                 }else if (includeName == "stream") {
-                    includeCodeBlock(cb_stream, tw, vars, tnames, filebase, srcName);
+                    includeCodeBlock(cb_stream, tw, vars, tnames, filebase, srcName, indent);
                 }else if (includeName == "textWriter") {
-                    includeCodeBlock(cb_text_writer, tw, vars, tnames, filebase, srcName);
+                    includeCodeBlock(cb_text_writer, tw, vars, tnames, filebase, srcName, indent);
                 }else if (includeName == "print") {
-                    includeCodeBlock(cb_print, tw, vars, tnames, filebase, srcName);
+                    includeCodeBlock(cb_print, tw, vars, tnames, filebase, srcName, indent);
                 }else if (includeName == "nsutil") {
-                    includeCodeBlock(cb_nsutil, tw, vars, tnames, filebase, srcName);
+                    includeCodeBlock(cb_nsutil, tw, vars, tnames, filebase, srcName, indent);
                 }else if (includeName == "filepos") {
-                    includeCodeBlock(cb_filepos, tw, vars, tnames, filebase, srcName);
+                    includeCodeBlock(cb_filepos, tw, vars, tnames, filebase, srcName, indent);
                 }else{
                     throw GeneratorError(__LINE__, __FILE__, grammar.pos(), "UNKNOWN_INCLUDE:{}", includeName);
                 }
@@ -1545,7 +1544,8 @@ struct Generator {
             case Token::Line: {
                 PRINT("Init::LINE:{}, eblockName=[{}]", line, eblockName);
                 if (skip == false) {
-                    generatePrototypeLine(tw, line, vars);
+                    PRINT("ind:[{}]:[{}]:[{}]", outerIndent, innerIndent, tline);
+                    generatePrototypeLine(tw, tline, vars, indent);
                 }else if(eblockName == "throwError") {
                     tblock += line;
                 }
@@ -1626,7 +1626,7 @@ struct Generator {
             {"AST", grammar.astClass},
         };
 
-        includeCodeBlock(cb_prototype, tw, vars, tnames, filebase, srcName);
+        includeCodeBlock(cb_prototype, tw, vars, tnames, filebase, srcName, "");
     }
 };
 }
