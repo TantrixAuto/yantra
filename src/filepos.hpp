@@ -1,7 +1,6 @@
+///PROTOTYPE_ENTER:SKIP
 /// @file filepos.hpp
 /// @brief Represent location on file
-
-///PROTOTYPE_ENTER:SKIP
 #pragma once
 ///PROTOTYPE_LEAVE:SKIP
 
