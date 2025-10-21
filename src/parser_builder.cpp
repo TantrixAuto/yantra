@@ -78,14 +78,7 @@ struct ParserStateMachineBuilder {
         return configs;
     }
 
-    inline char resolveAssoc(const yglx::RegexSet& rx) const {
-        if(rx.assoc == yglx::RegexSet::Assoc::Left) {
-            return 'R';
-        }
-        return 'S';
-    }
-
-    inline char resolveConflict(const yglx::RegexSet& rx, const ygp::Config& cfg) const {
+    inline char resolveConflict(const ygp::Config& cfg, const yglx::RegexSet& rx, const std::string& indent) const {
         auto& r = cfg.rule;
 
         // if we are resolving a conflict against the END token,
@@ -93,13 +86,33 @@ struct ParserStateMachineBuilder {
         if(rx.name == grammar.end) {
             return 'R';
         }
-        if(rx.precedence < r.precedence->precedence) {
-            return 'S';
-        }
-        if(rx.precedence > r.precedence->precedence) {
+
+        if(r.precedence->precedence > rx.precedence) {
             return 'R';
         }
-        return resolveAssoc(rx);
+
+        if(r.precedence->precedence < rx.precedence) {
+            return 'S';
+        }
+
+        assert(r.precedence->precedence == rx.precedence);
+        if(rx.assoc == yglx::RegexSet::Assoc::Left) {
+            return 'R';
+        }
+
+        if(rx.assoc == yglx::RegexSet::Assoc::Right) {
+            return 'S';
+        }
+
+        assert(rx.assoc == yglx::RegexSet::Assoc::None);
+        if(grammar.autoResolve == false) {
+            throw GeneratorError(__LINE__, __FILE__, r.pos, "REDUCE_SHIFT_RESOLVE_ERROR:{}->{}", r.ruleName, rx.name);
+        }
+
+        if(grammar.warnResolve == true) {
+            log("{}REDUCE-SHIFT-CONFLICT: Resolved in favor of SHIFT: {}->{}", indent, r.ruleName, rx.name);
+        }
+        return 'S';
     }
 
     inline void addReduce(
@@ -114,7 +127,7 @@ struct ParserStateMachineBuilder {
         log("{}addReduce(2):rs={}", indent, rs.name);
 
         for(auto& rx : rs.follows) {
-            char p = resolveConflict(*rx, config);
+            char p = resolveConflict(config, *rx, indent);
             if(cs.hasShift(*rx) != nullptr) {
                 std::stringstream ss;
                 log("{}addReduce(3):{}: REDUCE-SHIFT-CONFLICT: on {}{}", indent, config.rule.pos.str(), rx->name, ss.str());
@@ -174,17 +187,16 @@ struct ParserStateMachineBuilder {
                 if(grammar.autoResolve == false) {
                     throw GeneratorError(__LINE__, __FILE__, config.rule.pos, "REDUCE_SHIFT_CONFLICT:ON:{}{}", rx->name, ss.str());
                 }else if(grammar.warnResolve == true) {
-                    log("{}addReduce(10): REDUCE-SHIFT-CONFLICT: {} on:{}{}", indent, config.rule.pos.str(), rx->name, ss.str());
-                    log("{}addReduce(11): REDUCE-SHIFT-CONFLICT: Resolved in favor of SHIFT", indent);
+                    log("{}addReduce(10): REDUCE-SHIFT-CONFLICT: Resolved in favor of SHIFT: {} on:{}{}", indent, config.rule.pos.str(), rx->name, ss.str());
                 }
-                log("{}addReduce(12): REDUCE-SHIFT-CONFLICT: shifting {}", indent, rx->name);
+                log("{}addReduce(11): REDUCE-SHIFT-CONFLICT: shifting {}", indent, rx->name);
                 cs.moveShifts(*rx, ncfgs, {});
                 continue;
             }
 
             // else reduce by default
             if(auto r = cs.hasReduce(*rx)) {
-                log("{}addReduce(13): REDUCE-SHIFT-CONFLICT: reducing {}, rx={}", indent, config.str(), rx->name);
+                log("{}addReduce(12): REDUCE-SHIFT-CONFLICT: reducing {}, rx={}", indent, config.str(), rx->name);
                 unused(r);
                 // assert(r->next != nullptr);
                 // auto& ocfg = *(r->next);
@@ -192,7 +204,7 @@ struct ParserStateMachineBuilder {
                 // assert(ocfg == &config);
                 continue;
             }
-            log("{}addReduce(14): reducing {}, rx={}", indent, config.str(), rx->name);
+            log("{}addReduce(13): reducing {}, rx={}", indent, config.str(), rx->name);
             assert(cs.hasReduce(*rx) == nullptr);
             cs.addReduce(*rx, config, len);
         }
@@ -214,7 +226,7 @@ struct ParserStateMachineBuilder {
         auto& rx = grammar.getRegexSet(nextNode);
         if(cs.hasReduce(rx) != nullptr) {
             std::stringstream ss;
-            char p = resolveConflict(rx, config);
+            char p = resolveConflict(config, rx, indent);
             log("{}addShift: {}: SHIFT-REDUCE conflict on:{}{}, p={}", indent, config.rule.pos.str(), rx.name, ss.str(), p);
             if(p == 'R') {
                 return;
