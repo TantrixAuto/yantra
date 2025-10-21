@@ -447,15 +447,25 @@ struct Generator {
                     coln = " : ";
                 }
 
-                tw.writeln("{}        inline void dump(std::ostream& ss, const std::string& name, const FilePos& p, const std::string& indent) const {{", indent);
-                tw.writeln("{}            ss << std::format(\"{{}}: {{}}+--{{}}({})\\n\", p.str(), indent, name);", indent, r->ruleName);
+                tw.writeln("{}        inline void dump(std::ostream& ss, const size_t& lvl, const FilePos& p, const std::string& indent) const {{", indent);
+                tw.writeln("{}            if(lvl >= 2) {{", indent);
+                tw.writeln("{}                ss << std::format(\"{{}}: {{}}+--{}\\n\", p.str(), indent);", indent, r->str(false));
+                tw.writeln("{}            }}else{{", indent);
+                tw.writeln("{}                assert(lvl == 1);", indent);
+                tw.writeln("{}                ss << std::format(\"{{}}: {{}}+--{}({})\\n\", p.str(), indent);", indent, rs->name, r->ruleName);
+                tw.writeln("{}            }}", indent);
                 for (size_t idx = 0; idx < r->nodes.size(); ++idx) {
                     auto& n = r->nodes.at(idx);
                     auto varName = n->varName;
                     if (n->varName.size() == 0) {
                         varName = std::format("{}{}", n->name, idx);
                     }
-                    tw.writeln("{}            {}.dump(ss, \"{}\", indent + \"|  \");", indent, varName, n->name);
+                    if(n->isRule() == true) {
+                        tw.writeln("{}            {}.dump(ss, lvl, indent + \"|  \");", indent, varName);
+                    }else{
+                        assert(n->isRegex() == true);
+                        tw.writeln("{}            {}.dump(ss, lvl, \"{}\", indent + \"|  \");", indent, varName, n->name);
+                    }
                 }
                 tw.writeln("{}        }}", indent);
                 tw.writeln();
@@ -480,9 +490,9 @@ struct Generator {
             tw.writeln("{}    Rule rule;", indent);
             tw.writeln();
 
-            tw.writeln("{}    inline void dump(std::ostream& ss, const std::string& name, const std::string& indent) const {{", indent);
-            tw.writeln("{}        std::visit([this, &ss, &name, &indent](const auto& r){{", indent);
-            tw.writeln("{}            r.dump(ss, name, pos, indent);", indent);
+            tw.writeln("{}    inline void dump(std::ostream& ss, const size_t& lvl, const std::string& indent) const {{", indent);
+            tw.writeln("{}        std::visit([this, &ss, &lvl, &indent](const auto& r){{", indent);
+            tw.writeln("{}            r.dump(ss, lvl, pos, indent);", indent);
             tw.writeln("{}        }}, rule);", indent);
             tw.writeln("{}    }}", indent);
             tw.writeln();
