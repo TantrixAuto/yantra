@@ -9,7 +9,7 @@
 struct Stream {
     std::istream& in;
     FilePos pos;
-    char_t ch = 0;
+    char_t ch = 1;
     bool _eof = false;
 
     ///PROTOTYPE_ENTER:SKIP
@@ -21,7 +21,7 @@ struct Stream {
     inline Stream(std::istream& i, const std::string_view& f) : in(i) {
         pos.file = f;
         pos.row = 1;
-        pos.col = 0;
+        pos.col = 1;
         ch = read(in);
     }
 
@@ -50,7 +50,7 @@ struct Stream {
         pos.col++;
         if(ch == '\n') {
             pos.row++;
-            pos.col = 0;
+            pos.col = 1;
         }
     }
 };

@@ -446,6 +446,20 @@ struct Generator {
                     sep = ", ";
                     coln = " : ";
                 }
+
+                tw.writeln("{}        inline void dump(std::ostream& ss, const std::string& name, const FilePos& p, const std::string& indent) const {{", indent);
+                tw.writeln("{}            ss << std::format(\"{{}}: {{}}+--{{}}({})\\n\", p.str(), indent, name);", indent, r->ruleName);
+                for (size_t idx = 0; idx < r->nodes.size(); ++idx) {
+                    auto& n = r->nodes.at(idx);
+                    auto varName = n->varName;
+                    if (n->varName.size() == 0) {
+                        varName = std::format("{}{}", n->name, idx);
+                    }
+                    tw.writeln("{}            {}.dump(ss, \"{}\", indent + \"|  \");", indent, varName, n->name);
+                }
+                tw.writeln("{}        }}", indent);
+                tw.writeln();
+
                 tw.writeln("{}        explicit inline {}({}){}{} {{}}", indent, r->ruleName, pos.str(), coln, ios.str());
                 tw.writeln("{}    }};", indent);
                 tw.writeln();
@@ -453,7 +467,7 @@ struct Generator {
 
             std::string sep;
             tw.writeln("{}    using Rule = std::variant<", indent);
-            tw.writeln("{}        {}std::monostate", indent, sep);
+            tw.writeln("{}        {}_astEmpty", indent, sep);
             sep = ",";
             for (auto& r : rs->rules) {
                 tw.writeln("{}        {}{}", indent, sep, r->ruleName);
@@ -464,6 +478,13 @@ struct Generator {
 
             tw.writeln("{}    const {}& anchor;", indent, grammar.tokenClass);
             tw.writeln("{}    Rule rule;", indent);
+            tw.writeln();
+
+            tw.writeln("{}    inline void dump(std::ostream& ss, const std::string& name, const std::string& indent) const {{", indent);
+            tw.writeln("{}        std::visit([this, &ss, &name, &indent](const auto& r){{", indent);
+            tw.writeln("{}            r.dump(ss, name, pos, indent);", indent);
+            tw.writeln("{}        }}, rule);", indent);
+            tw.writeln("{}    }}", indent);
             tw.writeln();
 
             auto anchorArg = std::format(", const {}& a", grammar.tokenClass);
@@ -635,7 +656,7 @@ struct Generator {
         tw.writeln("{}    return std::visit(overload{{", indent);
 
         if(true) {
-            tw.writeln("{}        [&](const std::monostate&) -> {} {{", indent, fsig.type);
+            tw.writeln("{}        [&](const _astEmpty&) -> {} {{", indent, fsig.type);
             tw.writeln("{}            throw std::runtime_error(\"internal_error\"); //should never reach here", indent);
             tw.writeln("{}        }},", indent);
             tw.writeln();

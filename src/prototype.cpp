@@ -114,6 +114,9 @@ struct TAG(CLASSQID) {
 
     // walk AST, no output file
     void walk(const std::vector<std::string>& walkers);
+
+    // print AST
+    void printAST(std::ostream& ss, const std::string& indent) const;
 };
 
 ///PROTOTYPE_ENTER:SKIP
@@ -168,6 +171,11 @@ namespace {
         inline TAG(AST)& operator=(const TAG(AST)&) = delete;
         inline TAG(AST)& operator=(TAG(AST)&&) = delete;
 
+        struct _astEmpty {
+            inline void dump(std::ostream&, const std::string&, const FilePos&, const std::string&) const {
+            }
+        };
+
         struct TAG(TOKEN) {
             FilePos pos;
             std::string text;
@@ -175,9 +183,8 @@ namespace {
             inline TAG(TOKEN)(const FilePos& p, const std::string& t) : pos(p), text(t) {}
             inline TAG(TOKEN)(const TAG(TOKEN)& src) : pos(src.pos), text(src.text) {}
 
-            inline void str(std::ostream& os, const std::string& path, const bool& full) const {
-                unused(full);
-                os << std::format("{}:{}\n", path, text);
+            inline void dump(std::ostream& ss, const std::string& name, const std::string& indent) const {
+                ss << std::format("{}: {}+--{}({})\n", pos.str(), indent, name, text);
             }
 
             inline const TAG(TOKEN)* get() const {
@@ -199,6 +206,8 @@ namespace {
         struct START_RULE{
             inline START_RULE& go(TAG(AST)&) {
                 return *this;
+            }
+            inline void dump(std::ostream&, const std::string&, const std::string&) const {
             }
         };
 
@@ -269,7 +278,7 @@ namespace {
 
         ///PROTOTYPE_SEGMENT:epilogue
 
-        inline TAG(START_RULE)& _root() {
+        inline TAG(START_RULE)& _root() const {
             assert(R_start);
             return *(R_start);
         }
@@ -674,6 +683,11 @@ struct TAG(CLASSQID)::Impl {
             ///PROTOTYPE_SEGMENT:walkerCalls
         }
     }
+
+    inline void printAST(std::ostream& ss, const std::string& indent) const {
+        auto& start = ast._root();
+        start.dump(ss, TAG(START_RULE_NAME), indent);
+    }
 };
 
 TAG(CLASSQID)::TAG(CLSNAME)(const std::string& n, const std::string& lname) : name(n) {
@@ -716,6 +730,10 @@ void TAG(CLASSQID)::readString(const std::string& s, const std::string_view& fil
     _impl->read(is, filename);
 }
 
+void TAG(CLASSQID)::printAST(std::ostream& ss, const std::string& indent) const {
+    _impl->printAST(ss, indent);
+}
+
 ///PROTOTYPE_ENTER:SKIP
 #define HAS_REPL 1
 ///PROTOTYPE_LEAVE:SKIP
@@ -740,7 +758,8 @@ inline int help(const std::string& xname, const std::string& msg) {
         std::print("== {} ==\n", msg);
     }
 #if HAS_REPL
-    std::print("{} -i -f <filename> -s <string> -l <log>\n", xxname.string());
+    std::print("{} <options>\n", xxname.string());
+    std::print("options:\n");
     std::print("    -i              : read input interactively from console\n");
 #else
     std::print("{} -f <filename> -s <string> -l <log>\n", xxname.string());
@@ -748,6 +767,7 @@ inline int help(const std::string& xname, const std::string& msg) {
     std::print("    -f <filename>   : read input from file <filename>\n");
     std::print("    -s <string>     : read input from <string> passed on commandline\n");
     std::print("    -l <log>        : generate debug log to <log> (use - for console)\n");
+    std::print("    -t              : print AST to log\n");
     std::print("    -v              : print verbose messages to console\n");
     std::print("    -w <walker>     : use walker\n");
     std::print("    -o <filename>   : write output to file <filename>\n");
@@ -766,6 +786,7 @@ int main(int argc, char* argv[]) {
     std::string odir = ".";
     std::string log;
     bool verbose = false;
+    bool printAST = false;
 #if HAS_REPL
     bool repl = false;
 #else
@@ -817,6 +838,8 @@ int main(int argc, char* argv[]) {
         }else if(a == "-i") {
             repl = true;
 #endif
+        }else if(a == "-t") {
+            printAST = true;
         }else {
             return help(argv[0], "unknown argument: " + a);
         }
@@ -856,6 +879,9 @@ int main(int argc, char* argv[]) {
                 // instance of the module
                 TAG(CLASSQID) mp("main", log);
                 mp.readFile(f);
+                if(printAST == true) {
+                    mp.printAST(std::cout, "");
+                }
                 mp.walk(walkers, outf, f);
             }catch(const std::exception& ex) {
                 ++errs;
@@ -874,6 +900,9 @@ int main(int argc, char* argv[]) {
                 // instance of the module
                 TAG(CLASSQID) mp("main", log);
                 mp.readString(f, inn);
+                if(printAST == true) {
+                    mp.printAST(std::cout, "");
+                }
                 mp.walk(walkers);
             }catch(const std::exception& ex) {
                 std::print("err:{}\n", ex.what());
@@ -894,6 +923,9 @@ int main(int argc, char* argv[]) {
 
             try {
                 mp.readFile(f);
+                if(printAST == true) {
+                    mp.printAST(std::cout, "");
+                }
                 mp.walk(walkers);
             }catch(const std::exception& ex) {
                 std::print("err:{}\n", ex.what());
@@ -907,6 +939,9 @@ int main(int argc, char* argv[]) {
 
             try {
                 mp.readString(f, "<str>");
+                if(printAST == true) {
+                    mp.printAST(std::cout, "");
+                }
                 mp.walk(walkers);
             }catch(const std::exception& ex) {
                 std::print("err:{}\n", ex.what());
