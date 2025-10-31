@@ -619,6 +619,18 @@ struct RegexSet : public NonCopyable {
         None,
     };
 
+    static inline const char* assocName(const Assoc& ass) {
+        static const std::unordered_map<Assoc, const char*> map = {
+            {Assoc::Left, "Left"},
+            {Assoc::Right, "Right"},
+            {Assoc::None, "None"},
+        };
+        if(auto it = map.find(ass); it != map.end()) {
+            return it->second;
+        }
+        return "";
+    }
+
     /// @brief unique id for this token set
     size_t id = 0;
 

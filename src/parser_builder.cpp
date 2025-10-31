@@ -3,6 +3,142 @@
 #include "logger.hpp"
 
 namespace {
+/// @brief represents a set of configs
+/// This is an intermediate data structure used during the
+/// construction of ItemSets in the LALR state machine
+/// TODO: This class is almost identical to ItemSet, chek if opssible to merge.
+struct PreItemSet : public NonCopyable {
+    /// @brief represents all SHIFT actions from this config set
+    struct Shift {
+        /// @brief the next config to shift to
+        std::vector<const ygp::Config*> next;
+
+        /// @brief epsilon transitions from this PreItemSet
+        std::vector<const ygp::RuleSet*> epsilons;
+    };
+
+    /// @brief represents all REDUCE actions from this config set
+    struct Reduce {
+        /// @brief the next config to shift when this REDUCE action is executed
+        /// a PreItemSet can have multiple reduces for the same REGEX.
+        /// this is resolved when converting to ItemSet.
+        /// hence, a vector here.
+        std::vector<const ygp::Config*> next;
+
+        /// @brief length of the Rule to REDUCE
+        size_t len = 0;
+    };
+
+    /// @brief the underlying ItemSet for this config set
+    ygp::ItemSet& is;
+
+    /// @brief list of SHIFT actions from this config set
+    std::unordered_map<const yglx::RegexSet*, Shift> shifts;
+
+    /// @brief list of REDUCE actions from this config set
+    std::unordered_map<const yglx::RegexSet*, Reduce> reduces;
+
+    /// @brief list of GOTO actions from this config set
+    std::unordered_map<const ygp::RuleSet*, std::vector<const ygp::Config*>> gotos;
+
+    /// @brief ctor
+    inline PreItemSet(ygp::ItemSet& i) : is(i) {}
+
+    /// @brief check if there is a SHIFT action for the given token @arg rx
+    inline const Shift* hasShift(const yglx::RegexSet& rx) const {
+        if(auto it = shifts.find(&rx); it != shifts.end()) {
+            return &(it->second);
+        }
+        return nullptr;
+    }
+
+    /// @brief add a SHIFT action for the given token @arg rx, from current Config to @arg next Config
+    inline void addShift(const yglx::RegexSet& rx, const ygp::Config& next) {
+        if(hasShift(rx) == nullptr) {
+            shifts[&rx] = Shift();
+        }
+        shifts[&rx].next.push_back(&next);
+    }
+
+    /// @brief add a SHIFT action for the given token @arg rx, from current Config to @arg next Config
+    /// along with @arg epsilon tranitions
+    inline void addShift(const yglx::RegexSet& rx, const ygp::Config& next, const std::vector<const ygp::RuleSet*>& epsilons) {
+        if(hasShift(rx) == nullptr) {
+            shifts[&rx] = Shift();
+            shifts[&rx].epsilons = epsilons;
+        }
+        shifts[&rx].next.push_back(&next);
+    }
+
+    /// @brief move SHIFTs from another Config to here
+    /// This is used during LALR construction, to collapse similar Configs into one
+    inline const std::vector<const ygp::Config*>&
+    moveShifts(
+        const yglx::RegexSet& rx,
+        std::vector<const ygp::Config*>& nexts,
+        const std::vector<const ygp::RuleSet*>& epsilons
+    ) {
+        unused(epsilons);
+        if(hasShift(rx) == nullptr) {
+            shifts[&rx] = Shift();
+            shifts[&rx].epsilons = epsilons;
+        }
+        auto& shift = shifts[&rx];
+        shift.next = std::move(nexts);
+        return shift.next;
+    }
+
+    /// @brief check if there is a REDUCE action for the given token @arg rx
+    inline const Reduce* hasReduce(const yglx::RegexSet& rx) const {
+        if(auto it = reduces.find(&rx); it != reduces.end()) {
+            return &(it->second);
+        }
+        return nullptr;
+    }
+
+    /// @brief add a REDUCE action for the given token @arg rx
+    inline void addReduce(const yglx::RegexSet& rx, const ygp::Config& next, const size_t& len) {
+        if(hasReduce(rx) == nullptr) {
+            Reduce r;
+            r.len = len;
+            reduces[&rx] = r;
+        }
+        reduces[&rx].next.push_back(&next);
+    }
+
+    /// @brief move REDUCEs from another Config to here
+    inline void
+    moveReduces(
+        const yglx::RegexSet& rx,
+        Reduce& r
+    ) {
+        reduces[&rx] = std::move(r);
+    }
+
+    /// @brief check if there is a GOTO action for the given RuleSet @arg rs
+    inline bool hasGoto(const ygp::RuleSet& rs, const ygp::Config& cfg) const {
+        if(auto it = gotos.find(&rs); it != gotos.end()) {
+            for(auto& c : it->second) {
+                if(c == &cfg) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /// @brief move GOTOs from another Config to here
+    inline const std::vector<const ygp::Config*>&
+    moveGotos(
+        const ygp::RuleSet& rs,
+        std::vector<const ygp::Config*>& nexts
+    ) {
+        auto& g = gotos[&rs];
+        g = std::move(nexts);
+        return g;
+    }
+};
+
 struct ParserStateMachineBuilder {
     yg::Grammar& grammar;
     inline ParserStateMachineBuilder(yg::Grammar& g) : grammar{g} {}
@@ -11,12 +147,13 @@ struct ParserStateMachineBuilder {
         std::println(os, "--------------------------------");
         std::println(os, "GRAMMAR({}):{}", grammar.rules.size(), msg);
         for(auto& rs : grammar.regexSets) {
-            std::println(os, "REGEXSET({}): name={} [{}]", rs->id, rs->name, rs->precedence);
-            for(auto& rx : rs->regexes) {
-                std::println(os, "  REGEX({}): name={} [{}]", rx->id, rx->regexName, rx->regexSet->precedence);
+            std::println(os, "REGEXSET({}): name={}, prec={}, assoc={}", rs->id, rs->name, rs->precedence, yglx::RegexSet::assocName(rs->assoc));
+            if(rs->regexes.size() > 1) {
+                for(auto& rx : rs->regexes) {
+                    std::println(os, "  REGEX({}): name={}, prec={}", rx->id, rx->regexName, rx->regexSet->precedence);
+                }
             }
         }
-
 
         for(auto& rule : grammar.rules) {
             std::println(os, "RULE<{}>: {}", rule->ruleSet->name, rule->str());
@@ -25,14 +162,83 @@ struct ParserStateMachineBuilder {
 
     [[maybe_unused]]
     inline void
-    printConfigList(const std::string& msg, const std::vector<const ygp::Config*>& cfgs) {
-        std::println("{}({})", msg, cfgs.size());
-        for(auto& cfg : cfgs) {
-            std::println("-cfg:{}", cfg->str());
+    printPreItemSet(
+        const PreItemSet& pis,
+        const size_t& id,
+        const std::string_view& indent
+    ) const {
+        std::println("{}<<configset:is={}", indent, id);
+        for(auto& c : pis.shifts) {
+            auto& rx = c.first;
+            auto& cfgs = c.second;
+            std::println("{}-shift: rx={}, next_sz={}", indent, rx->name, cfgs.next.size());
+            for(auto& cfg : cfgs.next) {
+                std::println("{}--cfg={}", indent, cfg->str(false));
+            }
+        }
+
+        for(auto& c : pis.reduces) {
+            auto& rx = c.first;
+            auto& cfgs = c.second;
+            std::println("{}-reduce: rx={}, next_sz={}", indent, rx->name, cfgs.next.size());
+            for(auto& cfg : cfgs.next) {
+                std::println("{}--cfg={}", indent, cfg->str(false));
+            }
+        }
+
+        for(auto& c : pis.gotos) {
+            auto& rs = c.first;
+            auto& cfgs = c.second;
+            std::println("{}-goto: rs={}, next_sz={}", indent, rs->name, cfgs.size());
+            for(auto& cfg : cfgs) {
+                std::println("{}--cfg={}", indent, cfg->str(false));
+            }
+        }
+        std::println("{}>>configset:is={}", indent, id);
+    }
+
+    inline void
+    _printConfigList(
+        std::ostream& os,
+        const std::string& msg,
+        const size_t& id,
+        const std::vector<const ygp::Config*>& configs,
+        const std::string_view& indent
+    ) const {
+        std::println(os, "{}{},id=={}, len={}", indent, msg, id, configs.size());
+        for(auto& pc : configs) {
+            auto& c = *pc;
+            std::println(os, "{}-config:{}", indent, c.str(false));
         }
     }
 
-    inline bool hasRuleInConfigList(const std::vector<const ygp::Config*>& configs, const ygp::Rule& r) {
+    [[maybe_unused]]
+    inline void
+    printConfigList(
+        const std::string& msg,
+        const size_t& id,
+        const std::vector<const ygp::Config*>& configs,
+        const std::string_view& indent
+    ) const {
+        _printConfigList(std::cout, msg, id, configs, indent);
+    }
+
+    [[maybe_unused]]
+    inline void
+    logConfigList(
+        const std::string& msg,
+        const size_t& id,
+        const std::vector<const ygp::Config*>& configs,
+        const std::string_view& indent
+    ) const {
+        _printConfigList(Logger::olog(), msg, id, configs, indent);
+    }
+
+    inline bool
+    hasRuleInConfigList(
+        const std::vector<const ygp::Config*>& configs,
+        const ygp::Rule& r
+    ) {
         for(auto& c : configs) {
             if(&(c->rule) == &r) {
                 return true;
@@ -41,8 +247,11 @@ struct ParserStateMachineBuilder {
         return false;
     }
 
+    /// @brief expands all configs in the list
+    /// for each config, if the next node is a rule-ref,
+    /// add all matching rules to the config-list
     inline std::vector<const ygp::Config*>
-    expandConfig(const std::vector<const ygp::Config*>& initConfig) {
+    expandConfigs(const std::vector<const ygp::Config*>& initConfig) {
         // create all sub-configs
         std::vector<const ygp::Config*> configs;
 
@@ -116,103 +325,21 @@ struct ParserStateMachineBuilder {
     }
 
     inline void addReduce(
-        ygp::ConfigSet& cs,
+        PreItemSet& pis,
         const ygp::Config& config,
         const size_t& len,
-        const std::string& indent
+        const std::string& /*indent*/
     ) {
-        log("{}addReduce(1):cfg={}, next=null", indent, config.str());
         auto& rs = grammar.getRuleSetByName(config.rule.pos, config.rule.ruleSetName());
-
-        log("{}addReduce(2):rs={}", indent, rs.name);
-
-        for(auto& rx : rs.follows) {
-            char p = resolveConflict(config, *rx, indent);
-            if(cs.hasShift(*rx) != nullptr) {
-                std::stringstream ss;
-                log("{}addReduce(3):{}: REDUCE-SHIFT-CONFLICT: on {}{}", indent, config.rule.pos.str(), rx->name, ss.str());
-                if(p == 'R') {
-                    log("{}addReduce(4): REDUCE-SHIFT-CONFLICT: rx={}, p={}, R-S conflict, reducing", indent, rx->name, p);
-                    cs.shifts.erase(rx);
-                    assert(cs.hasReduce(*rx) == nullptr);
-                    cs.addReduce(*rx, config, len);
-
-                    log("{}addReduce(5): REDUCE-SHIFT-CONFLICT: Resolved in favor of REDUCE", indent);
-                }else{
-                    log("{}addReduce(6): REDUCE-SHIFT-CONFLICT: rx={}, p={}, R-S conflict, shifting", indent, rx->name, p);
-                    log("{}addReduce(7): REDUCE-SHIFT-CONFLICT: Resolved in favor of SHIFT", indent);
-                }
-                return;
-            }
-
-            if(p == 'R') {
-                log("{}addReduce(8): rx={}, p={}, reducing, r={}", indent, rx->name, p, config.str());
-                // if(auto c = cs.hasReduce(*rx); c != nullptr) {
-                //     log("{}addReduce: R-R conflict", indent);
-                //     if(c->next != &config) {
-                //         log("{}- prev-config={}", indent, c->next->str());
-                //         log("{}- next-config={}", indent, config.str());
-                //         // throw GeneratorError(__LINE__, __FILE__, config.rule->pos, "REDUCE_REDUCE_CONFLICT:ON:{}", rx->name);
-                //         continue;
-                //     }
-                // }
-                cs.addReduce(*rx, config, len);
-                continue;
-            }
-
-            // SR conflict resolved in favor of SHIFT
-            assert(p == 'S');
-
-            // check if there are any matching configs
-            auto& lastNode = *(config.rule.nodes.back());
-            log("{}addReduce(9): REDUCE-SHIFT-CONFLICT: lastNode={}, rx={}", indent, lastNode.name, rx->name);
-            std::vector<const ygp::Config*> ncfgs;
-            for(auto& r : grammar.rules) {
-                if(r->nodes.size() < 2) {
-                    continue;
-                }
-                if((r->nodes.at(0)->name == lastNode.name) && (r->nodes.at(1)->name == rx->name)) {
-                    auto& ncfg = grammar.createConfig(*r, 2);
-                    ncfgs.push_back(&ncfg);
-                }
-            }
-
-            // if matching configs found, shift to that
-            if(ncfgs.size() > 0) {
-                std::stringstream ss;
-                ss << std::format("\n{}:REDUCE:{}", config.rule.pos.str(), config.str());
-                for(auto& ncfg : ncfgs) {
-                    ss << std::format("\n{}: SHIFT:{}", ncfg->rule.pos.str(), ncfg->str());
-                }
-                if(grammar.autoResolve == false) {
-                    throw GeneratorError(__LINE__, __FILE__, config.rule.pos, "REDUCE_SHIFT_CONFLICT:ON:{}{}", rx->name, ss.str());
-                }else if(grammar.warnResolve == true) {
-                    log("{}addReduce(10): REDUCE-SHIFT-CONFLICT: Resolved in favor of SHIFT: {} on:{}{}", indent, config.rule.pos.str(), rx->name, ss.str());
-                }
-                log("{}addReduce(11): REDUCE-SHIFT-CONFLICT: shifting {}", indent, rx->name);
-                cs.moveShifts(*rx, ncfgs, {});
-                continue;
-            }
-
-            // else reduce by default
-            if(auto r = cs.hasReduce(*rx)) {
-                log("{}addReduce(12): REDUCE-SHIFT-CONFLICT: reducing {}, rx={}", indent, config.str(), rx->name);
-                unused(r);
-                // assert(r->next != nullptr);
-                // auto& ocfg = *(r->next);
-                // log("{}addReduce: REDUCE-SHIFT:ocfg={}", indent, ocfg.str());
-                // assert(ocfg == &config);
-                continue;
-            }
-            log("{}addReduce(13): reducing {}, rx={}", indent, config.str(), rx->name);
-            assert(cs.hasReduce(*rx) == nullptr);
-            cs.addReduce(*rx, config, len);
+        for(auto& prx : rs.follows) {
+            auto& rx = *prx;
+            pis.addReduce(rx, config, len);
         }
     }
 
     inline void addShift(
         ygp::Node& nextNode,
-        ygp::ConfigSet& cs,
+        PreItemSet& pis,
         const ygp::Config& config,
         const size_t& cpos,
         const std::vector<const ygp::RuleSet*>& epsilons,
@@ -223,20 +350,20 @@ struct ParserStateMachineBuilder {
             log("{}addShift:skip_empty", indent);
             return;
         }
+
         auto& rx = grammar.getRegexSet(nextNode);
-        if(cs.hasReduce(rx) != nullptr) {
-            std::stringstream ss;
+        if(pis.hasReduce(rx) != nullptr) {
             char p = resolveConflict(config, rx, indent);
-            log("{}addShift: {}: SHIFT-REDUCE conflict on:{}{}, p={}", indent, config.rule.pos.str(), rx.name, ss.str(), p);
             if(p == 'R') {
                 return;
             }
-            cs.reduces.erase(&rx);
+            pis.reduces.erase(&rx);
         }
+
         bool hasExisting = false;
-        if(cs.hasShift(rx)) {
-            for(auto& xcfg : cs.shifts[&rx].next) {
-                if(&(xcfg->rule) == &(config.rule)) {
+        if(pis.hasShift(rx)) {
+            for(auto& xcfg : pis.shifts[&rx].next) {
+                 if(&(xcfg->rule) == &(config.rule)) {
                     hasExisting = true;
                     break;
                 }
@@ -244,13 +371,13 @@ struct ParserStateMachineBuilder {
         }
         if(hasExisting == false) {
             auto& ncfg = grammar.createConfig(config.rule, cpos + 1);
-            cs.addShift(rx, ncfg, epsilons);
+            pis.addShift(rx, ncfg, epsilons);
         }
     }
 
     inline void addGoto(
         ygp::Node& nextNode,
-        ygp::ConfigSet& cs,
+        PreItemSet& pis,
         const ygp::Config& config,
         const size_t& cpos,
         const std::string& indent
@@ -260,46 +387,68 @@ struct ParserStateMachineBuilder {
         // add GOTO for rule node
         auto& ncfg = grammar.createConfig(config.rule, cpos + 1);
         auto& rs = grammar.getRuleSetByName(nextNode.pos, nextNode.name);
-        assert(cs.hasGoto(rs, ncfg) == false);
-        cs.gotos[&rs].push_back(&ncfg);
+        assert(pis.hasGoto(rs, ncfg) == false);
+        pis.gotos[&rs].push_back(&ncfg);
     }
 
-    inline void getNextConfigSet(ygp::ItemSet& is, const std::string& indent) {
-        log("{}getNextConfigSet:is={}", indent, is.id);
-        ygp::ConfigSet cs;
+    std::unordered_map<const ygp::ItemSet*, std::unique_ptr<PreItemSet>> pisList;
 
-        for(auto& c : is.configs) {
+    inline PreItemSet&
+    createPreItemSet(ygp::ItemSet& is) {
+        if(pisList.find(&is) != pisList.end()) {
+            throw GeneratorError(__LINE__, __FILE__, grammar.pos(), "DUPLICATE_CONFIGSET:{}", is.id);
+        }
+
+        pisList[&is] = std::make_unique<PreItemSet>(is);
+        return *(pisList[&is]);
+    }
+
+    inline PreItemSet&
+    getPreItemSet(ygp::ItemSet& is) {
+        if(auto it = pisList.find(&is); it != pisList.end()) {
+            return *(it->second);
+        }
+        throw GeneratorError(__LINE__, __FILE__, grammar.pos(), "UNKNOWN_CONFIGSET");
+    }
+
+    inline void
+    getNextPreItemSet(
+        const std::vector<const ygp::Config*>& cfgs,
+        PreItemSet& pis,
+        const std::string& indent
+    ) {
+        for(auto& c : cfgs) {
             auto& config = *c;
             const ygp::Node* epsilonNode = nullptr;
             std::vector<const ygp::RuleSet*> epsilons;
             auto cpos = config.cpos;
             do {
-                log("{}getNextConfigSet({}):cfg={}, cpos={}", indent, is.id, config.str(), cpos);
+                log("{}getNextConfigSet:cfg={}, cpos={}", indent, config.str(), cpos);
                 assert(cpos <= config.rule.nodes.size());
                 bool first = (epsilonNode == nullptr);
                 epsilonNode = nullptr;
                 auto nextNode = config.rule.getNodeAt(cpos);
                 if(nextNode == nullptr) {
                     auto len = config.rule.nodes.size() - (cpos - config.cpos);
-                    log("{}getNextConfigSet({}):is-end:len={}", indent, is.id, len);
-                    addReduce(cs, config, len, indent);
+                    log("{}getNextConfigSet:is-end:len={}", indent, len);
+                    addReduce(pis, config, len, indent);
                 }else if(nextNode->isRegex()) {
                     if(nextNode->name == grammar.empty) {
-                        log("{}getNextConfigSet({}):is-regex-empty:{}", indent, is.id, nextNode->name);
+                        log("{}getNextConfigSet:is-regex-empty:{}", indent, nextNode->name);
                     //     epsilonNode = nextNode;
                     }else if(nextNode->name == grammar.end) {
                         auto len = config.rule.nodes.size() - (cpos - config.cpos);
-                        log("{}getNextConfigSet({}):is-regex-end:{}, len={}, cfg={}", indent, is.id, nextNode->name, len, config.str(false));
+                        log("{}getNextConfigSet:is-regex-end:{}, len={}, cfg={}", indent, nextNode->name, len, config.str(false));
                         assert(len > 0);
-                        addReduce(cs, config, len, indent);
+                        addReduce(pis, config, len, indent);
                     }else{
-                        log("{}getNextConfigSet({}):is-regex:{}", indent, is.id, nextNode->name);
-                        addShift(*nextNode, cs, config, cpos, epsilons, indent);
+                        log("{}getNextConfigSet:is-regex:{}", indent, nextNode->name);
+                        addShift(*nextNode, pis, config, cpos, epsilons, indent);
                     }
                 }else if(nextNode->isRule()) {
-                    log("{}getNextConfigSet({}):is-rule:{}", indent, is.id, nextNode->name);
+                    log("{}getNextConfigSet:is-rule:{}", indent, nextNode->name);
                     if(first == true) {
-                        addGoto(*nextNode, cs, config, cpos, indent);
+                        addGoto(*nextNode, pis, config, cpos, indent);
                         auto& rs = grammar.getRuleSetByName(nextNode->pos, nextNode->name);
                         if(rs.firstIncludes(grammar.empty) == true) {
                             epsilonNode = nextNode;
@@ -312,25 +461,77 @@ struct ParserStateMachineBuilder {
                 ++cpos;
             }while(epsilonNode != nullptr);
         }
+    }
 
-        // set is.shifts
-        for(auto& c : cs.shifts) {
-            auto& rx = c.first;
-            auto& cfgs = c.second;
-            auto xcfgs = expandConfig(cfgs.next);
-            is.configSet.moveShifts(*rx, xcfgs, cfgs.epsilons);
+    inline std::tuple<ygp::ItemSet&, bool>
+    createNewItemSet(
+        std::vector<const ygp::Config*>& configs,
+        const std::string& indent
+    ) {
+        unused(indent);
+        if(auto is = grammar.hasItemSet(configs)) {
+            log("{}Found Existing ItemSet:{}", indent, is->id);
+            return {*is, true};
         }
 
-        // set is.gotos
-        for(auto& c : cs.gotos) {
-            auto& rs = c.first;
+        auto& is = grammar.createItemSet(configs);
+        log("{}Created ItemSet:{}", indent, is.id);
+        return {is, false};
+    }
+
+    inline ygp::ItemSet&
+    createItemSet(
+        const std::vector<const ygp::Config*>& initConfig,
+        const std::string& indent
+    ) {
+        auto configs = expandConfigs(initConfig);
+
+        auto [is, found] = createNewItemSet(configs, indent);
+        if(found == true) {
+            return is;
+        }
+
+        PreItemSet pis(is);
+        getNextPreItemSet(is.configs, pis, indent);
+
+        auto& npis = createPreItemSet(is);
+
+        // set is.shifts
+        for(auto& c : pis.shifts) {
+            auto& rx = c.first;
             auto& cfgs = c.second;
-            auto xcfgs = expandConfig(cfgs);
-            is.configSet.gotos[rs] = xcfgs;
+            auto xcfgs = expandConfigs(cfgs.next);
+            npis.moveShifts(*rx, xcfgs, cfgs.epsilons);
         }
 
         // set is.reduces
-        is.configSet.reduces = cs.reduces;
+        for(auto& c : pis.reduces) {
+            auto& rx = c.first;
+            auto& cfgs = c.second;
+            npis.moveReduces(*rx, cfgs);
+        }
+
+        // set is.gotos
+        for(auto& c : pis.gotos) {
+            auto& rs = c.first;
+            auto& cfgs = c.second;
+            auto xcfgs = expandConfigs(cfgs);
+            npis.moveGotos(*rs, xcfgs);
+        }
+
+        // set is.shifts
+        for(auto& c : pis.shifts) {
+            auto& cfgs = c.second;
+            createItemSet(cfgs.next, indent + "  ");
+        }
+
+        // set is.gotos
+        for(auto& c : pis.gotos) {
+            auto& cfgs = c.second;
+            createItemSet(cfgs, indent + "  ");
+        }
+
+        return is;
     }
 
     inline void linkItemSets() {
@@ -338,7 +539,8 @@ struct ParserStateMachineBuilder {
             auto& is = *pis;
             log("linkItemSets:is={}", is.id);
 
-            for(auto& c : is.configSet.gotos) {
+            auto& npis = getPreItemSet(is);
+            for(auto& c : npis.gotos) {
                 auto& rs = c.first;
                 auto& cfgs = c.second;
                 log("  goto: rs={}, next_sz={}", rs->name, cfgs.size());
@@ -349,11 +551,12 @@ struct ParserStateMachineBuilder {
                 is.setGoto(nextNode, rs, &cis);
             }
 
-            for(auto& c : is.configSet.shifts) {
+            for(auto& c : npis.shifts) {
                 auto& rx = c.first;
                 auto& cfgs = c.second;
                 log("  shift: rx={}, next_sz={}", rx->name, cfgs.next.size());
                 assert(cfgs.next.size() > 0);
+                // assert(cfgs.next.size() == 1);
                 auto& config = *(cfgs.next.at(0));
                 auto& nextNode = config.rule.getNode(0);
                 auto& cis = grammar.getItemSet(config.rule.pos, cfgs.next);
@@ -362,7 +565,7 @@ struct ParserStateMachineBuilder {
                 is.setShift(nextNode, *rx, cis, cfgs.epsilons);
             }
 
-            for(auto& c : is.configSet.reduces) {
+            for(auto& c : npis.reduces) {
                 auto& rx = *(c.first);
                 auto& cfgs = c.second;
                 log("  reduce: rx={}, next_sz={}", rx.name, cfgs.next.size());
@@ -377,32 +580,6 @@ struct ParserStateMachineBuilder {
                 is.setReduce(lastNode, rx, config, cfgs.len);
             }
         }
-    }
-
-    inline ygp::ItemSet& createItemSet(const std::vector<const ygp::Config*>& initConfig, const std::string& indent) {
-        auto configs = expandConfig(initConfig);
-        if(auto xis = grammar.hasItemSet(configs)) {
-            log("{}Found Existing ItemSet:{}", indent, xis->id);
-            return *xis;
-        }
-
-        auto& is = grammar.createItemSet(configs);
-        log("{}Created ItemSet:{}", indent, is.id);
-        getNextConfigSet(is, indent);
-
-        for(auto& c : is.configSet.shifts) {
-            auto& cfgs = c.second;
-            assert(cfgs.next.size() > 0);
-            createItemSet(cfgs.next, indent + "  ");
-        }
-
-        for(auto& c : is.configSet.gotos) {
-            auto& cfgs = c.second;
-            assert(cfgs.size() > 0);
-            createItemSet(cfgs, indent + "  ");
-        }
-
-        return is;
     }
 
     struct Links {

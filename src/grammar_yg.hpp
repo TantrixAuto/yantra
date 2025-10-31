@@ -661,10 +661,15 @@ struct Grammar {
         return cfg;
     }
 
-    inline ygp::ItemSet& createItemSet(std::vector<const ygp::Config*>& cfgs) {
+    inline ygp::ItemSet& _createItemSet() {
         itemSets.push_back(std::make_unique<ygp::ItemSet>());
         auto& is = *(itemSets.back());
         is.id = itemSets.size();
+        return is;
+    }
+
+    inline ygp::ItemSet& createItemSet(std::vector<const ygp::Config*>& cfgs) {
+        auto& is = _createItemSet();
         is.configs = std::move(cfgs);
         return is;
     }

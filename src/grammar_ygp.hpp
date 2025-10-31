@@ -198,108 +198,6 @@ struct Config : public NonCopyable {
     }
 };
 
-/// @brief represents a set of configs
-/// This is an intermediate data structure used during the
-/// construction of ItemSets in the LALR state machine
-/// TODO: This class is almost identical to ItemSet, chek if opssible to merge.
-struct ConfigSet : public NonCopyable {
-    /// @brief represents all SHIFT actions from this config set
-    struct Shift {
-        /// @brief the next config to shift to
-        std::vector<const Config*> next;
-
-        /// @brief epsilon transitions from this ConfigSet
-        std::vector<const RuleSet*> epsilons;
-    };
-
-    /// @brief represents all REDUCE actions from this config set
-    struct Reduce {
-        /// @brief the next config to shift when this REDUCE action is executed
-        /// a ConfigSet can have multiple reduces for the same REGEX.
-        /// this is resolved when converting to ItemSet.
-        /// hence, a vector here.
-        std::vector<const Config*> next;
-
-        /// @brief length of the Rule to REDUCE
-        size_t len = 0;
-    };
-
-    /// @brief list of SHIFT actions from this config set
-    std::unordered_map<const yglx::RegexSet*, Shift> shifts;
-
-    /// @brief list of REDUCE actions from this config set
-    std::unordered_map<const yglx::RegexSet*, Reduce> reduces;
-
-    /// @brief list of GOTO actions from this config set
-    std::unordered_map<const RuleSet*, std::vector<const Config*>> gotos;
-
-    /// @brief check if there is a SHIFT action for the given token @arg rx
-    inline const Shift* hasShift(const yglx::RegexSet& rx) const {
-        if(auto it = shifts.find(&rx); it != shifts.end()) {
-            return &(it->second);
-        }
-        return nullptr;
-    }
-
-    /// @brief add a SHIFT action for the given token @arg rx, from current Config to @arg next Config
-    inline void addShift(const yglx::RegexSet& rx, const Config& next) {
-        if(hasShift(rx) == nullptr) {
-            shifts[&rx] = Shift();
-        }
-        shifts[&rx].next.push_back(&next);
-    }
-
-    /// @brief add a SHIFT action for the given token @arg rx, from current Config to @arg next Config
-    /// along with @arg epsilon tranitions
-    inline void addShift(const yglx::RegexSet& rx, const Config& next, const std::vector<const RuleSet*>& epsilons) {
-        if(hasShift(rx) == nullptr) {
-            shifts[&rx] = Shift();
-            shifts[&rx].epsilons = epsilons;
-        }
-        shifts[&rx].next.push_back(&next);
-    }
-
-    /// @brief move SHIFTs from another Config to here
-    /// This is used during LALR construction, to collapse similar Configs into one
-    inline void moveShifts(const yglx::RegexSet& rx, std::vector<const Config*>& nexts, const std::vector<const RuleSet*>& epsilons) {
-        if(hasShift(rx) == nullptr) {
-            shifts[&rx] = Shift();
-            shifts[&rx].epsilons = epsilons;
-        }
-        shifts[&rx].next = std::move(nexts);
-    }
-
-    /// @brief check if there is a REDUCE action for the given token @arg rx
-    inline const Reduce* hasReduce(const yglx::RegexSet& rx) const {
-        if(auto it = reduces.find(&rx); it != reduces.end()) {
-            return &(it->second);
-        }
-        return nullptr;
-    }
-
-    /// @brief add a REDUCE action for the given token @arg rx
-    inline void addReduce(const yglx::RegexSet& rx, const Config& next, const size_t& len) {
-        if(hasReduce(rx) == nullptr) {
-            Reduce r;
-            r.len = len;
-            reduces[&rx] = r;
-        }
-        reduces[&rx].next.push_back(&next);
-    }
-
-    /// @brief check if there is a GOTO action for the given RuleSet @arg rs
-    inline bool hasGoto(const RuleSet& rs, const Config& cfg) const {
-        if(auto it = gotos.find(&rs); it != gotos.end()) {
-            for(auto& c : it->second) {
-                if(c == &cfg) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-};
-
 /// @brief This class reprsents a state in the LALR state machine
 struct ItemSet : public NonCopyable {
     /// @brief represents all SHIFT actions from this ItemSet
@@ -324,9 +222,6 @@ struct ItemSet : public NonCopyable {
 
     /// @brief this is the list of configs for this item
     std::vector<const Config*> configs;
-
-    /// @brief this is the list of processed config-sets
-    ygp::ConfigSet configSet;
 
     /// @brief list of SHIFT actions from this ItemSet
     std::unordered_map<const yglx::RegexSet*, Shift> shifts;
@@ -370,6 +265,16 @@ struct ItemSet : public NonCopyable {
         return is2;
     }
 
+    // /// @brief move SHIFTs from another Config to here
+    // /// This is used during LALR construction, to collapse similar Configs into one
+    // inline void moveShifts(const yglx::RegexSet& rx, std::vector<const ygp::Config*>& nexts, const std::vector<const ygp::RuleSet*>& epsilons) {
+    //     if(hasShift(rx) == nullptr) {
+    //         shifts[&rx] = Shift();
+    //         shifts[&rx].epsilons = epsilons;
+    //     }
+    //     shifts[&rx].next = std::move(nexts);
+    // }
+
     /// @brief delete SHIFT action for the given token @arg rx
     /// This is used when resolving a SHIFT-REDUCE conflict in
     /// favour of a REDUCE
@@ -395,6 +300,16 @@ struct ItemSet : public NonCopyable {
             return nullptr;
         }
         return c2;
+    }
+
+    /// @brief add a REDUCE action for the given token @arg rx
+    inline void addReduce(const yglx::RegexSet& rx, const ygp::Config& next, const size_t& len) {
+        if(hasReduce(rx) == nullptr) {
+            Reduce r;
+            r.len = len;
+            reduces[&rx] = r;
+        }
+        reduces[&rx].next = &next;
     }
 
     /// @brief delete REDUCE action for the given token @arg rx
