@@ -3,8 +3,6 @@
 # ${CODEBLOCK_FILE} : this is the output file (typically cb_XXX.cpp)
 # ${VARNAME}        : variable name
 
-set(BLOCK_SIZE 0)
-
 function(FlushChunk)
     get_property(tCHUNK GLOBAL PROPERTY CHUNK)
     file(APPEND ${CODEBLOCK_FILE} "${tCHUNK}")
@@ -25,23 +23,34 @@ endfunction()
 
 message("PROTOTYPE_FILE: ${PROTOTYPE_FILE}")
 
-# empty lines are skipped if the NEWLINE_CONSUME parameter is not given
-# (this is in contradiction to the cmake documented behaviour)
-file(STRINGS ${PROTOTYPE_FILE} LINES NEWLINE_CONSUME)
+set(BLOCK_SIZE 0)
 
-file(WRITE ${CODEBLOCK_FILE} "")
+file(READ "${PROTOTYPE_FILE}" file_content)
+
+string(LENGTH "${file_content}" length)
+
+set(LINE "")
+
+math(EXPR index 0)
 WriteLine("extern const char* ${VARNAME};")
 WriteLine("const char* ${VARNAME} = R\"ENDTABLES(")
-foreach(LINE ${LINES})
-    WriteLine("${LINE}")
-
-    string(LENGTH "$LINE}" LLEN)
-    math(EXPR BLOCK_SIZE "${BLOCK_SIZE} + 1" )
-    if( ${BLOCK_SIZE} GREATER 50)
-        WriteLine(")ENDTABLES\"")
-        WriteLine("R\"ENDTABLES(")
-        set(BLOCK_SIZE 0)
+while(index LESS length)
+    string(SUBSTRING "${file_content}" ${index} 1 char)
+    if(char STREQUAL "\n")
+        WriteLine("${LINE}")
+        math(EXPR BLOCK_SIZE "${BLOCK_SIZE} + 1" )
+        message("bs: ${BLOCK_SIZE}")
+        if( ${BLOCK_SIZE} GREATER 50)
+            WriteLine(")ENDTABLES\"")
+            WriteLine("R\"ENDTABLES(")
+            set(BLOCK_SIZE 0)
+        endif()
+        set(LINE "")
+    else()
+        string(APPEND LINE "${char}")
     endif()
-endforeach()
+    math(EXPR index "${index} + 1")
+endwhile()
+
 WriteLine(")ENDTABLES\"; //${CBID}\n")
 FlushChunk()

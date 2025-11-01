@@ -374,7 +374,7 @@ struct Grammar {
         return &s;
     }
 
-    inline void releaseState(const yglx::State* s) {
+    inline void releaseState([[maybe_unused]] const yglx::State* s) {
         assert(s != nullptr);
         assert(s->id == states.size());
         assert(s->id == states.back()->id);
