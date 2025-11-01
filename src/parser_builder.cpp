@@ -7,20 +7,20 @@ namespace {
 /// This is an intermediate data structure used during the
 /// construction of ItemSets in the LALR state machine
 /// TODO: This class is almost identical to ItemSet, chek if opssible to merge.
-struct PreItemSet : public NonCopyable {
+struct CanonicalItemSet : public NonCopyable {
     /// @brief represents all SHIFT actions from this config set
     struct Shift {
         /// @brief the next config to shift to
         std::vector<const ygp::Config*> next;
 
-        /// @brief epsilon transitions from this PreItemSet
+        /// @brief epsilon transitions from this CanonicalItemSet
         std::vector<const ygp::RuleSet*> epsilons;
     };
 
     /// @brief represents all REDUCE actions from this config set
     struct Reduce {
         /// @brief the next config to shift when this REDUCE action is executed
-        /// a PreItemSet can have multiple reduces for the same REGEX.
+        /// a CanonicalItemSet can have multiple reduces for the same REGEX.
         /// this is resolved when converting to ItemSet.
         /// hence, a vector here.
         std::vector<const ygp::Config*> next;
@@ -42,7 +42,7 @@ struct PreItemSet : public NonCopyable {
     std::unordered_map<const ygp::RuleSet*, std::vector<const ygp::Config*>> gotos;
 
     /// @brief ctor
-    inline PreItemSet(ygp::ItemSet& i) : is(i) {}
+    inline CanonicalItemSet(ygp::ItemSet& i) : is(i) {}
 
     /// @brief check if there is a SHIFT action for the given token @arg rx
     inline const Shift* hasShift(const yglx::RegexSet& rx) const {
@@ -163,12 +163,12 @@ struct ParserStateMachineBuilder {
     [[maybe_unused]]
     inline void
     printPreItemSet(
-        const PreItemSet& pis,
+        const CanonicalItemSet& cis,
         const size_t& id,
         const std::string_view& indent
     ) const {
         std::println("{}<<configset:is={}", indent, id);
-        for(auto& c : pis.shifts) {
+        for(auto& c : cis.shifts) {
             auto& rx = c.first;
             auto& cfgs = c.second;
             std::println("{}-shift: rx={}, next_sz={}", indent, rx->name, cfgs.next.size());
@@ -177,7 +177,7 @@ struct ParserStateMachineBuilder {
             }
         }
 
-        for(auto& c : pis.reduces) {
+        for(auto& c : cis.reduces) {
             auto& rx = c.first;
             auto& cfgs = c.second;
             std::println("{}-reduce: rx={}, next_sz={}", indent, rx->name, cfgs.next.size());
@@ -186,7 +186,7 @@ struct ParserStateMachineBuilder {
             }
         }
 
-        for(auto& c : pis.gotos) {
+        for(auto& c : cis.gotos) {
             auto& rs = c.first;
             auto& cfgs = c.second;
             std::println("{}-goto: rs={}, next_sz={}", indent, rs->name, cfgs.size());
@@ -325,7 +325,7 @@ struct ParserStateMachineBuilder {
     }
 
     inline void addReduce(
-        PreItemSet& pis,
+        CanonicalItemSet& cis,
         const ygp::Config& config,
         const size_t& len,
         const std::string& /*indent*/
@@ -333,13 +333,13 @@ struct ParserStateMachineBuilder {
         auto& rs = grammar.getRuleSetByName(config.rule.pos, config.rule.ruleSetName());
         for(auto& prx : rs.follows) {
             auto& rx = *prx;
-            pis.addReduce(rx, config, len);
+            cis.addReduce(rx, config, len);
         }
     }
 
     inline void addShift(
         ygp::Node& nextNode,
-        PreItemSet& pis,
+        CanonicalItemSet& cis,
         const ygp::Config& config,
         const size_t& cpos,
         const std::vector<const ygp::RuleSet*>& epsilons,
@@ -352,17 +352,17 @@ struct ParserStateMachineBuilder {
         }
 
         auto& rx = grammar.getRegexSet(nextNode);
-        if(pis.hasReduce(rx) != nullptr) {
+        if(cis.hasReduce(rx) != nullptr) {
             char p = resolveConflict(config, rx, indent);
             if(p == 'R') {
                 return;
             }
-            pis.reduces.erase(&rx);
+            cis.reduces.erase(&rx);
         }
 
         bool hasExisting = false;
-        if(pis.hasShift(rx)) {
-            for(auto& xcfg : pis.shifts[&rx].next) {
+        if(cis.hasShift(rx)) {
+            for(auto& xcfg : cis.shifts[&rx].next) {
                  if(&(xcfg->rule) == &(config.rule)) {
                     hasExisting = true;
                     break;
@@ -371,13 +371,13 @@ struct ParserStateMachineBuilder {
         }
         if(hasExisting == false) {
             auto& ncfg = grammar.createConfig(config.rule, cpos + 1);
-            pis.addShift(rx, ncfg, epsilons);
+            cis.addShift(rx, ncfg, epsilons);
         }
     }
 
     inline void addGoto(
         ygp::Node& nextNode,
-        PreItemSet& pis,
+        CanonicalItemSet& cis,
         const ygp::Config& config,
         const size_t& cpos,
         const std::string& indent
@@ -387,34 +387,34 @@ struct ParserStateMachineBuilder {
         // add GOTO for rule node
         auto& ncfg = grammar.createConfig(config.rule, cpos + 1);
         auto& rs = grammar.getRuleSetByName(nextNode.pos, nextNode.name);
-        assert(pis.hasGoto(rs, ncfg) == false);
-        pis.gotos[&rs].push_back(&ncfg);
+        assert(cis.hasGoto(rs, ncfg) == false);
+        cis.gotos[&rs].push_back(&ncfg);
     }
 
-    std::unordered_map<const ygp::ItemSet*, std::unique_ptr<PreItemSet>> pisList;
+    std::unordered_map<const ygp::ItemSet*, std::unique_ptr<CanonicalItemSet>> cisList;
 
-    inline PreItemSet&
-    createPreItemSet(ygp::ItemSet& is) {
-        if(pisList.find(&is) != pisList.end()) {
+    inline CanonicalItemSet&
+    createCanonicalItemSet(ygp::ItemSet& is) {
+        if(cisList.find(&is) != cisList.end()) {
             throw GeneratorError(__LINE__, __FILE__, grammar.pos(), "DUPLICATE_CONFIGSET:{}", is.id);
         }
 
-        pisList[&is] = std::make_unique<PreItemSet>(is);
-        return *(pisList[&is]);
+        cisList[&is] = std::make_unique<CanonicalItemSet>(is);
+        return *(cisList[&is]);
     }
 
-    inline PreItemSet&
-    getPreItemSet(ygp::ItemSet& is) {
-        if(auto it = pisList.find(&is); it != pisList.end()) {
+    inline CanonicalItemSet&
+    getCanonicalItemSet(ygp::ItemSet& is) {
+        if(auto it = cisList.find(&is); it != cisList.end()) {
             return *(it->second);
         }
         throw GeneratorError(__LINE__, __FILE__, grammar.pos(), "UNKNOWN_CONFIGSET");
     }
 
     inline void
-    getNextPreItemSet(
+    getNextCanonicalItemSet(
         const std::vector<const ygp::Config*>& cfgs,
-        PreItemSet& pis,
+        CanonicalItemSet& cis,
         const std::string& indent
     ) {
         for(auto& c : cfgs) {
@@ -431,7 +431,7 @@ struct ParserStateMachineBuilder {
                 if(nextNode == nullptr) {
                     auto len = config.rule.nodes.size() - (cpos - config.cpos);
                     log("{}getNextConfigSet:is-end:len={}", indent, len);
-                    addReduce(pis, config, len, indent);
+                    addReduce(cis, config, len, indent);
                 }else if(nextNode->isRegex()) {
                     if(nextNode->name == grammar.empty) {
                         log("{}getNextConfigSet:is-regex-empty:{}", indent, nextNode->name);
@@ -440,15 +440,15 @@ struct ParserStateMachineBuilder {
                         auto len = config.rule.nodes.size() - (cpos - config.cpos);
                         log("{}getNextConfigSet:is-regex-end:{}, len={}, cfg={}", indent, nextNode->name, len, config.str(false));
                         assert(len > 0);
-                        addReduce(pis, config, len, indent);
+                        addReduce(cis, config, len, indent);
                     }else{
                         log("{}getNextConfigSet:is-regex:{}", indent, nextNode->name);
-                        addShift(*nextNode, pis, config, cpos, epsilons, indent);
+                        addShift(*nextNode, cis, config, cpos, epsilons, indent);
                     }
                 }else if(nextNode->isRule()) {
                     log("{}getNextConfigSet:is-rule:{}", indent, nextNode->name);
                     if(first == true) {
-                        addGoto(*nextNode, pis, config, cpos, indent);
+                        addGoto(*nextNode, cis, config, cpos, indent);
                         auto& rs = grammar.getRuleSetByName(nextNode->pos, nextNode->name);
                         if(rs.firstIncludes(grammar.empty) == true) {
                             epsilonNode = nextNode;
@@ -491,42 +491,42 @@ struct ParserStateMachineBuilder {
             return is;
         }
 
-        PreItemSet pis(is);
-        getNextPreItemSet(is.configs, pis, indent);
+        CanonicalItemSet cis(is);
+        getNextCanonicalItemSet(is.configs, cis, indent);
 
-        auto& npis = createPreItemSet(is);
+        auto& ncis = createCanonicalItemSet(is);
 
         // set is.shifts
-        for(auto& c : pis.shifts) {
+        for(auto& c : cis.shifts) {
             auto& rx = c.first;
             auto& cfgs = c.second;
             auto xcfgs = expandConfigs(cfgs.next);
-            npis.moveShifts(*rx, xcfgs, cfgs.epsilons);
+            ncis.moveShifts(*rx, xcfgs, cfgs.epsilons);
         }
 
         // set is.reduces
-        for(auto& c : pis.reduces) {
+        for(auto& c : cis.reduces) {
             auto& rx = c.first;
             auto& cfgs = c.second;
-            npis.moveReduces(*rx, cfgs);
+            ncis.moveReduces(*rx, cfgs);
         }
 
         // set is.gotos
-        for(auto& c : pis.gotos) {
+        for(auto& c : cis.gotos) {
             auto& rs = c.first;
             auto& cfgs = c.second;
             auto xcfgs = expandConfigs(cfgs);
-            npis.moveGotos(*rs, xcfgs);
+            ncis.moveGotos(*rs, xcfgs);
         }
 
         // set is.shifts
-        for(auto& c : pis.shifts) {
+        for(auto& c : cis.shifts) {
             auto& cfgs = c.second;
             createItemSet(cfgs.next, indent + "  ");
         }
 
         // set is.gotos
-        for(auto& c : pis.gotos) {
+        for(auto& c : cis.gotos) {
             auto& cfgs = c.second;
             createItemSet(cfgs, indent + "  ");
         }
@@ -539,8 +539,8 @@ struct ParserStateMachineBuilder {
             auto& is = *pis;
             log("linkItemSets:is={}", is.id);
 
-            auto& npis = getPreItemSet(is);
-            for(auto& c : npis.gotos) {
+            auto& ncis = getCanonicalItemSet(is);
+            for(auto& c : ncis.gotos) {
                 auto& rs = c.first;
                 auto& cfgs = c.second;
                 log("  goto: rs={}, next_sz={}", rs->name, cfgs.size());
@@ -551,7 +551,7 @@ struct ParserStateMachineBuilder {
                 is.setGoto(nextNode, rs, &cis);
             }
 
-            for(auto& c : npis.shifts) {
+            for(auto& c : ncis.shifts) {
                 auto& rx = c.first;
                 auto& cfgs = c.second;
                 log("  shift: rx={}, next_sz={}", rx->name, cfgs.next.size());
@@ -565,7 +565,7 @@ struct ParserStateMachineBuilder {
                 is.setShift(nextNode, *rx, cis, cfgs.epsilons);
             }
 
-            for(auto& c : npis.reduces) {
+            for(auto& c : ncis.reduces) {
                 auto& rx = *(c.first);
                 auto& cfgs = c.second;
                 log("  reduce: rx={}, next_sz={}", rx.name, cfgs.next.size());
