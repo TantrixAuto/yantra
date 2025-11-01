@@ -67,7 +67,6 @@ struct TextFileWriter : public TextWriter<std::ofstream> {
 
     inline void
     _open(const std::filesystem::path& fname) {
-        std::println("opening:{}", fname.string());
         if(fname.empty()) {
             return;
         }

@@ -448,13 +448,9 @@ struct Generator {
                     coln = " : ";
                 }
 
-                tw.writeln("{}        inline void dump(std::ostream& ss, const size_t& lvl, const FilePos& p, const std::string& indent) const {{", indent);
+                tw.writeln("{}        inline void dump(std::ostream& ss, const size_t& lvl, const FilePos& p, const std::string& indent, const size_t& depth) const {{", indent);
                 tw.writeln("{}            if(lvl >= 2) {{", indent);
                 tw.writeln("{}                ss << std::format(\"{{}}: {{}}+--{}\\n\", p.str(), indent);", indent, r->str(false));
-                tw.writeln("{}            }}else{{", indent);
-                tw.writeln("{}                assert(lvl == 1);", indent);
-                tw.writeln("{}                ss << std::format(\"{{}}: {{}}+--{}({})\\n\", p.str(), indent);", indent, rs->name, r->ruleName);
-                tw.writeln("{}            }}", indent);
                 for (size_t idx = 0; idx < r->nodes.size(); ++idx) {
                     auto& n = r->nodes.at(idx);
                     auto varName = n->varName;
@@ -462,12 +458,32 @@ struct Generator {
                         varName = std::format("{}{}", n->name, idx);
                     }
                     if(n->isRule() == true) {
-                        tw.writeln("{}            {}.dump(ss, lvl, indent + \"|  \");", indent, varName);
+                        tw.writeln("{}                {}.dump(ss, lvl, indent + \"|  \", depth + 1);", indent, varName);
                     }else{
                         assert(n->isRegex() == true);
-                        tw.writeln("{}            {}.dump(ss, lvl, \"{}\", indent + \"|  \");", indent, varName, n->name);
+                        tw.writeln("{}                {}.dump(ss, lvl, \"{}\", indent + \"|  \", depth + 1);", indent, varName, n->name);
                     }
                 }
+                tw.writeln("{}            }}else{{", indent);
+                tw.writeln("{}                assert(lvl == 1);", indent);
+                tw.writeln("{}                ss << std::format(\"{{}}{{}}:{}(\", indent, depth);", indent, r->ruleName);
+                auto ind = std::format("\"\"");
+                for (size_t idx = 0; idx < r->nodes.size(); ++idx) {
+                    auto& n = r->nodes.at(idx);
+                    auto varName = n->varName;
+                    if (n->varName.size() == 0) {
+                        varName = std::format("{}{}", n->name, idx);
+                    }
+                    if(n->isRule() == true) {
+                        tw.writeln("{}                {}.dump(ss, lvl, {}, depth + 1);", indent, varName, ind);
+                    }else{
+                        assert(n->isRegex() == true);
+                        tw.writeln("{}                {}.dump(ss, lvl, \"{}\", {}, depth + 1);", indent, varName, n->name, ind);
+                    }
+                    ind = std::format("\" \"");
+                }
+                tw.writeln("{}                ss << std::format(\")\");", indent);
+                tw.writeln("{}            }}", indent);
                 tw.writeln("{}        }}", indent);
                 tw.writeln();
 
@@ -491,9 +507,9 @@ struct Generator {
             tw.writeln("{}    Rule rule;", indent);
             tw.writeln();
 
-            tw.writeln("{}    inline void dump(std::ostream& ss, const size_t& lvl, const std::string& indent) const {{", indent);
-            tw.writeln("{}        std::visit([this, &ss, &lvl, &indent](const auto& r){{", indent);
-            tw.writeln("{}            r.dump(ss, lvl, pos, indent);", indent);
+            tw.writeln("{}    inline void dump(std::ostream& ss, const size_t& lvl, const std::string& indent, const size_t& depth) const {{", indent);
+            tw.writeln("{}        std::visit([this, &ss, &lvl, &indent, &depth](const auto& r){{", indent);
+            tw.writeln("{}            r.dump(ss, lvl, pos, indent, depth);", indent);
             tw.writeln("{}        }}, rule);", indent);
             tw.writeln("{}    }}", indent);
             tw.writeln();
@@ -1098,7 +1114,7 @@ struct Generator {
     /// @brief generate Lexer states
     inline void generateLexerStates(TextFileWriter& tw, const std::unordered_map<std::string, std::string>& vars) {
         tw.writeln("            case 0:");
-        generateError(tw, "stream.pos.row", "stream.pos.col", "stream.pos.file", "\"SYNTAX_ERROR\"", "                ", vars);
+        generateError(tw, "stream.pos.row", "stream.pos.col", "stream.pos.file", "\"LEXER_INTERNAL_ERROR\"", "                ", vars);
 
         for (auto& ps : grammar.states) {
             auto& state = *ps;
@@ -1279,7 +1295,7 @@ struct Generator {
                 tw.writeln("                state = {};", tset.leaveClosure.first->next->id);
                 tw.writeln("                continue; //leaveClosure");
             }else{
-                generateError(tw, "stream.pos.row", "stream.pos.col", "stream.pos.file", "\"SYNTAX_ERROR\"", "                ", vars);
+                generateError(tw, "stream.pos.row", "stream.pos.col", "stream.pos.file", "std::format(\"TOKEN_ERROR:{}\", token.text)", "                ", vars);
             }
         }
     }

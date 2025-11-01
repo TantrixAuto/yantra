@@ -172,7 +172,7 @@ namespace {
         inline TAG(AST)& operator=(TAG(AST)&&) = delete;
 
         struct _astEmpty {
-            inline void dump(std::ostream&, const size_t&, const FilePos&, const std::string&) const {
+            inline void dump(std::ostream&, const size_t&, const FilePos&, const std::string&, const size_t&) const {
             }
         };
 
@@ -183,8 +183,13 @@ namespace {
             inline TAG(TOKEN)(const FilePos& p, const std::string& t) : pos(p), text(t) {}
             inline TAG(TOKEN)(const TAG(TOKEN)& src) : pos(src.pos), text(src.text) {}
 
-            inline void dump(std::ostream& ss, const size_t&, const std::string& name, const std::string& indent) const {
-                ss << std::format("{}: {}+--{}({})\n", pos.str(), indent, name, text);
+            inline void dump(std::ostream& ss, const size_t& lvl, const std::string& name, const std::string& indent, const size_t& depth) const {
+                if(lvl >= 2) {
+                    ss << std::format("{}: {}+--{}({})\n", pos.str(), indent, name, text);
+                }else{
+                    assert(lvl == 1);
+                    ss << std::format("{}{}:{}({})", indent, depth, name, text);
+                }
             }
 
             inline const TAG(TOKEN)* get() const {
@@ -207,7 +212,7 @@ namespace {
             inline START_RULE& go(TAG(AST)&) {
                 return *this;
             }
-            inline void dump(std::ostream&, const size_t&, const std::string&) const {
+            inline void dump(std::ostream&, const size_t&, const std::string&, const size_t&) const {
             }
         };
 
@@ -686,7 +691,7 @@ struct TAG(CLASSQID)::Impl {
 
     inline void printAST(std::ostream& ss, const size_t& lvl, const std::string& indent) const {
         auto& start = ast._root();
-        start.dump(ss, lvl, indent);
+        start.dump(ss, lvl, indent, 0);
     }
 };
 
@@ -773,6 +778,15 @@ inline int help(const std::string& xname, const std::string& msg) {
     std::print("    -w <walker>     : use walker\n");
     std::print("    -o <filename>   : write output to file <filename>\n");
     return 1;
+}
+
+inline void printASTIf(const size_t& printAstLevel, const TAG(CLASSQID)& mp) {
+    if(printAstLevel > 0) {
+        mp.printAST(std::cout, printAstLevel, "");
+        if(printAstLevel == 1) {
+            std::cout << std::endl;
+        }
+    }
 }
 
 int main(int argc, char* argv[]) {
@@ -882,9 +896,7 @@ int main(int argc, char* argv[]) {
                 // instance of the module
                 TAG(CLASSQID) mp("main", log);
                 mp.readFile(f);
-                if(printAstLevel > 0) {
-                    mp.printAST(std::cout, printAstLevel, "");
-                }
+                printASTIf(printAstLevel, mp);
                 mp.walk(walkers, outf, f);
             }catch(const std::exception& ex) {
                 ++errs;
@@ -903,9 +915,7 @@ int main(int argc, char* argv[]) {
                 // instance of the module
                 TAG(CLASSQID) mp("main", log);
                 mp.readString(f, inn);
-                if(printAstLevel > 0) {
-                    mp.printAST(std::cout, printAstLevel, "");
-                }
+                printASTIf(printAstLevel, mp);
                 mp.walk(walkers);
             }catch(const std::exception& ex) {
                 std::print("err:{}\n", ex.what());
@@ -926,9 +936,7 @@ int main(int argc, char* argv[]) {
 
             try {
                 mp.readFile(f);
-                if(printAstLevel > 0) {
-                    mp.printAST(std::cout, printAstLevel, "");
-                }
+                printASTIf(printAstLevel, mp);
                 mp.walk(walkers);
             }catch(const std::exception& ex) {
                 std::print("err:{}\n", ex.what());
@@ -942,9 +950,7 @@ int main(int argc, char* argv[]) {
 
             try {
                 mp.readString(f, "<str>");
-                if(printAstLevel > 0) {
-                    mp.printAST(std::cout, printAstLevel, "");
-                }
+                printASTIf(printAstLevel, mp);
                 mp.walk(walkers);
             }catch(const std::exception& ex) {
                 std::print("err:{}\n", ex.what());

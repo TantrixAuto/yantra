@@ -6,6 +6,7 @@ logger="a.log"
 failfast=0
 passcount=0
 failcount=0
+verbose=0
 
 enabled=1
 
@@ -13,7 +14,7 @@ if [[ -z "${YCC}" ]]; then
   YCC=~/build/yantra/Debug/bin/ycc
 fi
 
-while getopts "h?fd" opt; do
+while getopts "h?fdv" opt; do
   case "$opt" in
     h|\?)
       echo "-f : failfast"
@@ -21,6 +22,9 @@ while getopts "h?fd" opt; do
       ;;
     f)
       failfast=1
+      ;;
+    v)
+      verbose=1
       ;;
     d)
       enabled=0
@@ -36,7 +40,9 @@ compile_grammar() {
   grammar="$1"
   xerr="$2" #0 - expect success, 1 = expect ycc-error, 2 = expect compile-error
 
-  echo ${BASH_LINENO}: Generating parser
+  if [ $verbose -eq 1 ]; then
+    echo ${BASH_LINENO}: Generating parser
+  fi
   ${YCC} -c ascii -s "$grammar" -a -n out -g out.md
   if [ $? -ne 0 ]; then
     if [ $xerr -eq 1 ]; then
@@ -54,7 +60,9 @@ compile_grammar() {
 
   FLAGS="-Wall -Werror -Weverything -Wno-padded -Wno-c++98-compat-pedantic -Wno-exit-time-destructors -Wno-global-constructors -Wno-weak-vtables -Wno-switch-default -Wno-switch-enum -Wno-header-hygiene"
 
-  echo ${BASH_LINENO}: Compiling parser
+  if [ $verbose -eq 1 ]; then
+    echo ${BASH_LINENO}: Compiling parser
+  fi
   clang++ -g -std=c++20 $FLAGS -include-pch testpch.hpp.pch out.cpp
   if [ $? -ne 0 ]; then
     if [ $xerr -eq 2 ]; then
@@ -73,42 +81,86 @@ compile_grammar() {
 }
 
 run_passing_test() {
+  local OPTIND OPTARG opt input xoutput routput
   if [ $enabled -eq 0 ]; then
     return
   fi
 
-  input="$1"
+  OPTIND=1
+  input=""
+  xoutput=""
 
-  echo ${BASH_LINENO}: Running passing test ["$input"]
-  ./a.out -s "$input" -l "$logger"
+  while getopts "s:t:" opt "$@"; do
+    case "$opt" in
+      s)
+        input="$OPTARG"
+        ;;
+      t)
+        xoutput="$OPTARG"
+        ;;
+    esac
+  done
+
+  echo -n "${BASH_LINENO}: Running passing test [$input]... "
+  routput=$(./a.out -s "$input" -l "$logger" -t1)
   if [ $? -ne 0 ]; then
     if [ $failfast -ne 0 ]; then
-        echo ${BASH_LINENO}: Exiting on failure-passing test failed
-        exit $?
+      echo "${BASH_LINENO}: Exiting on failure-passing test failed"
+      exit $?
     fi
     failcount=$((failcount+1))
+    echo "FAIL"
   else
-    passcount=$((passcount+1))
+    if [ "$routput" != "$xoutput" ]; then
+      echo "EXPT: [$xoutput]"
+      echo "RECV: [$routput]"
+      if [ $failfast -ne 0 ]; then
+        echo "${BASH_LINENO}: Exiting on failure-unexpected output"
+        exit 1
+      fi
+      failcount=$((failcount+1))
+      echo "FAIL"
+    else
+      passcount=$((passcount+1))
+      echo "PASS"
+    fi
   fi
 }
 
 run_failing_test() {
+  local OPTIND OPTARG opt input xoutput routput
   if [ $enabled -eq 0 ]; then
     return
   fi
 
-  input="$1"
+  OPTIND=1
+  input=""
+  xoutput=""
 
-  echo ${BASH_LINENO}: Running failing test ["$input"]
-  ./a.out -s "$input" -l "$logger"
+  while getopts "s:e:" opt "$@"; do
+    case "$opt" in
+      s)
+        input="$OPTARG"
+        ;;
+      e)
+        xoutput="$OPTARG"
+        ;;
+    esac
+  done
+
+  echo -n "${BASH_LINENO}: Running failing test [$input]... "
+  routput=$(./a.out -s "$input" -l "$logger")
   if [ $? -eq 0 ]; then
     if [ $failfast -ne 0 ]; then
         echo ${BASH_LINENO}: Exiting on failure - failing test passed
+        echo $routput
         exit $?
     fi
     failcount=$((failcount+1))
+    echo "FAIL"
   else
     passcount=$((passcount+1))
+    echo "PASS"
   fi
 }
 
@@ -130,7 +182,9 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'G A a'
+run_passing_test \
+  -s 'G A a' \
+  -t '0:start_1(1:stmts_1(2:stmts_1(3:stmts_2(4:stmt_1(5:ID(G))) 3:stmt_2(4:HEX(A))) 2:stmt_2(3:HEX(a))) 1:_tEND())'
 
 #############################
 grammar='
@@ -147,7 +201,9 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'G A a'
+run_passing_test \
+  -s 'G A a' \
+  -t '0:start_1(1:stmts_1(2:stmts_1(3:stmts_2(4:stmt_1(5:ID(G))) 3:stmt_2(4:HEX(A))) 2:stmt_2(3:HEX(a))) 1:_tEND())'
 
 #############################
 grammar='
@@ -160,7 +216,7 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'Ag Aa'
+run_passing_test -s 'Ag Aa' -t '0:start_1(1:stmts_1(2:stmts_2(3:stmt_1(4:ID(Ag))) 2:stmt_1(3:ID(Aa))) 1:_tEND())'
 
 #############################
 grammar='
@@ -173,9 +229,9 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'A'
-run_passing_test 'AAAA'
-run_failing_test 'AAAA1'
+run_passing_test -s 'A' -t '0:start_1(1:stmts_2(2:stmt_1(3:ID(A))) 1:_tEND())'
+run_passing_test -s 'AAAA' -t '0:start_1(1:stmts_2(2:stmt_1(3:ID(AAAA))) 1:_tEND())'
+run_failing_test -s 'AAAA1'
 
 #############################
 grammar='
@@ -187,13 +243,13 @@ ID := "[A-K]{2,5}Z";
 '
 
 compile_grammar "$grammar" 0
-run_failing_test 'AZ'
-run_passing_test 'ABZ'
-run_passing_test 'ABCZ'
-run_passing_test 'ABCDZ'
-run_passing_test 'ABCDEZ'
-run_failing_test 'ABCDEFZ'
-run_failing_test 'ABCDEFGHZ'
+run_failing_test -s 'AZ'
+run_passing_test -s 'ABZ' -t '0:start_1(1:stmts_2(2:stmt_1(3:ID(ABZ))) 1:_tEND())'
+run_passing_test -s 'ABCZ' -t '0:start_1(1:stmts_2(2:stmt_1(3:ID(ABCZ))) 1:_tEND())'
+run_passing_test -s 'ABCDZ' -t '0:start_1(1:stmts_2(2:stmt_1(3:ID(ABCDZ))) 1:_tEND())'
+run_passing_test -s 'ABCDEZ' -t '0:start_1(1:stmts_2(2:stmt_1(3:ID(ABCDEZ))) 1:_tEND())'
+run_failing_test -s 'ABCDEFZ'
+run_failing_test -s 'ABCDEFGHZ'
 
 #############################
 grammar='
@@ -206,10 +262,10 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'aBCD'
-run_failing_test 'aBCDe'
-run_failing_test 'aEFGa'
-run_failing_test 'aEFG1'
+run_passing_test -s 'aBCD' -t '0:start_1(1:stmts_2(2:stmt_1(3:ID(aBCD))) 1:_tEND())'
+run_failing_test -s 'aBCDe'
+run_failing_test -s 'aEFGa'
+run_failing_test -s 'aEFG1'
 
 #############################
 grammar='
@@ -224,7 +280,7 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'AAAA123A'
+run_passing_test -s 'AAAA123A' -t '0:start_1(1:stmts_1(2:stmts_1(3:stmts_2(4:stmt_1(5:ID(AAAA))) 3:stmt_2(4:NUM(123))) 2:stmt_1(3:ID(A))) 1:_tEND())'
 
 #############################
 grammar='
@@ -239,10 +295,10 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'A1'
-run_passing_test 'a2'
-run_failing_test 'A2'
-run_failing_test 'a1'
+run_passing_test -s 'A1' -t '0:start_1(1:stmts_2(2:stmt_1(3:IDU(A1))) 1:_tEND())'
+run_passing_test -s 'a2' -t '0:start_1(1:stmts_2(2:stmt_2(3:IDL(a2))) 1:_tEND())'
+run_failing_test -s 'A2'
+run_failing_test -s 'a1'
 
 #############################
 grammar='
@@ -257,8 +313,8 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'AAAA1'
-run_passing_test 'A1'
+run_passing_test -s 'AAAA1' -t '0:start_1(1:stmts_2(2:stmt_1(3:IDU(AAAA1))) 1:_tEND())'
+run_passing_test -s 'A1' -t '0:start_1(1:stmts_2(2:stmt_1(3:IDU(A1))) 1:_tEND())'
 
 #############################
 grammar='
@@ -271,11 +327,11 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'AZ'
-run_passing_test 'ABZ'
-run_passing_test 'ABCZ'
-run_failing_test 'ABCDZ'
-run_failing_test 'ABCDEZ'
+run_passing_test -s 'AZ' -t '0:start_1(1:stmts_2(2:stmt_1(3:IDU(AZ))) 1:_tEND())'
+run_passing_test -s 'ABZ' -t '0:start_1(1:stmts_2(2:stmt_1(3:IDU(ABZ))) 1:_tEND())'
+run_passing_test -s 'ABCZ' -t '0:start_1(1:stmts_2(2:stmt_1(3:IDU(ABCZ))) 1:_tEND())'
+run_failing_test -s 'ABCDZ'
+run_failing_test -s 'ABCDEZ'
 
 #############################
 grammar='
@@ -288,8 +344,8 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'G'
-run_failing_test 'A'
+run_passing_test -s 'G' -t '0:start_1(1:stmts_2(2:stmt_1(3:IDU(G))) 1:_tEND())'
+run_failing_test -s 'A'
 
 #############################
 grammar='
@@ -305,12 +361,12 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'AAAA1'
-run_passing_test 'A1'
-run_passing_test 'A1'
-run_passing_test 'a2'
-run_passing_test '11'
-run_passing_test '2'
+run_passing_test -s 'AAAA1' -t '0:start_1(1:stmts_2(2:stmt_1(3:IDU(AAAA1))) 1:_tEND())'
+run_passing_test -s 'A1' -t '0:start_1(1:stmts_2(2:stmt_1(3:IDU(A1))) 1:_tEND())'
+run_passing_test -s 'A1' -t '0:start_1(1:stmts_2(2:stmt_1(3:IDU(A1))) 1:_tEND())'
+run_passing_test -s 'a2' -t '0:start_1(1:stmts_2(2:stmt_2(3:IDL(a2))) 1:_tEND())'
+run_passing_test -s '11' -t '0:start_1(1:stmts_2(2:stmt_2(3:IDL(11))) 1:_tEND())'
+run_passing_test -s '2' -t '0:start_1(1:stmts_2(2:stmt_2(3:IDL(2))) 1:_tEND())'
 
 #############################
 grammar='
@@ -322,8 +378,8 @@ ID := "[A-F][a-f]*";
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'Aa'
-run_passing_test 'A'
+run_passing_test -s 'Aa' -t '0:start_1(1:stmts_2(2:stmt_1(3:ID(Aa))) 1:_tEND())'
+run_passing_test -s 'A' -t '0:start_1(1:stmts_2(2:stmt_1(3:ID(A))) 1:_tEND())'
 
 #############################
 grammar='
@@ -372,16 +428,14 @@ IDC := "[D-H]*3";
 WS := "\s"!;
 '
 
-enabled=0
-compile_grammar "$grammar" 0
-run_passing_test 'L1'
-run_passing_test 'A2'
-run_passing_test 'DEFA2'
-run_passing_test 'DEFE3'
-run_failing_test '1'
-run_passing_test '2'
-run_passing_test '3'
-enabled=1
+#compile_grammar "$grammar" 0
+#run_passing_test -s 'L1'
+#run_passing_test -s 'A2'
+#run_passing_test -s 'DEFA2'
+#run_passing_test -s 'DEFE3'
+#run_failing_test -s '1'
+#run_passing_test -s '2'
+#run_passing_test -s '3'
 
 #############################
 grammar='
@@ -420,12 +474,12 @@ STRING := "A[^B]*B";
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'AB'
-run_failing_test 'A'
-run_passing_test 'AB'
-run_failing_test 'AC'
-run_passing_test 'ACDEB'
-run_failing_test 'ABCDE'
+run_passing_test -s 'AB' -t '0:start_1(1:STRING(AB) 1:_tEND())'
+run_failing_test -s 'A'
+run_passing_test -s 'AB' -t '0:start_1(1:STRING(AB) 1:_tEND())'
+run_failing_test -s 'AC'
+run_passing_test -s 'ACDEB' -t '0:start_1(1:STRING(ACDEB) 1:_tEND())'
+run_failing_test -s 'ABCDE'
 
 #############################
 grammar='
@@ -433,17 +487,17 @@ start := IDU;
 IDU := "A{1,3}|B{4,7}Z";
 '
 compile_grammar "$grammar" 0
-run_failing_test 'AZ'
-run_passing_test 'A'
-run_passing_test 'AA'
-run_passing_test 'AAA'
-run_failing_test 'AAAA'
-run_failing_test 'BZ'
-run_failing_test 'BBZ'
-run_failing_test 'BBBZ'
-run_passing_test 'BBBBZ'
-run_passing_test 'BBBBBBBZ'
-run_failing_test 'BBBBBBBBZ'
+run_failing_test -s 'AZ'
+run_passing_test -s 'A' -t '0:start_1(1:IDU(A) 1:_tEND())'
+run_passing_test -s 'AA' -t '0:start_1(1:IDU(AA) 1:_tEND())'
+run_passing_test -s 'AAA' -t '0:start_1(1:IDU(AAA) 1:_tEND())'
+run_failing_test -s 'AAAA'
+run_failing_test -s 'BZ'
+run_failing_test -s 'BBZ'
+run_failing_test -s 'BBBZ'
+run_passing_test -s 'BBBBZ' -t '0:start_1(1:IDU(BBBBZ) 1:_tEND())'
+run_passing_test -s 'BBBBBBBZ' -t '0:start_1(1:IDU(BBBBBBBZ) 1:_tEND())'
+run_failing_test -s 'BBBBBBBBZ'
 
 #############################
 grammar='
@@ -452,7 +506,7 @@ IDU := "A{1,2}Z";
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'AZ'
+run_passing_test -s 'AZ' -t '0:start_1(1:IDU(AZ) 1:_tEND())'
 
 #############################
 grammar='
@@ -461,7 +515,7 @@ IDU := "A{1,5}Z";
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'AZ'
+run_passing_test -s 'AZ' -t '0:start_1(1:IDU(AZ) 1:_tEND())'
 
 #############################
 grammar='
@@ -470,10 +524,10 @@ IDU := "A{2,3}Z";
 '
 
 compile_grammar "$grammar" 0
-run_failing_test 'AZ'
-run_passing_test 'AAZ'
-run_passing_test 'AAAZ'
-run_failing_test 'AAAAZ'
+run_failing_test -s 'AZ'
+run_passing_test -s 'AAZ' -t '0:start_1(1:IDU(AAZ) 1:_tEND())'
+run_passing_test -s 'AAAZ' -t '0:start_1(1:IDU(AAAZ) 1:_tEND())'
+run_failing_test -s 'AAAAZ'
 
 #############################
 grammar='
@@ -482,11 +536,11 @@ IDU := "A{2,4}Z";
 '
 
 compile_grammar "$grammar" 0
-run_failing_test 'AZ'
-run_passing_test 'AAZ'
-run_passing_test 'AAAZ'
-run_passing_test 'AAAAZ'
-run_failing_test 'AAAAAZ'
+run_failing_test -s 'AZ'
+run_passing_test -s 'AAZ' -t '0:start_1(1:IDU(AAZ) 1:_tEND())'
+run_passing_test -s 'AAAZ' -t '0:start_1(1:IDU(AAAZ) 1:_tEND())'
+run_passing_test -s 'AAAAZ' -t '0:start_1(1:IDU(AAAAZ) 1:_tEND())'
+run_failing_test -s 'AAAAAZ'
 
 #############################
 grammar='
@@ -495,12 +549,12 @@ IDU := "A{2,7}Z";
 '
 
 compile_grammar "$grammar" 0
-run_failing_test 'AZ'
-run_passing_test 'AAZ'
-run_passing_test 'AAAZ'
-run_passing_test 'AAAAAAZ'
-run_passing_test 'AAAAAAAZ'
-run_failing_test 'AAAAAAAAZ'
+run_failing_test -s 'AZ'
+run_passing_test -s 'AAZ' -t '0:start_1(1:IDU(AAZ) 1:_tEND())'
+run_passing_test -s 'AAAZ' -t '0:start_1(1:IDU(AAAZ) 1:_tEND())'
+run_passing_test -s 'AAAAAAZ' -t '0:start_1(1:IDU(AAAAAAZ) 1:_tEND())'
+run_passing_test -s 'AAAAAAAZ' -t '0:start_1(1:IDU(AAAAAAAZ) 1:_tEND())'
+run_failing_test -s 'AAAAAAAAZ'
 
 #############################
 grammar='
@@ -509,12 +563,12 @@ IDU := "A{3,7}Z";
 '
 
 compile_grammar "$grammar" 0
-run_failing_test 'AZ'
-run_failing_test 'AAZ'
-run_passing_test 'AAAZ'
-run_passing_test 'AAAAAAZ'
-run_passing_test 'AAAAAAAZ'
-run_failing_test 'AAAAAAAAZ'
+run_failing_test -s 'AZ'
+run_failing_test -s 'AAZ'
+run_passing_test -s 'AAAZ' -t '0:start_1(1:IDU(AAAZ) 1:_tEND())'
+run_passing_test -s 'AAAAAAZ' -t '0:start_1(1:IDU(AAAAAAZ) 1:_tEND())'
+run_passing_test -s 'AAAAAAAZ' -t '0:start_1(1:IDU(AAAAAAAZ) 1:_tEND())'
+run_failing_test -s 'AAAAAAAAZ'
 
 #############################
 grammar='
@@ -523,13 +577,13 @@ IDU := "A{5,6}Z";
 '
 
 compile_grammar "$grammar" 0
-run_failing_test 'AZ'
-run_failing_test 'AAZ'
-run_failing_test 'AAAZ'
-run_failing_test 'AAAAZ'
-run_passing_test 'AAAAAZ'
-run_passing_test 'AAAAAAZ'
-run_failing_test 'AAAAAAAZ'
+run_failing_test -s 'AZ'
+run_failing_test -s 'AAZ'
+run_failing_test -s 'AAAZ'
+run_failing_test -s 'AAAAZ'
+run_passing_test -s 'AAAAAZ' -t '0:start_1(1:IDU(AAAAAZ) 1:_tEND())'
+run_passing_test -s 'AAAAAAZ' -t '0:start_1(1:IDU(AAAAAAZ) 1:_tEND())'
+run_failing_test -s 'AAAAAAAZ'
 
 #############################
 grammar='
@@ -538,16 +592,16 @@ IDU := "A{5,9}Z";
 '
 
 compile_grammar "$grammar" 0
-run_failing_test 'AZ'
-run_failing_test 'AAZ'
-run_failing_test 'AAAZ'
-run_failing_test 'AAAAZ'
-run_passing_test 'AAAAAZ'
-run_passing_test 'AAAAAAZ'
-run_passing_test 'AAAAAAAZ'
-run_passing_test 'AAAAAAAAZ'
-run_passing_test 'AAAAAAAAAZ'
-run_failing_test 'AAAAAAAAAAZ'
+run_failing_test -s 'AZ'
+run_failing_test -s 'AAZ'
+run_failing_test -s 'AAAZ'
+run_failing_test -s 'AAAAZ'
+run_passing_test -s 'AAAAAZ' -t '0:start_1(1:IDU(AAAAAZ) 1:_tEND())'
+run_passing_test -s 'AAAAAAZ' -t '0:start_1(1:IDU(AAAAAAZ) 1:_tEND())'
+run_passing_test -s 'AAAAAAAZ' -t '0:start_1(1:IDU(AAAAAAAZ) 1:_tEND())'
+run_passing_test -s 'AAAAAAAAZ' -t '0:start_1(1:IDU(AAAAAAAAZ) 1:_tEND())'
+run_passing_test -s 'AAAAAAAAAZ' -t '0:start_1(1:IDU(AAAAAAAAAZ) 1:_tEND())'
+run_failing_test -s 'AAAAAAAAAAZ'
 
 #############################
 grammar='
@@ -562,7 +616,7 @@ STRING := "(!\")xx(!\")";
 '
 
 compile_grammar "$grammar" 0
-run_passing_test '"xx"'
+run_passing_test -s '"xx"' -t '0:start_1(1:STRING(xx) 1:_tEND())'
 
 #############################
 grammar='
@@ -576,7 +630,7 @@ STRING := "(!\")[^\"]*(!\")";
 '
 
 compile_grammar "$grammar" 0
-run_passing_test '"xx"'
+run_passing_test -s '"xx"' -t '0:start_1(1:STRING(xx) 1:_tEND())'
 
 #############################
 grammar='
@@ -585,12 +639,12 @@ ID := "[A-F][a-f0-9R-V]*";
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'A'
-run_passing_test 'Aa'
-run_passing_test 'A1'
-run_passing_test 'Aac1efR4T'
-run_failing_test 'Aac1efr4t'
-run_failing_test 'AZ'
+run_passing_test -s 'A' -t '0:start_1(1:ID(A) 1:_tEND())'
+run_passing_test -s 'Aa' -t '0:start_1(1:ID(Aa) 1:_tEND())'
+run_passing_test -s 'A1' -t '0:start_1(1:ID(A1) 1:_tEND())'
+run_passing_test -s 'Aac1efR4T' -t '0:start_1(1:ID(Aac1efR4T) 1:_tEND())'
+run_failing_test -s 'Aac1efr4t'
+run_failing_test -s 'AZ'
 
 #############################
 grammar='
@@ -605,7 +659,7 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'A Z'
+run_passing_test -s 'A Z' -t '0:start_1(1:stmts_1(2:stmts_r_1(3:stmts_r_2(4:stmt_r_1(5:stmt_1(6:HEX(A)))) 3:stmt_r_1(4:stmt_1(5:HEX(Z))))) 1:_tEND())'
 
 #############################
 grammar='
@@ -620,7 +674,7 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'A Z'
+run_passing_test -s 'A Z' -t '0:start_1(1:stmts_1(2:stmts_r_1(3:stmts_r_2(4:stmt_r_1(5:stmt_1(6:HEX(A)))) 3:stmt_r_1(4:stmt_1(5:HEX(Z))))) 1:_tEND())'
 
 #############################
 grammar='
@@ -635,7 +689,7 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'A Z'
+run_passing_test -s 'A Z' -t '0:start_1(1:stmts_1(2:stmts_r_2(3:stmts_r_1(4:stmt_r_1(5:stmt_1(6:HEX(A)))) 3:stmt_r_1(4:stmt_1(5:HEX(Z))))) 1:_tEND())'
 
 #############################
 grammar='
@@ -650,7 +704,7 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'A Z'
+run_passing_test -s 'A Z' -t '0:start_1(1:stmts_1(2:stmts_r_2(3:stmts_r_1(4:stmt_r_1(5:stmt_1(6:HEX(A)))) 3:stmt_r_1(4:stmt_1(5:HEX(Z))))) 1:_tEND())'
 
 #############################
 grammar='
@@ -665,7 +719,7 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'A Z'
+run_passing_test -s 'A Z' -t '0:start_1(1:stmts_1(2:stmts_r_1(3:stmts_r_2(4:stmt_r_1(5:stmt_1(6:HEX(A)))) 3:stmt_r_1(4:stmt_1(5:HEX(Z))))) 1:_tEND())'
 
 #############################
 grammar='
@@ -680,7 +734,7 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'A Z'
+run_passing_test -s 'A Z' -t '0:start_1(1:stmts_1(2:stmts_r_2(3:stmts_r_1(4:stmt_r_1(5:stmt_1(6:HEX(A)))) 3:stmt_r_1(4:stmt_1(5:HEX(Z))))) 1:_tEND())'
 
 #############################
 grammar='
@@ -695,7 +749,7 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'A Z'
+run_passing_test -s 'A Z' -t '0:start_1(1:stmts_1(2:stmts_r_1(3:stmts_r_2(4:stmt_r_1(5:stmt_1(6:HEX(A)))) 3:stmt_r_1(4:stmt_1(5:HEX(Z))))) 1:_tEND())'
 
 #############################
 grammar='
@@ -710,7 +764,7 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'A Z'
+run_passing_test -s 'A Z' -t '0:start_1(1:stmts_1(2:stmts_r_1(3:stmts_r_2(4:stmt_r_1(5:stmt_1(6:HEX(A)))) 3:stmt_r_1(4:stmt_1(5:HEX(Z))))) 1:_tEND())'
 
 #############################
 grammar='
@@ -725,7 +779,7 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'A Z'
+run_passing_test -s 'A Z' -t '0:start_1(1:stmts_1(2:stmts_r_1(3:stmts_r_2(4:stmt_r_1(5:stmt_1(6:HEX(A)))) 3:stmt_r_1(4:stmt_1(5:HEX(Z))))) 1:_tEND())'
 
 #############################
 grammar='
@@ -740,7 +794,7 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'A Z'
+run_passing_test -s 'A Z' -t '0:start_1(1:stmts_1(2:stmts_r_1(3:stmts_r_2(4:stmt_r_1(5:stmt_1(6:HEX(A)))) 3:stmt_r_1(4:stmt_1(5:HEX(Z))))) 1:_tEND())'
 
 #############################
 grammar='
@@ -755,7 +809,7 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'A Z'
+run_passing_test -s 'A Z' -t '0:start_1(1:stmts_1(2:stmts_r_1(3:stmts_r_2(4:stmt_r_1(5:stmt_1(6:HEX(A)))) 3:stmt_r_1(4:stmt_1(5:HEX(Z))))) 1:_tEND())'
 
 #############################
 grammar='
@@ -770,7 +824,7 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'A Z'
+run_passing_test -s 'A Z' -t '0:start_1(1:stmts_1(2:stmts_r_1(3:stmts_r_2(4:stmt_r_1(5:stmt_1(6:HEX(A)))) 3:stmt_r_1(4:stmt_1(5:HEX(Z))))) 1:_tEND())'
 
 #############################
 grammar='
@@ -785,7 +839,7 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'A Z'
+run_passing_test -s 'A Z' -t '0:start_1(1:stmts_1(2:stmts_r_2(3:stmts_r_1(4:stmt_r_1(5:stmt_1(6:HEX(A)))) 3:stmt_r_1(4:stmt_1(5:HEX(Z))))) 1:_tEND())'
 
 #############################
 grammar='
@@ -800,7 +854,7 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'A Z'
+run_passing_test -s 'A Z' -t '0:start_1(1:stmts_1(2:stmts_r_2(3:stmts_r_1(4:stmt_r_1(5:stmt_1(6:HEX(A)))) 3:stmt_r_1(4:stmt_1(5:HEX(Z))))) 1:_tEND())'
 
 #############################
 grammar='
@@ -815,7 +869,7 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'A Z'
+run_passing_test -s 'A Z' -t '0:start_1(1:stmts_1(2:stmts_r_2(3:stmts_r_1(4:stmt_r_1(5:stmt_1(6:HEX(A)))) 3:stmt_r_1(4:stmt_1(5:HEX(Z))))) 1:_tEND())'
 
 #############################
 grammar='
@@ -830,7 +884,7 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'A Z'
+run_passing_test -s 'A Z' -t '0:start_1(1:stmts_1(2:stmts_r_2(3:stmts_r_1(4:stmt_r_1(5:stmt_1(6:HEX(A)))) 3:stmt_r_1(4:stmt_1(5:HEX(Z))))) 1:_tEND())'
 
 #############################
 grammar='
@@ -845,7 +899,7 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'A Z'
+run_passing_test -s 'A Z' -t '0:start_1(1:stmts_1(2:stmts_r_1(3:stmts_r_2(4:stmt_r_1(5:stmt_1(6:HEX(A)))) 3:stmt_r_1(4:stmt_1(5:HEX(Z))))) 1:_tEND())'
 
 #############################
 grammar='
@@ -860,7 +914,7 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'A Z'
+run_passing_test -s 'A Z' -t '0:start_1(1:stmts_1(2:stmts_r_2(3:stmts_r_1(4:stmt_r_1(5:stmt_1(6:HEX(A)))) 3:stmt_r_1(4:stmt_1(5:HEX(Z))))) 1:_tEND())'
 
 #############################
 grammar='
@@ -875,7 +929,7 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'A Z'
+run_passing_test -s 'A Z' -t '0:start_1(1:stmts_1(2:stmts_r_1(3:stmts_r_2(4:stmt_r_1(5:stmt_1(6:HEX(A)))) 3:stmt_r_1(4:stmt_1(5:HEX(Z))))) 1:_tEND())'
 
 #############################
 grammar='
@@ -890,7 +944,7 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'A Z'
+run_passing_test -s 'A Z' -t '0:start_1(1:stmts_1(2:stmts_r_1(3:stmts_r_2(4:stmt_r_1(5:stmt_1(6:HEX(A)))) 3:stmt_r_1(4:stmt_1(5:HEX(Z))))) 1:_tEND())'
 
 #############################
 grammar='
@@ -905,7 +959,7 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'A Z'
+run_passing_test -s 'A Z' -t '0:start_1(1:stmts_1(2:stmts_r_2(3:stmts_r_1(4:stmt_r_1(5:stmt_1(6:HEX(A)))) 3:stmt_r_1(4:stmt_1(5:HEX(Z))))) 1:_tEND())'
 
 #############################
 grammar='
@@ -920,7 +974,9 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'A Z'
+run_passing_test -s 'A Z' -t '0:start_1(1:stmts_1(2:stmts_r_2(3:stmts_r_1(4:stmt_r_1(5:stmt_1(6:HEX(A)))) 3:stmt_r_1(4:stmt_1(5:HEX(Z))))) 1:_tEND())'
+
+enabled=1
 
 #############################
 grammar='
@@ -943,7 +999,7 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'A Z'
+run_passing_test -s 'A Z' -t '0:start_1(1:stmts_1(2:stmts_2(3:stmt_1(4:HEX(A))) 2:stmt_1(3:HEX(Z))) 1:_tEND())'
 
 #############################
 grammar='
@@ -961,15 +1017,15 @@ SEMI := ";";
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'var v;'
-run_passing_test 'var vz;'
-run_passing_test 'var v1;'
-run_passing_test 'var vaz;'
-run_passing_test 'var varz;'
-run_passing_test 'var var1;'
-run_passing_test 'var val1;'
-run_passing_test 'val var1;'
-run_passing_test 'val val1;'
+run_passing_test -s 'var v;' -t '0:start_1(1:stmts_2(2:stmt_1(3:VAR(var) 3:ID(v) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'var vz;' -t '0:start_1(1:stmts_2(2:stmt_1(3:VAR(var) 3:ID(vz) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'var v1;' -t '0:start_1(1:stmts_2(2:stmt_1(3:VAR(var) 3:ID(v1) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'var vaz;' -t '0:start_1(1:stmts_2(2:stmt_1(3:VAR(var) 3:ID(vaz) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'var varz;' -t '0:start_1(1:stmts_2(2:stmt_1(3:VAR(var) 3:ID(varz) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'var var1;' -t '0:start_1(1:stmts_2(2:stmt_1(3:VAR(var) 3:ID(var1) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'var val1;' -t '0:start_1(1:stmts_2(2:stmt_1(3:VAR(var) 3:ID(val1) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'val var1;' -t '0:start_1(1:stmts_2(2:stmt_2(3:VAL(val) 3:ID(var1) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'val val1;' -t '0:start_1(1:stmts_2(2:stmt_2(3:VAL(val) 3:ID(val1) 3:SEMI(;))) 1:_tEND())'
 
 #############################
 grammar='
@@ -987,11 +1043,11 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'var v;'
-run_passing_test 'var vz;'
-run_passing_test 'var vaz;'
-run_passing_test 'var varz;'
-run_passing_test 'var var;'
+run_passing_test -s 'var v;' -t '0:start_1(1:stmts_2(2:stmt_1(3:VAR(var) 3:ID(v) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'var vz;' -t '0:start_1(1:stmts_2(2:stmt_1(3:VAR(var) 3:ID(vz) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'var vaz;' -t '0:start_1(1:stmts_2(2:stmt_1(3:VAR(var) 3:ID(vaz) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'var varz;' -t '0:start_1(1:stmts_2(2:stmt_1(3:VAR(var) 3:ID(varz) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'var var;' -t '0:start_1(1:stmts_2(2:stmt_1(3:VAR(var) 3:ID(var) 3:SEMI(;))) 1:_tEND())'
 
 #############################
 # test ruletype with deleted copy-ctors
@@ -1009,7 +1065,7 @@ ID := "[a-z]+";
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'var'
+run_passing_test -s 'var' -t '0:start_1(1:stmt_1(2:ID(var)) 1:_tEND())'
 
 #############################
 grammar='
@@ -1045,8 +1101,8 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'if else'
-run_passing_test 'if'
+run_passing_test -s 'if else' -t '0:start_1(1:stmt_2(2:IF(if) 2:ELSE(else)) 1:_tEND())'
+run_passing_test -s 'if' -t '0:start_1(1:stmt_1(2:IF(if)) 1:_tEND())'
 
 #############################
 grammar='
@@ -1061,8 +1117,8 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'if else'
-run_passing_test 'if'
+run_passing_test -s 'if else' -t '0:start_1(1:stmt_1(2:IF(if) 2:ELSE(else)) 1:_tEND())'
+run_passing_test -s 'if' -t '0:start_1(1:stmt_2(2:IF(if)) 1:_tEND())'
 
 #############################
 grammar='
@@ -1070,10 +1126,7 @@ start := stmts;
 stmts := stmts stmt;
 stmts := stmt;
 
-stmt := ID(I)
-%{
-  std::print("ID:{}\n", I.text);
-%}
+stmt := ID(I);
 
 ID := "[A-Z]+";
 ENTER_MLCOMMENT := "/\*"! [ML_COMMENT_MODE];
@@ -1086,11 +1139,11 @@ CMT := ".*"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'ABC'
-run_passing_test 'ABC /*xxx*/'
-run_passing_test 'ABC /*xxx*/ DEF'
-run_passing_test 'ABC /*xxx /*yyy*/ zzz*/ DEF'
-run_passing_test 'ABC /*xxx*/ DEF /*yyy*/ GHI'
+run_passing_test -s 'ABC' -t '0:start_1(1:stmts_2(2:stmt_1(3:ID(ABC))) 1:_tEND())'
+run_passing_test -s 'ABC /*xxx*/' -t '0:start_1(1:stmts_2(2:stmt_1(3:ID(ABC))) 1:_tEND())'
+run_passing_test -s 'ABC /*xxx*/ DEF' -t '0:start_1(1:stmts_1(2:stmts_2(3:stmt_1(4:ID(ABC))) 2:stmt_1(3:ID(DEF))) 1:_tEND())'
+run_passing_test -s 'ABC /*xxx /*yyy*/ zzz*/ DEF' -t '0:start_1(1:stmts_1(2:stmts_2(3:stmt_1(4:ID(ABC))) 2:stmt_1(3:ID(DEF))) 1:_tEND())'
+run_passing_test -s 'ABC /*xxx*/ DEF /*yyy*/ GHI' -t '0:start_1(1:stmts_1(2:stmts_1(3:stmts_2(4:stmt_1(5:ID(ABC))) 3:stmt_1(4:ID(DEF))) 2:stmt_1(3:ID(GHI))) 1:_tEND())'
 
 #############################
 grammar='
@@ -1104,7 +1157,7 @@ stmts := stmt;
 stmt := ID EQ expr(e) SEMI
 @Generator %{
   auto v = eval(e);
-  std::print("e={}\n", v);
+  if(v) {}
 %}
 
 //%type expr int;
@@ -1135,8 +1188,8 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'xx = 11 + 12 + 13;'
-run_passing_test 'xx = 11 * 12 * 13;'
+run_passing_test -s 'xx = 11 + 12 + 13;' -t '0:start_1(1:stmts_2(2:stmt_1(3:ID(xx) 3:EQ(=) 3:expr_1(4:expr_1(5:expr_3(6:NUM(11)) 5:PLUS(+) 5:expr_3(6:NUM(12))) 4:PLUS(+) 4:expr_3(5:NUM(13))) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'xx = 11 * 12 * 13;' -t '0:start_1(1:stmts_2(2:stmt_1(3:ID(xx) 3:EQ(=) 3:expr_2(4:expr_2(5:expr_3(6:NUM(11)) 5:STAR(*) 5:expr_3(6:NUM(12))) 4:STAR(*) 4:expr_3(5:NUM(13))) 3:SEMI(;))) 1:_tEND())'
 
 #############################
 grammar='
@@ -1160,7 +1213,7 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'int aa'
+run_passing_test -s 'int aa' -t '0:start_1(1:stmt_1(2:arg_1(3:type_1(4:INT_TYPE(int)) 3:ID(aa))) 1:_tEND())'
 
 #############################
 grammar='
@@ -1180,7 +1233,7 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'fn(){}'
+run_passing_test -s 'fn(){}' -t '0:start_1(1:stmt_1(2:ID(fn) 2:argsx_1(3:LBRACKET(() 3:RBRACKET())) 2:stmt_block_1(3:LCURLY({) 3:RCURLY(}))) 1:_tEND())'
 
 #############################
 # rStructAttrList is nullable, followed by a token STRUCT
@@ -1208,10 +1261,10 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'attr1 struct;'
-run_passing_test 'attr1 service;'
-run_passing_test 'struct;'
-run_passing_test 'service;'
+run_passing_test -s 'attr1 struct;' -t '0:start_1(1:stmt_1(2:rStructStatement_1(3:rStructDef_1(4:rStructAttrList_1(5:ATTR1(attr1)) 4:STRUCT(struct)) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'attr1 service;' -t '0:start_1(1:stmt_2(2:rServiceStatement_1(3:rServiceDef_1(4:rStructAttrList_1(5:ATTR1(attr1)) 4:SERVICE(service)) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'struct;' -t '0:start_1(1:stmt_1(2:rStructStatement_1(3:rStructDef_1(4:rStructAttrList_0(5:_tEMPTY(rStructAttrList)) 4:STRUCT(struct)) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'service;' -t '0:start_1(1:stmt_2(2:rServiceStatement_1(3:rServiceDef_1(4:rStructAttrList_0(5:_tEMPTY(rStructAttrList)) 4:SERVICE(service)) 3:SEMI(;))) 1:_tEND())'
 
 #############################
 # rStructAttrList is nullable, followed by a token STRUCT
@@ -1244,10 +1297,10 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'interface x;'
-run_passing_test 'void service x;'
-run_passing_test 'interface x;'
-run_passing_test 'service x;'
+run_passing_test -s 'interface x;' -t '0:start_1(1:rStatements_2(2:rStatement_2(3:INTERFACE(interface) 3:IDENTIFIER(x) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'void service x;' -t '0:start_1(1:rStatements_2(2:rStatement_1(3:rStructAttrList_1(4:rStructAttrItem_1(5:TYPE_VOID(void))) 3:SERVICE(service) 3:IDENTIFIER(x) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'interface x;' -t '0:start_1(1:rStatements_2(2:rStatement_2(3:INTERFACE(interface) 3:IDENTIFIER(x) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'service x;' -t '0:start_1(1:rStatements_2(2:rStatement_1(3:rStructAttrList_0(4:_tEMPTY(rStructAttrList)) 3:SERVICE(service) 3:IDENTIFIER(x) 3:SEMI(;))) 1:_tEND())'
 
 #############################
 # rStructAttrList is nullable, followed by a token STRUCT
@@ -1274,10 +1327,10 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'string msgID'
-run_passing_test 'string* msgID'
-run_passing_test 'string ^msgID'
-run_passing_test 'string* ^msgID'
+run_passing_test -s 'string msgID' -t '0:start_1(1:rParameterDef_1(2:rTypeRef_1(3:rTypeRefBase_1(4:rPrimaryTypeRef_1(5:TYPE_STRING(string))) 3:rTypeRefQualifier_0(4:_tEMPTY())) 2:IDENTIFIER(msgID)) 1:_tEND())'
+run_passing_test -s 'string* msgID' -t '0:start_1(1:rParameterDef_1(2:rTypeRef_1(3:rTypeRefBase_1(4:rPrimaryTypeRef_1(5:TYPE_STRING(string))) 3:rTypeRefQualifier_1(4:STAR(*))) 2:IDENTIFIER(msgID)) 1:_tEND())'
+run_passing_test -s 'string ^msgID' -t '0:start_1(1:rParameterDef_2(2:rTypeRef_1(3:rTypeRefBase_1(4:rPrimaryTypeRef_1(5:TYPE_STRING(string))) 3:rTypeRefQualifier_0(4:_tEMPTY())) 2:CARET(^) 2:IDENTIFIER(msgID)) 1:_tEND())'
+run_passing_test -s 'string* ^msgID' -t '0:start_1(1:rParameterDef_2(2:rTypeRef_1(3:rTypeRefBase_1(4:rPrimaryTypeRef_1(5:TYPE_STRING(string))) 3:rTypeRefQualifier_1(4:STAR(*))) 2:CARET(^) 2:IDENTIFIER(msgID)) 1:_tEND())'
 
 #############################
 grammar='
@@ -1292,7 +1345,7 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'namespace name;'
+run_passing_test -s 'namespace name;' -t '0:start_1(1:stmt_1(2:NAMESPACE(namespace) 2:ID(name) 2:SEMI(;)) 1:_tEND())'
 
 #############################
 grammar='
@@ -1324,18 +1377,18 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'ABC'
-run_passing_test 'ABC GO1'
-run_passing_test 'ABC GO1 DEF'
-run_passing_test 'ABC GO1 DEF GO2'
-run_passing_test 'ABC GO1 DEF GO2 GHI'
-run_failing_test 'DEF'
-run_failing_test 'ABC DEF'
-run_failing_test 'ABC GO2'
-run_failing_test 'ABC GO1 ABC'
-run_passing_test 'ABC GO1 DEF GO2 GHI GOY DEF'
-run_passing_test 'ABC GO1 DEF GO2 GHI GOZ ABC'
-run_failing_test 'ABC GO1 DEF GO2 GHI GOZ DEF'
+run_passing_test -s 'ABC' -t '0:start_1(1:stmts_2(2:stmt_1(3:ID(ABC))) 1:_tEND())'
+run_passing_test -s 'ABC GO1' -t '0:start_1(1:stmts_1(2:stmts_2(3:stmt_1(4:ID(ABC))) 2:stmt_2(3:GO1(GO1))) 1:_tEND())'
+run_passing_test -s 'ABC GO1 DEF' -t '0:start_1(1:stmts_1(2:stmts_1(3:stmts_2(4:stmt_1(5:ID(ABC))) 3:stmt_2(4:GO1(GO1))) 2:stmt_1(3:ID(DEF))) 1:_tEND())'
+run_passing_test -s 'ABC GO1 DEF GO2' -t '0:start_1(1:stmts_1(2:stmts_1(3:stmts_1(4:stmts_2(5:stmt_1(6:ID(ABC))) 4:stmt_2(5:GO1(GO1))) 3:stmt_1(4:ID(DEF))) 2:stmt_3(3:GO2(GO2))) 1:_tEND())'
+run_passing_test -s 'ABC GO1 DEF GO2 GHI' -t '0:start_1(1:stmts_1(2:stmts_1(3:stmts_1(4:stmts_1(5:stmts_2(6:stmt_1(7:ID(ABC))) 5:stmt_2(6:GO1(GO1))) 4:stmt_1(5:ID(DEF))) 3:stmt_3(4:GO2(GO2))) 2:stmt_1(3:ID(GHI))) 1:_tEND())'
+run_failing_test -s 'DEF'
+run_failing_test -s 'ABC DEF'
+run_failing_test -s 'ABC GO2'
+run_failing_test -s 'ABC GO1 ABC'
+run_passing_test -s 'ABC GO1 DEF GO2 GHI GOY DEF' -t '0:start_1(1:stmts_1(2:stmts_1(3:stmts_1(4:stmts_1(5:stmts_1(6:stmts_2(7:stmt_1(8:ID(ABC))) 6:stmt_2(7:GO1(GO1))) 5:stmt_1(6:ID(DEF))) 4:stmt_3(5:GO2(GO2))) 3:stmt_1(4:ID(GHI))) 2:stmt_1(3:ID(DEF))) 1:_tEND())'
+run_passing_test -s 'ABC GO1 DEF GO2 GHI GOZ ABC' -t '0:start_1(1:stmts_1(2:stmts_1(3:stmts_1(4:stmts_1(5:stmts_1(6:stmts_2(7:stmt_1(8:ID(ABC))) 6:stmt_2(7:GO1(GO1))) 5:stmt_1(6:ID(DEF))) 4:stmt_3(5:GO2(GO2))) 3:stmt_1(4:ID(GHI))) 2:stmt_1(3:ID(ABC))) 1:_tEND())'
+run_failing_test -s 'ABC GO1 DEF GO2 GHI GOZ DEF'
 
 #############################
 grammar='
@@ -1348,7 +1401,7 @@ start := rParameterDef;
 rParameterDef := rTypeRef(t) IDENTIFIER
 @CppServer %{
     unused(t);
-    std::print("rParameterDef/@CppServer\n");
+//    std::print("rParameterDef/@CppServer\n");
     str(t, 1);
 %}
 
@@ -1360,16 +1413,16 @@ rParameterDef := rTypeRef CARET IDENTIFIER;
 %function rTypeRef CppServer::len(int x) -> size_t;
 rTypeRef := rTypeRefBase rTypeRefQualifier
 @CppServer %{
-    std::print("rTypeRef/@CppServer ***\n");
+//    std::print("rTypeRef/@CppServer ***\n");
 %}
 @CppServer::str %{
     unused(x);
-    std::print("rTypeRef/CppServer::str ***\n");
+//    std::print("rTypeRef/CppServer::str ***\n");
     return "";
 %}
 @CppServer::len %{
     unused(x);
-    std::print("rTypeRef/CppServer::len ***\n");
+//    std::print("rTypeRef/CppServer::len ***\n");
     return 0;
 %}
 
@@ -1389,8 +1442,8 @@ WS := "\s"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test 'string msgID'
-run_passing_test 'string ^msgID'
+run_passing_test -s 'string msgID' -t '0:start_1(1:rParameterDef_1(2:rTypeRef_1(3:rTypeRefBase_1(4:rPrimaryTypeRef_1(5:TYPE_STRING(string))) 3:rTypeRefQualifier_0(4:_tEMPTY())) 2:IDENTIFIER(msgID)) 1:_tEND())'
+run_passing_test -s 'string ^msgID' -t '0:start_1(1:rParameterDef_2(2:rTypeRef_1(3:rTypeRefBase_1(4:rPrimaryTypeRef_1(5:TYPE_STRING(string))) 3:rTypeRefQualifier_0(4:_tEMPTY())) 2:CARET(^) 2:IDENTIFIER(msgID)) 1:_tEND())'
 
 #############################
 grammar='
@@ -1415,8 +1468,8 @@ WS := "\s+"!;
 '
 
 compile_grammar "$grammar" 0
-run_passing_test '1 + 2'
-run_passing_test '1 - 23'
+run_passing_test -s '1 + 2' -t '0:start_1(1:expr_1(2:expr_5(3:NUMBER(1)) 2:PLUS(+) 2:expr_5(3:NUMBER(2))) 1:_tEND())'
+run_passing_test -s '1 - 23' -t '0:start_1(1:expr_2(2:expr_5(3:NUMBER(1)) 2:MINUS(-) 2:expr_5(3:NUMBER(23))) 1:_tEND())'
 
 #############################
 # this infinite loop
