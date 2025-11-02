@@ -1,20 +1,15 @@
 #!/bin/bash
 
 logger="a.log"
-#logger="-"
-
 failfast=0
 passcount=0
 failcount=0
 verbose=0
-
 enabled=1
 
-if [[ -z "${YCC}" ]]; then
-  YCC=~/build/yantra/Debug/bin/ycc
-fi
+YCC=./bin/ycc
 
-while getopts "h?fdv" opt; do
+while getopts "h?fdvy:l:" opt; do
   case "$opt" in
     h|\?)
       echo "-f : failfast"
@@ -26,11 +21,42 @@ while getopts "h?fdv" opt; do
     v)
       verbose=1
       ;;
+    y)
+      YCC="$OPTARG"
+      ;;
+    l)
+      logger="$OPTARG"
+      ;;
     d)
       enabled=0
       ;;
   esac
 done
+
+if [[ -n "$MSYSTEM" ]]; then
+  MSYS2_ARG_CONV_EXCL=* # set this using export on command line
+  CC="cl.exe"
+  FLAGS="/EHsc /nologo"
+  OUT="./out.exe"
+else
+  CC="clang++"
+  FLAGS="-Wall -Werror -Weverything -Wno-padded -Wno-c++98-compat-pedantic -Wno-exit-time-destructors -Wno-global-constructors -Wno-weak-vtables -Wno-switch-default -Wno-switch-enum -Wno-header-hygiene -Wno-poison-system-directories"
+  if [ -f testpch.hpp.pch ]; then
+    FLAGS="$FLAGS -include-pch testpch.hpp.pch"
+  fi
+  OUT="./a.out"
+fi
+
+if [ ! -f ${YCC} ]; then
+  echo "YCC executable not found at ${YCC}"
+  exit 1
+fi
+
+if [ ! -f testpch.hpp.pch ]; then
+  if [ -f testpch.hpp ]; then
+    ${CC} -c -std=c++20 testpch.hpp -o testpch.hpp.pch
+  fi
+fi
 
 compile_grammar() {
   if [ $enabled -eq 0 ]; then
@@ -58,18 +84,22 @@ compile_grammar() {
     passcount=$((passcount+1))
   fi
 
-  FLAGS="-Wall -Werror -Weverything -Wno-padded -Wno-c++98-compat-pedantic -Wno-exit-time-destructors -Wno-global-constructors -Wno-weak-vtables -Wno-switch-default -Wno-switch-enum -Wno-header-hygiene"
-
   if [ $verbose -eq 1 ]; then
     echo ${BASH_LINENO}: Compiling parser
   fi
-  clang++ -g -std=c++20 $FLAGS -include-pch testpch.hpp.pch out.cpp
+
+  if [[ -n "$MSYSTEM" ]]; then
+    ${CC} /std:c++20 $FLAGS out.cpp
+  else
+    ${CC} -std=c++20 $FLAGS out.cpp
+  fi
+
   if [ $? -ne 0 ]; then
     if [ $xerr -eq 2 ]; then
       return
     fi
     if [ $failfast -ne 0 ]; then
-        echo ${BASH_LINENO}: Exiting on failure-clang failed
+        echo ${BASH_LINENO}: Exiting on failure: compile failed
         echo $grammar
         exit $?
     fi
@@ -102,7 +132,7 @@ run_passing_test() {
   done
 
   echo -n "${BASH_LINENO}: Running passing test [$input]... "
-  routput=$(./a.out -s "$input" -l "$logger" -t1)
+  routput=$("$OUT" -s "$input" -l "$logger" -t1)
   if [ $? -ne 0 ]; then
     if [ $failfast -ne 0 ]; then
       echo "${BASH_LINENO}: Exiting on failure-passing test failed"
@@ -149,7 +179,7 @@ run_failing_test() {
   done
 
   echo -n "${BASH_LINENO}: Running failing test [$input]... "
-  routput=$(./a.out -s "$input" -l "$logger")
+  routput=$("$OUT" -s "$input" -l "$logger")
   if [ $? -eq 0 ]; then
     if [ $failfast -ne 0 ]; then
         echo ${BASH_LINENO}: Exiting on failure - failing test passed
@@ -163,10 +193,6 @@ run_failing_test() {
     echo "PASS"
   fi
 }
-
-if [ ! -f testpch.hpp.pch ]; then
-  clang++ -c -std=c++20 testpch.hpp -o testpch.hpp.pch
-fi
 
 #############################
 grammar='
