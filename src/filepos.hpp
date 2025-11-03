@@ -16,7 +16,7 @@ struct FilePos {
     size_t col = 1;
 
     /// @brief return string representation of this location
-    inline std::string str() const {
+    inline auto str() const -> std::string{
         return std::format("{}({:03d},{:03d})", file, row, col);
     }
 };

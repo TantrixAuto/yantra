@@ -2,12 +2,16 @@
 #include "nsutil.hpp"
 #include "print.hpp"
 
-inline std::string getChString(const uint32_t& ch, const bool& md = false) {
-    if(ch > 255){
+inline auto
+getChString(
+    const uint32_t& ch,
+    const bool& md = false
+) -> std::string {
+    if(ch > 255){ // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
         return std::format("0x{:04X}", ch);
     }
 
-    if(isprint(static_cast<int>(ch)) == false) {
+    if(isprint(static_cast<int>(ch)) == 0) {
         return std::format("0x{:02X}", ch);
     }
 
@@ -24,6 +28,8 @@ inline std::string getChString(const uint32_t& ch, const bool& md = false) {
         return std::format("'\\v'");
     case '\'':
         return std::format("'\\''");
+    default:
+        break;
     }
 
     if(md == true) {
@@ -34,13 +40,15 @@ inline std::string getChString(const uint32_t& ch, const bool& md = false) {
             return std::format("'#colon;'");
         case '.':
             return std::format("'#period;'");
+    default:
+        break;
         }
     }
 
     return std::format("'{:c}'", ch);
 }
 
-inline std::string getChString(const uint32_t& ch1, const uint32_t& ch2, const bool& md = false) {
+inline auto getChString(const uint32_t& ch1, const uint32_t& ch2, const bool& md = false) -> std::string {
     std::string s = getChString(ch1, md);
     if(ch2 != ch1) {
         s += "-";
@@ -50,14 +58,14 @@ inline std::string getChString(const uint32_t& ch1, const uint32_t& ch2, const b
 }
 
 template<typename T>
-inline size_t zid(const T* t) {
+inline auto zid(const T* t) -> size_t {
     if(t == nullptr) {
         return 0;
     }
     return t->id;
 }
 
-static inline bool isHEX(const int& ch) {
+static inline auto isHEX(const int& ch) -> bool {
     if ((ch >= '0') && (ch <= '9')) {
         return true;
     }
@@ -70,7 +78,7 @@ static inline bool isHEX(const int& ch) {
     return false;
 }
 
-static inline bool isDEC(const int& ch) {
+static inline auto isDEC(const int& ch) -> bool {
     if ((ch >= '0') && (ch <= '9')) {
         return true;
     }

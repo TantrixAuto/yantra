@@ -28,7 +28,7 @@ static inline void print(const std::format_string<ArgsT...>& msg, ArgsT... args)
 
 template <typename ...ArgsT>
 [[maybe_unused]]
-static inline void println(const std::format_string<ArgsT...>& msg, ArgsT... args) {
+static inline void println(const std::format_string<ArgsT...>& msg, const ArgsT&... args) {
     return println(std::cout, msg, args...);
 }
 } // namespace std

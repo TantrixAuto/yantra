@@ -51,12 +51,12 @@ struct TextFileWriter : public TextWriter<std::ofstream> {
     std::filesystem::path dir;
     std::filesystem::path file;
 
-    inline std::filesystem::path
+    inline auto
     buildOutputPath(
         std::filesystem::path inf,
         const std::filesystem::path& odir,
         const std::string& ext
-    ) {
+    ) -> std::filesystem::path {
         inf = std::filesystem::absolute(inf);
         inf = inf.lexically_normal();
         dir = inf.parent_path();
@@ -79,16 +79,16 @@ struct TextFileWriter : public TextWriter<std::ofstream> {
 
     inline void
     open(const std::filesystem::path& fname) {
-        return _open(fname);
+        _open(fname);
     }
 
     inline void
     open(const std::filesystem::path& odir, const std::string_view& filename, const std::string& ext) {
         auto ofilename = buildOutputPath(filename, odir, ext);
-        return _open(ofilename);
+        _open(ofilename);
     }
 
-    inline bool isOpen() const {
+    inline auto isOpen() const -> bool {
         return ss.is_open();
     }
 
@@ -112,17 +112,18 @@ struct TextFileWriter : public TextWriter<std::ofstream> {
 };
 
 template<typename TW>
-struct Indenter {
+struct Indenter : public NonCopyable {
     TW& writer;
     std::string indent;
-    inline Indenter(TW& w) : writer(w) {
-        indent = writer.indent;
+
+    explicit inline Indenter(TW& w) : writer(w) {
+        indent = writer.indent; // NOLINT(cppcoreguidelines-prefer-member-initializer)
         writer.indent += "    ";
     }
     inline ~Indenter() {
         writer.indent = indent;
     }
-    inline operator bool() const {
+    explicit inline operator bool() const {
         return true;
     }
 };

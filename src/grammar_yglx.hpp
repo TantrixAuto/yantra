@@ -20,8 +20,8 @@ struct Atom;
 /// @brief This class represents a regex's wildcard atom primitive
 /// .
 struct WildCard{
-    inline WildCard() {}
-    inline std::string str(const bool& = false) const {
+    inline WildCard() = default;
+    static inline auto str([[maybe_unused]] const bool& md = false) -> std::string {
         return std::format(".");
     }
 };
@@ -34,7 +34,7 @@ struct LargeEscClass{
     const yg::Grammar& grammar;
     std::string checker;
     inline LargeEscClass(const yg::Grammar& g, const std::string& c) : grammar(g), checker{c} {}
-    inline std::string str(const bool& = false) const {
+    inline auto str([[maybe_unused]] const bool& md = false) const -> std::string {
         return std::format("{}", checker);
     }
 };
@@ -46,7 +46,7 @@ struct RangeClass{
     uint32_t ch2;
     inline RangeClass(const uint32_t& c1, const uint32_t& c2) : ch1{c1}, ch2{c2} {}
 
-    inline std::string str(const bool& md = false) const {
+    inline auto str(const bool& md = false) const -> std::string {
         return std::format("{}", getChString(ch1, ch2, md));
     }
 };
@@ -63,8 +63,8 @@ struct Primitive {
     const Atom_t atom;
     inline Primitive(const FilePos& p, const Atom_t& a) : pos(p), atom(a) {}
 
-    inline std::string str(const bool& md = false) const {
-        return std::visit([&md](const auto& a){
+    inline auto str(const bool& md = false) const -> std::string {
+        return std::visit([&md](const auto& a) -> std::string{
             auto s = a.str(md);
             return std::format("${}", s);
         }, atom);
@@ -80,14 +80,14 @@ struct Class{
     inline Class(const FilePos& p, const bool& n, std::vector<Primitive::Atom_t>&& a)
         : pos(p), negate{n}, atoms(std::move(a)) {}
 
-    inline std::string str(const bool& md = false) const {
+    inline auto str(const bool& md = false) const -> std::string {
         std::stringstream ss;
         ss << "[";
         if(negate == true) {
             ss << "^";
         }
-        for(auto& ax : atoms) {
-            std::visit([&ss, &md](const auto& a){ss << a.str(md);}, ax);
+        for(const auto& ax : atoms) {
+            std::visit([&ss, &md](const auto& a) -> void {ss << a.str(md);}, ax);
         }
         ss << "]";
 
@@ -103,7 +103,8 @@ struct Sequence{
     std::unique_ptr<const Atom> rhs;
     inline Sequence(const FilePos& p, std::unique_ptr<const Atom> l, std::unique_ptr<const Atom> r)
         : pos(p), lhs{std::move(l)}, rhs{std::move(r)} {}
-    inline std::string str(const bool& = false) const {
+
+    static inline auto str([[maybe_unused]] const bool& md = false) -> std::string {
         return std::format("&");
     }
 };
@@ -117,7 +118,7 @@ struct Disjunct{
     inline Disjunct(const FilePos& p, std::unique_ptr<const Atom> l, std::unique_ptr<const Atom> r)
         : pos(p), lhs{std::move(l)}, rhs{std::move(r)} {}
 
-    inline std::string str(const bool& = false) const {
+    static inline auto str([[maybe_unused]] const bool& md = false) -> std::string {
         return std::format("|");
     }
 };
@@ -130,7 +131,8 @@ struct Group{
     std::unique_ptr<const Atom> atom;
     inline Group(const FilePos& p, const bool& c, std::unique_ptr<const Atom>&& a)
         : pos(p), capture{c}, atom{std::move(a)} {}
-    inline std::string str(const bool& = false) const {
+
+    static inline auto str([[maybe_unused]] const bool& md = false) -> std::string {
         return std::format("()");
     }
 };
@@ -146,7 +148,7 @@ struct Closure{
     inline Closure(const yg::Grammar& g, const FilePos& p, std::unique_ptr<const Atom> n, const size_t& mn, const size_t& mx)
         : grammar(g), pos(p), atom{std::move(n)}, min{mn}, max{mx} {}
 
-    std::string str(const bool& md = false) const;
+    auto str(const bool& md = false) const -> std::string;
 };
 
 /// @brief variant that holds all regex atoms
@@ -162,57 +164,58 @@ using Atom_t = std::variant<
 /// @brief This class holds a single atom of a regex
 struct Atom : public NonCopyable {
     Atom_t atom;
-    inline Atom(Atom_t&& a) : atom{std::move(a)} {}
-    inline const FilePos& pos() const {
+    explicit inline Atom(Atom_t&& a) : atom(std::move(a)) {}
+
+    inline auto pos() const -> FilePos {
         return std::visit([](const auto& a) -> const FilePos& {return a.pos;}, atom);
     }
 };
 
 /// @brief compare(Wildcard, LargeEscClass) function
 /// a Wildcard is always less than a LargeEscClass
-static inline int32_t compare(const yglx::WildCard&, const yglx::LargeEscClass&) {
+static inline auto compare(const yglx::WildCard&, const yglx::LargeEscClass&) -> int32_t {
     return -1;
 }
 
 /// @brief compare(Wildcard, RangeClass) function
 /// a Wildcard is always less than a RangeClass
-static inline int32_t compare(const yglx::WildCard&, const yglx::RangeClass&) {
+static inline auto compare(const yglx::WildCard&, const yglx::RangeClass&) -> int32_t {
     return -1;
 }
 
 /// @brief compare(LargeEscClass, RangeClass) function
 /// a LargeEscClass is always less than a RangeClass
-static inline int32_t compare(const yglx::LargeEscClass&, const yglx::RangeClass&) {
+static inline auto compare(const yglx::LargeEscClass&, const yglx::RangeClass&) -> int32_t {
     return -1;
 }
 
 /// @brief compare(LargeEscClass, WildCard) function
 /// a LargeEscClass is always less than a WildCard
-static inline int32_t compare(const yglx::LargeEscClass&, const yglx::WildCard&) {
+static inline auto compare(const yglx::LargeEscClass&, const yglx::WildCard&) -> int32_t {
     return +1;
 }
 
 /// @brief compare(RangeClass, WildCard) function
 /// a RangeClass is always less than a WildCard
-static inline int32_t compare(const yglx::RangeClass&, const yglx::WildCard&) {
+static inline auto compare(const yglx::RangeClass&, const yglx::WildCard&) -> int32_t {
     return +1;
 }
 
 /// @brief compare(RangeClass, LargeEscClass) function
 /// a RangeClass is always less than a LargeEscClass
-static inline int32_t compare(const yglx::RangeClass&, const yglx::LargeEscClass&) {
+static inline auto compare(const yglx::RangeClass&, const yglx::LargeEscClass&) -> int32_t {
     return +1;
 }
 
 /// @brief compare(WildCard, WildCard) function
 /// a Wildcard is always same as a WildCard
-static inline int32_t compare(const yglx::WildCard&, const yglx::WildCard&) {
+static inline auto compare(const yglx::WildCard&, const yglx::WildCard&) -> int32_t {
     return 0;
 }
 
 /// @brief compare(RangeClass, RangeClass) function
 /// compare width of both RangeClass'es
-static inline int32_t compare(const yglx::RangeClass& lhs, const yglx::RangeClass& rhs) {
+static inline auto compare(const yglx::RangeClass& lhs, const yglx::RangeClass& rhs) -> int32_t {
     if((lhs.ch1 == rhs.ch1) && (lhs.ch2 == rhs.ch2)) {
         return 0;
     }
@@ -241,7 +244,7 @@ static inline int32_t compare(const yglx::RangeClass& lhs, const yglx::RangeClas
 
 /// @brief compare(LargeEscClass, LargeEscClass) function
 /// compare checker of both LargeEscClass'es
-static inline int32_t compare(const yglx::LargeEscClass& lhs, const yglx::LargeEscClass& rhs) {
+static inline auto compare(const yglx::LargeEscClass& lhs, const yglx::LargeEscClass& rhs) -> int32_t {
     if(lhs.checker < rhs.checker) {
         return -1;
     }
@@ -253,17 +256,17 @@ static inline int32_t compare(const yglx::LargeEscClass& lhs, const yglx::LargeE
 
 /// @brief compare(Class, Class) function
 /// compare checker of both Class'es
-static inline int32_t compare(const yglx::Class& lhs, const yglx::Class& rhs) {
+static inline auto compare(const yglx::Class& lhs, const yglx::Class& rhs) -> int32_t {
     if(lhs.atoms.size() < rhs.atoms.size()) {
         return -1;
     }
     if(lhs.atoms.size() > rhs.atoms.size()) {
         return +1;
     }
-    for(auto& lax : lhs.atoms) {
-        auto c0 = std::visit([&rhs](const auto& la){
-            for(auto& rax : rhs.atoms) {
-                auto c1 = std::visit([&la](const auto& ra){
+    for(const auto& lax : lhs.atoms) {
+        auto c0 = std::visit([&rhs](const auto& la) -> int32_t {
+            for(const auto& rax : rhs.atoms) {
+                auto c1 = std::visit([&la](const auto& ra) -> int32_t {
                     return yglx::compare(la, ra);
                 }, rax);
                 if(c1 != 0) {
@@ -282,8 +285,9 @@ static inline int32_t compare(const yglx::Class& lhs, const yglx::Class& rhs) {
 /// @brief this class represents a lexer state transition on a primitive atom
 struct PrimitiveTransition{
     const yglx::Primitive& atom;
-    inline PrimitiveTransition(const yglx::Primitive& a) : atom(a) {}
-    inline std::string str(const bool& md = false) const {
+
+    explicit inline PrimitiveTransition(const yglx::Primitive& a) : atom(a) {}
+    inline auto str(const bool& md = false) const -> std::string {
         return atom.str(md);
     }
 };
@@ -291,15 +295,16 @@ struct PrimitiveTransition{
 /// @brief this class represents a lexer state transition on a class atom
 struct ClassTransition{
     const yglx::Class& atom;
-    inline ClassTransition(const yglx::Class& a) : atom(a) {}
-    inline std::string str(const bool& md = false) const {
+
+    explicit inline ClassTransition(const yglx::Class& a) : atom(a) {}
+    inline auto str(const bool& md = false) const -> std::string {
         return atom.str(md);
     }
 };
 
 /// @brief this class represents a lexer state transition on a closure atom
 struct ClosureTransition{
-    enum class Type {
+    enum class Type : uint8_t {
         Enter,
         PreLoop,
         InLoop,
@@ -314,7 +319,7 @@ struct ClosureTransition{
 
     inline ClosureTransition(const yg::Grammar& g, const yglx::Closure& a, const Type& t, const size_t& ic = 0) : grammar(g), atom(a), type(t), initialCount(ic) {}
 
-    inline std::string str(const bool& md = false) const {
+    inline auto str(const bool& md = false) const -> std::string {
         switch(type) {
         case Type::Enter:
             if(md) {
@@ -346,8 +351,7 @@ struct ClosureTransition{
 /// if the lexer reaches a state that has an outgoing slide transition, it
 /// automatically slides to the destination state of this transition.
 struct SlideTransition{
-    inline SlideTransition() {}
-    inline std::string str(const bool& = false) const {
+    static inline auto str([[maybe_unused]] const bool& md = false) -> std::string {
         return std::format("~");
     }
 };
@@ -358,7 +362,7 @@ using Transition_t = std::variant<
     ClassTransition,
     ClosureTransition,
     SlideTransition
-    >;
+>;
 
 struct State;
 
@@ -380,19 +384,19 @@ struct Transition : public NonCopyable {
         : t(x), from(f), next{n}, capture(c) {}
 
     template<typename T>
-    inline const T* get();
+    inline auto get() -> const T*;
 
     /// @brief returns the Closure atom, if this is a Closure transition
-    inline const Closure* isClosure() {
-        if(auto tx = std::get_if<ClosureTransition>(&t)) {
+    inline auto isClosure() -> const Closure* {
+        if(auto* tx = std::get_if<ClosureTransition>(&t)) {
             return &(tx->atom);
         }
         return nullptr;
     }
 
     /// @brief returns the ClosureTransition class, if this is a Closure transition
-    inline ClosureTransition* isClosure(const ClosureTransition::Type& type) {
-        if(auto lt = std::get_if<ClosureTransition>(&t)) {
+    inline auto isClosure(const ClosureTransition::Type& type) -> ClosureTransition* {
+        if(auto* lt = std::get_if<ClosureTransition>(&t)) {
             if(lt->type == type) {
                 return lt;
             }
@@ -401,19 +405,19 @@ struct Transition : public NonCopyable {
     }
 
     /// @brief compare this transition to @arg rhs
-    int32_t compare(const Transition& rhs) const;
+    auto compare(const Transition& rhs) const -> int32_t;
 
     /// @brief return true if this transition is a subset of @arg rhs
     /// 'g' is a subset of 'a'-'z', etc
-    bool isSubsetOf(const Transition& rhs) const;
+    auto isSubsetOf(const Transition& rhs) const -> bool;
 
     /// @brief return this transition in string format
-    inline std::string str(const bool& md = false) const {
+    inline auto str(const bool& md = false) const  -> std::string {
         if(t.valueless_by_exception()) {
             return "??";
         }
 
-        auto st = std::visit([&md](const auto& xt){
+        auto st = std::visit([&md](const auto& xt) -> std::string {
             return xt.str(md);
         }, t);
 
@@ -473,34 +477,34 @@ struct State : public NonCopyable {
     /// @brief whether to check for EOF in this state
     bool checkEOF = false;
 
-    inline State() {}
+    inline State() = default;
 
     /// @brief get enter-closure transition
-    inline const Transition& enterClosureTx() const {
+    inline auto enterClosureTx() const -> const Transition& {
         assert(enterClosureTransition != nullptr);
         return *enterClosureTransition;
     }
 
     /// @brief get leave-closure transition
-    inline const Transition& leaveClosureTx() const {
+    inline auto leaveClosureTx() const -> const Transition& {
         assert(leaveClosureTransition != nullptr);
         return *leaveClosureTransition;
     }
 
     /// @brief get check-closure transition
-    inline const Transition& checkClosureTx() const {
+    inline auto checkClosureTx() const -> const Transition& {
         assert(checkClosureTransition != nullptr);
         return *checkClosureTransition;
     }
 
     /// @brief get start-closure transition
-    inline const Transition& startClosureTx() const {
+    inline auto startClosureTx() const -> const Transition& {
         assert(startClosureTransition != nullptr);
         return *startClosureTransition;
     }
 
     /// @brief add a transition to this state
-    inline Transition* addTransition(Transition* t) {
+    inline auto addTransition(Transition* t) -> Transition* {
         assert(t);
         auto it = transitions.begin();
         auto ite = transitions.end();
@@ -522,8 +526,8 @@ struct State : public NonCopyable {
 
     /// @brief get the specified transition from this state, if any
     template<typename T>
-    inline Transition* getTransition(const T& pa) const {
-        for(auto& tx : transitions) {
+    inline auto getTransition(const T& pa) const -> Transition* {
+        for(const auto& tx : transitions) {
             if(auto a = tx->get<T>()) {
                 if(yglx::compare(*a, pa) == 0) {
                     return tx;
@@ -534,7 +538,7 @@ struct State : public NonCopyable {
     }
 
     /// @brief get a closure transition from this state, if exists
-    inline const ClosureTransition* getClosureTransition(const ClosureTransition::Type& type);
+    inline auto getClosureTransition(const ClosureTransition::Type& type) -> const ClosureTransition*;
 };
 
 struct RegexSet;
@@ -542,7 +546,7 @@ struct RegexSet;
 /// @brief this class represents a TOKEN in the input grammar
 struct Regex : public NonCopyable {
     /// @brief the lexermode change, if any, when this token is matched
-    enum class ModeChange {
+    enum class ModeChange : uint8_t {
         /// @brief no LexerMode change
         None,
 
@@ -608,7 +612,7 @@ struct Regex : public NonCopyable {
 /// This will match all lines that start with a '//' or a '--', and recognise both as the same token 'SL_COMMENT'
 struct RegexSet : public NonCopyable {
     /// @brief association for this token set
-    enum class Assoc {
+    enum class Assoc : uint8_t {
         /// @brief token has left association (default)
         Left,
 
@@ -619,7 +623,7 @@ struct RegexSet : public NonCopyable {
         None,
     };
 
-    static inline const char* assocName(const Assoc& ass) {
+    static inline auto assocName(const Assoc& ass) -> const char* {
         static const std::unordered_map<Assoc, const char*> map = {
             {Assoc::Left, "Left"},
             {Assoc::Right, "Right"},
@@ -650,9 +654,9 @@ struct RegexSet : public NonCopyable {
     Assoc assoc = Assoc::Left;
 
     /// @brief return cumulative usage count of all tokens in this set
-    inline size_t usageCount() const {
+    inline auto usageCount() const -> size_t {
         size_t c = 0;
-        for(auto& rx : regexes) {
+        for(const auto& rx : regexes) {
             c += rx->usageCount;
         }
         return c;
@@ -667,9 +671,9 @@ struct LexerMode : public NonCopyable {
 
 /// @brief returns the Wildcard atom, if this is a Wildcard transition
 template<>
-inline const WildCard* Transition::get<WildCard>() {
-    if(auto tx = std::get_if<PrimitiveTransition>(&t)) {
-        if(auto a = std::get_if<WildCard>(&(tx->atom.atom))) {
+inline auto Transition::get<WildCard>() -> const WildCard* {
+    if(auto* tx = std::get_if<PrimitiveTransition>(&t)) {
+        if(const auto* a = std::get_if<WildCard>(&(tx->atom.atom))) {
             return a;
         }
     }
@@ -678,9 +682,9 @@ inline const WildCard* Transition::get<WildCard>() {
 
 /// @brief returns the LargeEscClass atom, if this is a LargeEscClass transition
 template<>
-inline const LargeEscClass* Transition::get<LargeEscClass>() {
-    if(auto tx = std::get_if<PrimitiveTransition>(&t)) {
-        if(auto a = std::get_if<LargeEscClass>(&(tx->atom.atom))) {
+inline auto Transition::get<LargeEscClass>() -> const LargeEscClass* {
+    if(auto* tx = std::get_if<PrimitiveTransition>(&t)) {
+        if(const auto* a = std::get_if<LargeEscClass>(&(tx->atom.atom))) {
             return a;
         }
     }
@@ -689,9 +693,9 @@ inline const LargeEscClass* Transition::get<LargeEscClass>() {
 
 /// @brief returns the RangeClass atom, if this is a RangeClass transition
 template<>
-inline const RangeClass* Transition::get<RangeClass>() {
-    if(auto tx = std::get_if<PrimitiveTransition>(&t)) {
-        if(auto a = std::get_if<RangeClass>(&(tx->atom.atom))) {
+inline auto Transition::get<RangeClass>() -> const RangeClass* {
+    if(auto* tx = std::get_if<PrimitiveTransition>(&t)) {
+        if(const auto* a = std::get_if<RangeClass>(&(tx->atom.atom))) {
             return a;
         }
     }
@@ -700,8 +704,8 @@ inline const RangeClass* Transition::get<RangeClass>() {
 
 /// @brief returns the Class atom, if this is a Class transition
 template<>
-inline const Class* Transition::get<Class>() {
-    if(auto tx = std::get_if<ClassTransition>(&t)) {
+inline auto Transition::get<Class>() -> const Class* {
+    if(auto* tx = std::get_if<ClassTransition>(&t)) {
         return &(tx->atom);
     }
     return nullptr;
@@ -709,16 +713,16 @@ inline const Class* Transition::get<Class>() {
 
 /// @brief returns the ClosureTransition class, if this is a Closure transition
 template<>
-inline const ClosureTransition* Transition::get<ClosureTransition>() {
-    if(auto tx = std::get_if<ClosureTransition>(&t)) {
+inline auto Transition::get<ClosureTransition>() -> const ClosureTransition* {
+    if(const auto* tx = std::get_if<ClosureTransition>(&t)) {
         return tx;
     }
     return nullptr;
 }
 
-inline const ClosureTransition* State::getClosureTransition(const ClosureTransition::Type& type) {
+inline auto State::getClosureTransition(const ClosureTransition::Type& type) -> const ClosureTransition* {
     for(auto& tx : transitions) {
-        if(auto t = tx->get<ClosureTransition>()) {
+        if(const auto* t = tx->get<ClosureTransition>()) {
             if(t->type == type) {
                 return t;
             }

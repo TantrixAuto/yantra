@@ -2,7 +2,7 @@
 /// @brief Contains all data structures and functions to read and manipulate ASCII strings
 
 ///PROTOTYPE_ENTER:SKIP
-#include <stdint.h>
+#include <cstdint>
 #include <cctype>
 #include <iostream>
 #include "encodings.hpp"
@@ -14,21 +14,22 @@ namespace ascii {
 
 using char_t = char;
 
-inline bool isSpace(const char_t& ch) {
-    return std::isspace(ch);
+inline auto isSpace(const char_t& ch) -> bool {
+    return (std::isspace(ch) != 0);
 }
 
-inline bool isDigit(const char_t& ch) {
-    return std::isdigit(ch);
+inline auto isDigit(const char_t& ch) -> bool {
+    return (std::isdigit(ch) != 0);
 }
 
-inline bool isLetter(const char_t& ch) {
-    return std::isalpha(ch);
+inline auto isLetter(const char_t& ch) -> bool {
+    return (std::isalpha(ch) != 0);
 }
 
-inline bool isWord(const char_t& ch) {
-    return std::isalnum(ch);
+inline auto isWord(const char_t& ch) -> bool {
+    return (std::isalnum(ch) != 0);
 }
+
 inline char_t read(std::istream& is) {
     char c0 = static_cast<char>(is.peek());
     return c0;

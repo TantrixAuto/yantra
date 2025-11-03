@@ -18,7 +18,7 @@ struct RuleSet;
 /// @brief represents a node in a production
 struct Node : public NonCopyable {
     /// @brief whether this node refers to a ruleset or a tokenset
-    enum class NodeType {
+    enum class NodeType : uint8_t {
         /// @brief this node refers to a ruleset
         RuleRef,
 
@@ -42,18 +42,18 @@ struct Node : public NonCopyable {
     std::string idxName;
 
     /// @brief return true if this is a ruleset reference
-    inline bool isRule() const {
+    inline auto isRule() const -> bool {
         return type == NodeType::RuleRef;
     }
 
     /// @brief return true if this is a tokenset reference
-    inline bool isRegex() const {
+    inline auto isRegex() const -> bool {
         return type == NodeType::RegexRef;
     }
 
     /// @brief return string representation of this node
     /// useful for debugging
-    inline std::string str() const {
+    inline auto str() const -> std::string {
         if(varName.size() > 0) {
             return std::format("{}({})", name, varName);
         }
@@ -85,28 +85,28 @@ struct Rule : public NonCopyable {
     const yglx::RegexSet* precedence = nullptr;
 
     /// @brief name of this rule's ruleset
-    inline const std::string& ruleSetName() const;
+    inline auto ruleSetName() const -> const std::string&;
 
     /// @brief get node at index specified by @arg idx
-    inline Node& getNode(const size_t& idx) const {
+    inline auto getNode(const size_t& idx) const -> Node& {
         assert(idx < nodes.size());
-        auto& node = nodes.at(idx);
+        const auto& node = nodes.at(idx);
         return *node;
     }
 
     /// @brief get node at index specified by @arg idx, or null if idx is out of range
-    inline Node* getNodeAt(const size_t& idx) const {
+    inline auto getNodeAt(const size_t& idx) const -> Node* {
         if(idx >= nodes.size()) {
             assert(idx == nodes.size());
             return nullptr;
         }
         assert(idx < nodes.size());
-        auto& node = nodes.at(idx);
+        const auto& node = nodes.at(idx);
         return node.get();
     }
 
     /// @brief add node to rule
-    inline Node& addNode(const FilePos& npos, const std::string& name, const ygp::Node::NodeType& type) {
+    inline auto addNode(const FilePos& npos, const std::string& name, const ygp::Node::NodeType& type) -> Node& {
         auto pnode = std::make_unique<Node>();
         nodes.push_back(std::move(pnode));
         auto& node = *(nodes.back());
@@ -118,17 +118,17 @@ struct Rule : public NonCopyable {
     }
 
     /// @brief add regex node to rule
-    inline Node& addRegexNode(const FilePos& npos, const std::string& name) {
+    inline auto addRegexNode(const FilePos& npos, const std::string& name) -> Node& {
         return addNode(npos, name, Node::NodeType::RegexRef);
     }
 
     /// @brief return string representation of this rule
     /// useful for debugging
-    std::string str(const size_t& cpos, const bool& full = true) const;
+    auto str(const size_t& cpos, const bool& full = true) const -> std::string;
 
     /// @brief return string representation of this rule
     /// useful for debugging
-    inline std::string str(const bool& full = true) const {
+    inline auto str(const bool& full = true) const -> std::string {
         return str(nodes.size() + 1, full);
     }
 };
@@ -159,17 +159,15 @@ struct RuleSet : public NonCopyable {
     std::vector<yglx::RegexSet*> follows;
 
     /// @brief true if @arg list contains @arg name
-    static inline bool hasToken(const std::vector<yglx::RegexSet*>& list, const std::string& name) {
-        for(auto& rx : list) {
-            if(rx->name == name) {
-                return true;
-            }
-        }
-        return false;
+    static inline auto hasToken(const std::vector<yglx::RegexSet*>& list, const std::string& name) -> bool {
+        bool found = std::ranges::any_of(list, [&](const auto& rx) -> bool {
+            return rx->name == name;
+        });
+        return found;
     }
 
     /// @brief true if FIRST-SET contains @arg t
-    inline bool firstIncludes(const std::string& t) const {
+    inline auto firstIncludes(const std::string& t) const -> bool {
         return hasToken(firsts, t);
     }
 };
@@ -187,13 +185,13 @@ struct Config : public NonCopyable {
     inline Config(const Rule& r, const size_t& p) : rule(r), cpos(p) {}
 
     /// @brief return the next node from the position of the dot in this config
-    inline Node& getNextNode() const {
+    inline auto getNextNode() const -> Node& {
         return rule.getNode(cpos);
     }
 
     /// @brief return string representation of this config
     /// used for debugging and logging
-    inline std::string str(const bool& full = true) const {
+    inline auto str(const bool& full = true) const -> std::string {
         return rule.str(cpos, full);
     }
 };
@@ -233,7 +231,7 @@ struct ItemSet : public NonCopyable {
     std::unordered_map<const RuleSet*, ItemSet*> gotos;
 
     /// @brief check if there is a GOTO action for the given RuleSet @arg rs
-    inline ItemSet* hasGoto(const RuleSet* rs) const {
+    inline auto hasGoto(const RuleSet* rs) const -> ItemSet* {
         if(auto it = gotos.find(rs); it != gotos.end()) {
             return it->second;
         }
@@ -242,14 +240,14 @@ struct ItemSet : public NonCopyable {
 
     /// @brief set GOTO action for the given RuleSet @arg rs
     inline void setGoto(const Node& node, const RuleSet* rs, ItemSet* is) {
-        if(hasGoto(rs)) {
+        if(hasGoto(rs) != nullptr) {
             throw GeneratorError(__LINE__, __FILE__, node.pos, "GOTO_CONFLICT:{}", rs->name);
         }
         gotos[rs] = is;
     }
 
     /// @brief check if there is a SHIFT action for the given token @arg rx
-    inline ItemSet* hasShift(const yglx::RegexSet& rx) const {
+    inline auto hasShift(const yglx::RegexSet& rx) const -> ItemSet* {
         if(auto it = shifts.find(&rx); it != shifts.end()) {
             return it->second.next;
         }
@@ -257,8 +255,8 @@ struct ItemSet : public NonCopyable {
     }
 
     /// @brief check if there is a SHIFT action for the given token @arg rx, leading to given ItemSet @arg is
-    inline ItemSet* hasShift(const yglx::RegexSet& rx, ItemSet& is) const {
-        auto is2 = hasShift(rx);
+    inline auto hasShift(const yglx::RegexSet& rx, ItemSet& is) const -> ItemSet* {
+        auto* is2 = hasShift(rx);
         if((is2 == nullptr) || (is2 == &is)) {
             return nullptr;
         }
@@ -286,7 +284,7 @@ struct ItemSet : public NonCopyable {
     }
 
     /// @brief check if there is a REDUCE action for the given token @arg rx
-    inline const Config* hasReduce(const yglx::RegexSet& rx) const {
+    inline auto hasReduce(const yglx::RegexSet& rx) const -> const Config* {
         if(auto it = reduces.find(&rx); it != reduces.end()) {
             return it->second.next;
         }
@@ -294,8 +292,8 @@ struct ItemSet : public NonCopyable {
     }
 
     /// @brief check if there is a REDUCE action for the given token @arg rx, leading to given Config @arg c
-    inline const Config* hasReduce(const yglx::RegexSet& rx, const Config& c) const {
-        auto c2 = hasReduce(rx);
+    inline auto hasReduce(const yglx::RegexSet& rx, const Config& c) const -> const Config* {
+        const auto* c2 = hasReduce(rx);
         if((c2 == nullptr) || (c2 == &c)) {
             return nullptr;
         }
@@ -341,10 +339,10 @@ struct ItemSet : public NonCopyable {
     /// from current Config to @arg is ItemSet
     /// along with @arg len length of the Rule to reduce
     inline void setReduce(const Node& node, const yglx::RegexSet& rx, const Config& c, const size_t& len) {
-        if(hasShift(rx)) {
+        if(hasShift(rx) != nullptr) {
             throw GeneratorError(__LINE__, __FILE__, node.pos, "REDUCE_SHIFT_CONFLICT:{}", rx.name);
         }
-        if(hasReduce(rx, c)) {
+        if(hasReduce(rx, c) != nullptr) {
             throw GeneratorError(__LINE__, __FILE__, node.pos, "REDUCE_REDUCE_CONFLICT:{}", rx.name);
         }
         Reduce rd;
@@ -355,23 +353,23 @@ struct ItemSet : public NonCopyable {
 
     /// @brief return string representation of this ItemSet
     /// used for debugging and logging
-    inline std::string str(const std::string& indent = "", const std::string& nl = "\n", const bool& full = true) const {
+    inline auto str(const std::string& indent = "", const std::string& nl = "\n", const bool& full = true) const -> std::string {
         std::stringstream ss;
         ss << indent << std::format("ItemSet:{}", id);
-        for(auto& c : configs) {
+        for(const auto& c : configs) {
             ss << nl << indent << c->str(full);
         }
         ss << nl;
         std::string sep;
-        for(auto& s : shifts) {
+        for(const auto& s : shifts) {
             ss << sep << s.first->name <<  " -> S" << s.second.next->id;
             sep = ", ";
         }
-        for(auto& s : reduces) {
+        for(const auto& s : reduces) {
             ss << sep << s.first->name <<  " -> R" << s.second.next->rule.id;
             sep = ", ";
         }
-        for(auto& s : gotos) {
+        for(const auto& s : gotos) {
             ss << sep << s.first->name <<  " -> G" << s.second->id;
             sep = ", ";
         }
@@ -379,7 +377,7 @@ struct ItemSet : public NonCopyable {
     }
 };
 
-inline const std::string& Rule::ruleSetName() const {
+inline auto Rule::ruleSetName() const -> const std::string& {
     assert(ruleSet != nullptr);
     return ruleSet->name;
 }

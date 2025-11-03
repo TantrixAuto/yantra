@@ -27,33 +27,31 @@
 #include "cpp_generator.hpp"
 #include "text_writer.hpp"
 #include "logger.hpp"
+#include "options.hpp"
 
 /// @brief This is the UNICODE encoding file, embedded as a raw C string
-extern const char* cb_encoding_utf8;
+extern const char* const cb_encoding_utf8;
 
 /// @brief This is the ASCII encoding file, embedded as a raw C string
-extern const char* cb_encoding_ascii;
+extern const char* const cb_encoding_ascii;
 
 /// @brief This is the prototype.cpp file, embedded as a raw C string
-extern const char* cb_prototype;
+extern const char* const cb_prototype;
 
 /// @brief This is the stream.hpp file, embedded as a raw C string
-extern const char* cb_stream;
+extern const char* const cb_stream;
 
 /// @brief This is the text_writer.hpp file, embedded as a raw C string
-extern const char* cb_text_writer;
+extern const char* const cb_text_writer;
 
 /// @brief This is the print.hpp file, embedded as a raw C string
-extern const char* cb_print;
+extern const char* const cb_print;
 
 /// @brief This is the nsutil.hpp file, embedded as a raw C string
-extern const char* cb_nsutil;
+extern const char* const cb_nsutil;
 
 /// @brief This is the filepos.hpp file, embedded as a raw C string
-extern const char* cb_filepos;
-
-/// @brief This is a flag that indicates whether to insert #line statements for codeblocks in the generated file
-extern bool genLines;
+extern const char* const cb_filepos;
 
 namespace {
 
@@ -63,18 +61,18 @@ struct Generator {
     std::string qid;
     CodeBlock throwError;
 
-    inline Generator(const yg::Grammar& g) : grammar{g} {}
+    inline explicit Generator(const yg::Grammar& g) : grammar(g) {}
 
     /// @brief expands all variables in a codeblock and normalizes the indentation
-    inline void
+    static inline void
     _expand(
         StringStreamWriter& sw,
         const std::string_view& codeblock,
-        const std::string_view& indent,
         const bool& autoIndent,
-        const std::unordered_map<std::string, std::string>& vars
+        const std::unordered_map<std::string, std::string>& vars,
+        const std::string_view& indent
     ) {
-        enum class State {
+        enum class State : uint8_t {
             InitSpace0,
             InitSpace1,
             Code,
@@ -97,14 +95,14 @@ struct Generator {
         size_t space0 = 0;
         size_t space1 = 0;
         std::string key;
-        for(auto& ch : codeblock) {
+        for(const auto& ch : codeblock) {
             switch(state) {
             case State::InitSpace0:
                 if((ch == '\r') || (ch == '\n')) {
                     space0 = 0;
                     continue;
                 }
-                if(autoIndent && (std::isspace(ch))) {
+                if(autoIndent && (std::isspace(ch) != 0)) {
                     ++space0;
                     continue;
                 }
@@ -127,7 +125,7 @@ struct Generator {
                     ++sw.row;
                     continue;
                 }
-                if(autoIndent && (std::isspace(ch)) && (ch != '\n')) {
+                if(autoIndent && (std::isspace(ch) != 0) && (ch != '\n')) {
                     if(space1 < space0) {
                         ++space1;
                         continue;
@@ -194,7 +192,7 @@ struct Generator {
                     }
                     state = State::Code;
                 }
-                else if ((isalpha(ch)) || (ch == '_')) {
+                else if ((isalpha(ch) != 0) || (ch == '_')) {
                     key += ch;
                 }else{
                     sw.write("TAG({}", key);
@@ -206,7 +204,7 @@ struct Generator {
     }
 
     /// @brief optionally appends a #line to an expanded codeblock
-    inline void
+    static inline void
     generateCodeBlock(
         TextFileWriter& tw,
         const CodeBlock& codeblock,
@@ -215,13 +213,13 @@ struct Generator {
         const std::unordered_map<std::string, std::string>& vars
     ) {
         StringStreamWriter sw;
-        _expand(sw, codeblock.code, indent, autoIndent, vars);
+        _expand(sw, codeblock.code, autoIndent, vars, indent);
         if (codeblock.hasPos == false) {
             tw.swrite(sw);
             return;
         }
 
-        std::string pline = (genLines == false) ? "//" : "";
+        std::string pline = (opts().genLines == false) ? "//" : "";
 
         tw.writeln();
         tw.writeln("{}{}#line {} \"{}\" //t={},s={}", indent, pline, codeblock.pos.row, codeblock.pos.file, tw.row, sw.row);
@@ -230,7 +228,7 @@ struct Generator {
     }
 
     /// @brief writes expanded codeblock to output stream if the codeblock is not empty
-    inline void
+    static inline void
     generatePrototypeLine(
         TextFileWriter& tw,
         const std::string_view& line,
@@ -242,7 +240,7 @@ struct Generator {
             tw.writeln();
         }else{
             StringStreamWriter sw;
-            _expand(sw, line, indent, false, vars);
+            _expand(sw, line, false, vars, indent);
             tw.swriteln(sw);
         }
     }
@@ -258,19 +256,20 @@ struct Generator {
         const std::string& msg,
         const std::string_view& indent,
         const std::unordered_map<std::string, std::string>& vars
-    ) {
+    ) const {
         auto xvars = vars;
         xvars["ROW"] = line;
         xvars["COL"] = col;
         xvars["SRC"] = file;
         xvars["MSG"] = msg;
         StringStreamWriter sw;
-        _expand(sw, throwError.code, indent, true, xvars);
+        _expand(sw, throwError.code, true, xvars, indent);
         tw.swriteln(sw);
     }
 
     /// @brief Construct a full function name given a rule and a short function name
-    inline std::string getFunctionName(const ygp::Rule& r, const std::string& fname) const {
+    static inline auto
+    getFunctionName(const ygp::Rule& r, const std::string& fname) -> std::string {
         return std::format("{}_{}", r.ruleName, fname);
     }
 
@@ -278,7 +277,7 @@ struct Generator {
     /// If the node is a terminal, returns the default token class name
     /// If non-terminal, return the AST node name for the rule
     /// (which is the same as the rule name)
-    inline std::string getNodeType(const ygp::Node& n) const {
+    inline auto getNodeType(const ygp::Node& n) const -> std::string {
         std::string nativeType;
         if(n.isRegex() == true) {
             nativeType = grammar.tokenClass;
@@ -305,7 +304,7 @@ struct Generator {
             isUnused = "[[maybe_unused]]";
         }
 
-        for(auto& n : r.nodes) {
+        for(const auto& n : r.nodes) {
             auto varName = n->varName;
             if(varName.size() == 0) {
                 continue;
@@ -338,8 +337,9 @@ struct Generator {
     /// This logic assumes that the variable name is always after the type.
     /// It will fail in cases where the variable name is inside the type-spec
     /// such as in case of function pointers
-    inline std::string extractParams(const std::string& args) {
-        enum class State {
+    static inline auto
+    extractParams(const std::string& args) -> std::string {
+        enum class State : uint8_t {
             Init,
             Var,
             Type,
@@ -348,12 +348,11 @@ struct Generator {
         std::vector<std::string> vars;
         State state = State::Init;
         std::string var;
-        for(auto it = args.rbegin(), ite = args.rend(); it != ite; ++it) {
-            auto& ch = *it;
+        for(const auto& ch : std::ranges::reverse_view(args)) {
             switch(state) {
             case State::Init:
                 // print("Init: ch={}", ch);
-                if(std::isspace(ch)) {
+                if(std::isspace(ch) != 0) {
                     break;
                 }
                 var = ch;
@@ -361,8 +360,8 @@ struct Generator {
                 break;
             case State::Var:
                 // print("Var: ch={}", ch);
-                if(std::isspace(ch)) {
-                    std::reverse(var.begin(), var.end());
+                if(std::isspace(ch) != 0) {
+                    std::ranges::reverse(var);
                     vars.push_back(var);
                     state = State::Type;
                     break;
@@ -396,35 +395,35 @@ struct Generator {
 
     /// @brief generates code to include header files in the parser's header file
     inline void generateHdrHeaders(TextFileWriter& tw, const std::string_view& indent) {
-        for (auto& h : grammar.hdrHeaders) {
+        for (const auto& h : grammar.hdrHeaders) {
             tw.writeln("{}#include \"{}\"", indent, h);
         }
     }
 
     /// @brief generates code to include header files in the parser's source file
     inline void generateSrcHeaders(TextFileWriter& tw, const std::string_view& indent) {
-        for (auto& h : grammar.srcHeaders) {
+        for (const auto& h : grammar.srcHeaders) {
             tw.writeln("{}#include \"{}\"", indent, h);
         }
     }
 
     /// @brief generates additional class members for the parser, if any are specified in the .y file
     inline void generateClassMembers(TextFileWriter& tw, const std::string_view& indent) {
-        for (auto& m : grammar.classMembers) {
+        for (const auto& m : grammar.classMembers) {
             tw.writeln("{}{};", indent, m);
         }
     }
 
     /// @brief generates declarations for all AST nodes
     inline void generateAstNodeDecls(TextFileWriter& tw, const std::string_view& indent) {
-        for (auto& rs : grammar.ruleSets) {
+        for (const auto& rs : grammar.ruleSets) {
             tw.writeln("{}struct {};", indent, rs->name);
         }
     }
 
     /// @brief generates definitions for all AST nodes
     inline void generateAstNodeDefns(TextFileWriter& tw, const std::string_view& indent) {
-        for (auto& rs : grammar.ruleSets) {
+        for (const auto& rs : grammar.ruleSets) {
             tw.writeln("{}struct {} : public NonCopyable {{", indent, rs->name);
             tw.writeln("{}    const FilePos pos;", indent);
 
@@ -450,7 +449,7 @@ struct Generator {
 
                 tw.writeln("{}        inline void dump(std::ostream& ss, const size_t& lvl, const FilePos& p, const std::string& indent, const size_t& depth) const {{", indent);
                 tw.writeln("{}            if(lvl >= 2) {{", indent);
-                tw.writeln("{}                ss << std::format(\"{{}}: {{}}+--{}\\n\", p.str(), indent);", indent, r->str(false));
+                tw.writeln(R"({}                ss << std::format("{{}}: {{}}+--{}\n", p.str(), indent);)", indent, r->str(false));
                 for (size_t idx = 0; idx < r->nodes.size(); ++idx) {
                     auto& n = r->nodes.at(idx);
                     auto varName = n->varName;
@@ -458,15 +457,15 @@ struct Generator {
                         varName = std::format("{}{}", n->name, idx);
                     }
                     if(n->isRule() == true) {
-                        tw.writeln("{}                {}.dump(ss, lvl, indent + \"|  \", depth + 1);", indent, varName);
+                        tw.writeln(R"({}                {}.dump(ss, lvl, indent + "|  ", depth + 1);)", indent, varName);
                     }else{
                         assert(n->isRegex() == true);
-                        tw.writeln("{}                {}.dump(ss, lvl, \"{}\", indent + \"|  \", depth + 1);", indent, varName, n->name);
+                        tw.writeln(R"({}                {}.dump(ss, lvl, "{}", indent + "|  ", depth + 1);)", indent, varName, n->name);
                     }
                 }
                 tw.writeln("{}            }}else{{", indent);
                 tw.writeln("{}                assert(lvl == 1);", indent);
-                tw.writeln("{}                ss << std::format(\"{{}}{{}}:{}(\", indent, depth);", indent, r->ruleName);
+                tw.writeln(R"({}                ss << std::format("{{}}{{}}:{}(", indent, depth);)", indent, r->ruleName);
                 auto ind = std::format("\"\"");
                 for (size_t idx = 0; idx < r->nodes.size(); ++idx) {
                     auto& n = r->nodes.at(idx);
@@ -514,9 +513,7 @@ struct Generator {
             tw.writeln("{}    }}", indent);
             tw.writeln();
 
-            auto anchorArg = std::format(", const {}& a", grammar.tokenClass);
-            auto anchorCtor = ", anchor(a)";
-            tw.writeln("{}    explicit inline {}(const FilePos& p{}) : pos(p){} {{}}", indent, rs->name, anchorArg, anchorCtor);
+            tw.writeln("{}    explicit inline {}(const FilePos& p, const {}& a) : pos(p), anchor(a) {{}}", indent, rs->name, grammar.tokenClass);
             tw.writeln("{}}}; // struct {}", indent, rs->name);
             tw.writeln();
         }
@@ -526,7 +523,7 @@ struct Generator {
     inline void generateAstNodeItems(TextFileWriter& tw, const std::string_view& indent) {
         tw.writeln("{}using AstNode = std::variant<", indent);
         tw.writeln("{}    {}", indent, grammar.tokenClass);
-        for (auto& rs : grammar.ruleSets) {
+        for (const auto& rs : grammar.ruleSets) {
             tw.writeln("{}    ,{}", indent, rs->name);
         }
         tw.writeln("{}>;", indent);
@@ -581,7 +578,7 @@ struct Generator {
         const yg::Walker::FunctionSig& fsig,
         const ygp::RuleSet& rs,
         const ygp::Rule& r,
-        const std::string& called,
+        const std::string_view& called,
         const std::string& xparams,
         const std::string_view& indent
     ) {
@@ -592,7 +589,7 @@ struct Generator {
         std::stringstream params;
         std::string node_unused = "[[maybe_unused]]";
         std::string sep;
-        for (auto& n : r.nodes) {
+        for (const auto& n : r.nodes) {
             if (n->varName.size() > 0) {
                 params << std::format("{}{}", sep, n->varName);
                 node_unused.clear();
@@ -608,7 +605,7 @@ struct Generator {
         tw.writeln("{}        [&]({}const {}::{}& _n) -> {} {{", indent, node_unused, rs.name, r.ruleName, fsig.type);
 
         // generate node-refs
-        for (auto& n : r.nodes) {
+        for (const auto& n : r.nodes) {
             if(n->name == grammar.end) {
                 continue;
             }
@@ -631,7 +628,7 @@ struct Generator {
 
         // if top-down traversal, invoke all nodes that were not invoked in the handler
         if(walker.traversalMode == yg::Walker::TraversalMode::TopDown) {
-            for (auto& n : r.nodes) {
+            for (const auto& n : r.nodes) {
                 if((n->name != grammar.end) && (n->isRule() == true) && (fsig.isUDF == false)) {
                     if (n->varName.size() > 0) {
                         tw.writeln("{}            if({}.called == false) {}({});", indent, n->varName, fsig.func, n->varName);
@@ -690,7 +687,7 @@ struct Generator {
         }
 
         // generate handlers for all rules in ruleset
-        for (auto& r : rs.rules) {
+        for (const auto& r : rs.rules) {
             generateRuleVisitorBody(tw, walker, fsig, rs, *r, called, xparams, indent);
         }
         tw.writeln("{}    }}, node.node.rule);", indent);
@@ -720,11 +717,11 @@ struct Generator {
             isVirtual = "virtual";
         }
 
-        for(auto& prs : grammar.ruleSets) {
+        for(const auto& prs : grammar.ruleSets) {
             auto& rs = *prs;
             auto funcl = walker.getFunctions(rs);
             for(auto& pfi : funcl) {
-                auto& fi = *pfi;
+                const auto& fi = *pfi;
                 auto isv = isVirtual;
                 auto iso = isOverride;
                 if(fi.isUDF == true) {
@@ -734,7 +731,7 @@ struct Generator {
 
                 for(auto& pr : rs.rules) {
                     auto& r = *pr;
-                    auto ci = walker.hasCodeblock(r, fi.func);
+                    const auto* ci = walker.hasCodeblock(r, fi.func);
                     if((grammar.isDerivedWalker(walker) == true) && (ci == nullptr)) {
                         continue;
                     }
@@ -750,7 +747,8 @@ struct Generator {
     }
 
     /// @brief generates writer for Walker
-    inline void generateWriter(
+    static inline void
+    generateWriter(
         TextFileWriter& tw,
         const yg::Walker& walker,
         const std::string_view& indent
@@ -779,7 +777,7 @@ struct Generator {
         auto xindent = std::string(indent) + "    ";
 
         // generate Walkers
-        for (auto& pwalker : grammar.walkers) {
+        for (const auto& pwalker : grammar.walkers) {
             auto& walker = *pwalker;
             auto wname = std::format("Walker_{}", walker.name);
             tw.writeln();
@@ -811,7 +809,7 @@ struct Generator {
 
     /// @brief generates code to add default Walker, if none specified
     inline void generateInitWalkers(TextFileWriter& tw, const std::string_view& indent) {
-        for (auto& pwalker : grammar.walkers) {
+        for (const auto& pwalker : grammar.walkers) {
             auto& walker = *pwalker;
             if(grammar.isBaseWalker(walker) == true) {
                 continue;
@@ -827,7 +825,7 @@ struct Generator {
             return;
         }
 
-        for (auto& pwalker : grammar.walkers) {
+        for (const auto& pwalker : grammar.walkers) {
             auto& walker = *pwalker;
             if(grammar.isBaseWalker(walker) == true) {
                 continue;
@@ -846,22 +844,30 @@ struct Generator {
     }
 
     /// @brief generates all Token IDs inside an enum in the prototype file
-    inline void generateTokenIDs(TextFileWriter& tw, const std::unordered_set<std::string>& tnames) {
-        for (auto& t : tnames) {
+    static inline void
+    generateTokenIDs(
+        TextFileWriter& tw,
+        const std::unordered_set<std::string>& tnames
+    ) {
+        for (const auto& t : tnames) {
             tw.writeln("        {},", t);
         }
     }
 
     /// @brief generates the string names for all Token IDs inside a map in the prototype file
-    inline void generateTokenIDNames(TextFileWriter& tw, const std::unordered_set<std::string>& tnames) {
-        for (auto& t : tnames) {
+    static inline void
+    generateTokenIDNames(
+        TextFileWriter& tw,
+        const std::unordered_set<std::string>& tnames
+    ) {
+        for (const auto& t : tnames) {
             tw.writeln("            {{ID::{}, \"{}\"}},", t, t);
         }
     }
 
     /// @brief generates function declarations to create each AST node
     inline void generateCreateASTNodesDecls(TextFileWriter& tw) {
-        for (auto& rs : grammar.ruleSets) {
+        for (const auto& rs : grammar.ruleSets) {
             tw.writeln("template<>");
             tw.writeln("inline {}::{}& Parser::create<{}::{}>(const ValueItem& vi);", grammar.astClass, rs->name, grammar.astClass, rs->name);
             tw.writeln();
@@ -871,7 +877,7 @@ struct Generator {
     /// @brief generates functions definitions to create each AST node
     /// These functions are called by the Parser on REDUCE actions
     inline void generateCreateASTNodesDefns(TextFileWriter& tw, const std::unordered_map<std::string, std::string>& vars) {
-        for (auto& rs : grammar.ruleSets) {
+        for (const auto& rs : grammar.ruleSets) {
             tw.writeln("template<>");
             tw.writeln("inline {}::{}& Parser::create<{}::{}>(const ValueItem& vi) {{", grammar.astClass, rs->name, grammar.astClass, rs->name);
             tw.writeln("    switch(vi.ruleID) {{");
@@ -932,7 +938,7 @@ struct Generator {
     /// Each case block checks the next Token received from the Lexer
     /// and decides whether to SHIFT, REDUCE or GOTO to the next state
     inline void generateParserTransitions(TextFileWriter& tw, const std::unordered_map<std::string, std::string>& vars) {
-        for (auto& ps : grammar.itemSets) {
+        for (const auto& ps : grammar.itemSets) {
             auto& itemSet = *ps;
             assert((itemSet.shifts.size() > 0) || (itemSet.reduces.size() > 0) || (itemSet.gotos.size() > 0));
             bool breaked = false;
@@ -940,11 +946,11 @@ struct Generator {
             std::string xsep;
 
             tw.writeln("            case {}:", itemSet.id);
-            tw.writeln("                std::print(log(), \"{{}}\", \"{}\\n\");", itemSet.str("", "\\n", true));
+            tw.writeln(R"(                std::print(log(), "{{}}", "{}\n");)", itemSet.str("", R"(\n)", true));
             tw.writeln("                switch(k.id) {{");
             for (auto& c : itemSet.shifts) {
-                for(auto& fb : c.first->fallbacks) {
-                    if ((itemSet.hasShift(*fb)) || (itemSet.hasReduce(*fb))) {
+                for(const auto& fb : c.first->fallbacks) {
+                    if ((itemSet.hasShift(*fb) != nullptr) || (itemSet.hasReduce(*fb) != nullptr)) {
                         continue;
                     }
                     tw.writeln("                case Tolkien::ID::{}: // SHIFT(fallback)", fb->name);
@@ -957,7 +963,7 @@ struct Generator {
                     tw.writeln("                    reduce(0, 1, 0, Tolkien::ID::{}, \"{}\");", e->name, e->name);
                     tw.writeln("                    stateStack.push_back(0);");
                 }
-                tw.writeln("                    std::print(log(), \"SHIFT {}: t={}\\n\");", c.second.next->id, c.first->name);
+                tw.writeln(R"(                    std::print(log(), "SHIFT {}: t={}\n");)", c.second.next->id, c.first->name);
                 tw.writeln("                    shift(k);");
                 tw.writeln("                    stateStack.push_back({});", c.second.next->id);
                 tw.writeln("                    return accepted;");
@@ -965,10 +971,10 @@ struct Generator {
                 xsep = ", ";
             }
             for (auto& rd : itemSet.reduces) {
-                auto& c = *(rd.second.next);
-                auto& r = c.rule;
+                const auto& c = *(rd.second.next);
+                const auto& r = c.rule;
                 tw.writeln("                case Tolkien::ID::{}: // REDUCE", rd.first->name);
-                tw.writeln("                    std::print(log(), \"REDUCE:{}:{{}}/{}\\n\", \"{}\");", rd.first->name, r.nodes.size(), c.str());
+                tw.writeln(R"(                    std::print(log(), "REDUCE:{}:{{}}/{}\n", "{}");)", rd.first->name, r.nodes.size(), c.str());
                 auto len = rd.second.len;
                 while(len < r.nodes.size()) {
                     tw.writeln("                    //shift-epsilon: len={}", len);
@@ -995,14 +1001,14 @@ struct Generator {
             }
             for (auto& c : itemSet.gotos) {
                 tw.writeln("                case Tolkien::ID::{}: // GOTO", c.first->name);
-                tw.writeln("                    std::print(log(), \"GOTO {}:id={}, rule={}\\n\");", c.second->id, c.first->id, c.first->name);
+                tw.writeln(R"(                    std::print(log(), "GOTO {}:id={}, rule={}\n");)", c.second->id, c.first->id, c.first->name);
                 tw.writeln("                    stateStack.push_back({});", c.second->id);
                 tw.writeln("                    k = k0;");
                 tw.writeln("                    break;");
                 breaked = true;
             }
             tw.writeln("                default:");
-            auto msg = std::format("\"SYNTAX_ERROR:received:\" + k.str() + \", expected:{}\"", xss.str());
+            auto msg = std::format(R"("SYNTAX_ERROR:received:" + k.str() + ", expected:{}")", xss.str());
             generateError(tw, "k.pos.row", "k.pos.col", "k.pos.file", msg, "                    ", vars);
             tw.writeln("                }} // switch(k.id)");
             if(breaked == true) {
@@ -1037,21 +1043,21 @@ struct Generator {
             inline Visitor(const yg::Grammar& g, TransitionSet& s, const yglx::Transition& x)
                 : grammar(g), tset(s), tx(x) {}
 
-            inline void operator()(const yglx::WildCard&) {
+            inline void operator()([[maybe_unused]] const yglx::WildCard& t) {
                 assert(tset.wildcard == nullptr);
                 tset.wildcard = &tx;
             }
 
             inline void operator()(const yglx::LargeEscClass& t) {
-                tset.largeEscClasses.push_back(std::make_pair(&tx, &t));
+                tset.largeEscClasses.emplace_back(&tx, &t);
             }
 
             inline void operator()(const yglx::RangeClass& t) {
                 bool isSmallRange = ((t.ch2 - t.ch1) <= grammar.smallRangeSize);
                 if (isSmallRange) {
-                    tset.smallRanges.push_back(std::make_pair(&tx, &t));
+                    tset.smallRanges.emplace_back(&tx, &t);
                 }else{
-                    tset.largeRanges.push_back(std::make_pair(&tx, &t));
+                    tset.largeRanges.emplace_back(&tx, &t);
                 }
             }
 
@@ -1060,7 +1066,7 @@ struct Generator {
             }
 
             inline void operator()(const yglx::ClassTransition& t) {
-                tset.classes.push_back(std::make_pair(&tx, &t));
+                tset.classes.emplace_back(&tx, &t);
             }
 
             inline void operator()(const yglx::ClosureTransition& t) {
@@ -1095,7 +1101,7 @@ struct Generator {
         };
 
         inline void process(const yg::Grammar& g, const std::vector<yglx::Transition*>& txs) {
-            for (auto& tx : txs) {
+            for (const auto& tx : txs) {
                 Visitor v(g, *this, *tx);
                 std::visit(v, tx->t);
             }
@@ -1103,7 +1109,13 @@ struct Generator {
     };
 
     /// @brief generate code to transition from one Lexer state to another
-    inline void generateStateChange(TextFileWriter& tw, const yglx::Transition& t, const yglx::State* nextState, const std::string& indent) {
+    static inline void
+    generateStateChange(
+        TextFileWriter& tw,
+        const yglx::Transition& t,
+        const yglx::State* nextState,
+        const std::string& indent
+    ) {
         if (t.capture) {
             tw.writeln("                {}token.addText(ch);", indent);
         }
@@ -1116,7 +1128,7 @@ struct Generator {
         tw.writeln("            case 0:");
         generateError(tw, "stream.pos.row", "stream.pos.col", "stream.pos.file", "\"LEXER_INTERNAL_ERROR\"", "                ", vars);
 
-        for (auto& ps : grammar.states) {
+        for (const auto& ps : grammar.states) {
             auto& state = *ps;
 
             TransitionSet tset;
@@ -1138,7 +1150,7 @@ struct Generator {
                 assert(tset.enterClosure.first == nullptr);
                 assert(tset.leaveClosure.first == nullptr);
 
-                auto& tx = *(tset.inLoop.second);
+                const auto& tx = *(tset.inLoop.second);
                 tw.writeln("                assert(counts.size() > 0);");
                 if (tset.preLoop.first != nullptr) {
                     tw.writeln("                if(count() < {}) {{", tx.atom.min);
@@ -1226,15 +1238,15 @@ struct Generator {
                 std::string sep;
                 std::string sepx = (t.second->atom.negate?" && ":" || ");
                 std::string negate = (t.second->atom.negate?"!":"");
-                for(auto& ax : t.second->atom.atoms) {
+                for(const auto& ax : t.second->atom.atoms) {
                     std::visit(overload{
-                        [&negate, &ss, &sep](const yglx::WildCard&) {
+                        [&negate, &ss, &sep](const yglx::WildCard&) -> void {
                             ss << std::format("{}({}true)", sep, negate);
                         },
-                        [&negate, &ss, &sep](const yglx::LargeEscClass& a) {
+                        [&negate, &ss, &sep](const yglx::LargeEscClass& a) -> void {
                             ss << std::format("{}({}{}(ch))", sep, negate, a.checker);
                         },
-                        [&negate, &ss, &sep](const yglx::RangeClass& a) {
+                        [&negate, &ss, &sep](const yglx::RangeClass& a) -> void {
                             ss << std::format("{}({}contains(ch, {}, {}))", sep, negate, getChString(a.ch1), getChString(a.ch2));
                         },
                     }, ax);
@@ -1258,7 +1270,7 @@ struct Generator {
                 tw.writeln("                counts.push_back({});", tset.enterClosure.second->initialCount);
                 tw.writeln("                state = {};", tset.enterClosure.first->next->id);
                 tw.writeln("                continue; //enterClosure");
-            }else if (state.matchedRegex) {
+            }else if (state.matchedRegex != nullptr) {
                 size_t nextStateID = 0;
                 switch(state.matchedRegex->modeChange) {
                 case yglx::Regex::ModeChange::None:
@@ -1303,14 +1315,15 @@ struct Generator {
     /// @brief main parser generator
     /// This function reads the prototype.cpp file (embedded as a raw string)
     /// and acts on each meta command found in the file.
-    inline void includeCodeBlock(
+    inline void
+    includeCodeBlock(
         const char* codeBlock,
         TextFileWriter& tw,
         const std::unordered_map<std::string, std::string>& vars,
         const std::unordered_set<std::string>& tnames,
         const std::filesystem::path& filebase,
         const std::string& srcName,
-        const std::string& outerIndent
+        const std::string_view& outerIndent
     ) {
         const std::string_view prefixEnterBlock = "///PROTOTYPE_ENTER:";
         const std::string_view prefixLeaveBlock = "///PROTOTYPE_LEAVE:";
@@ -1318,7 +1331,7 @@ struct Generator {
         const std::string_view includeSegment = "///PROTOTYPE_INCLUDE:";
         const std::string_view prefixTarget = "///PROTOTYPE_TARGET:";
 
-        enum class Token {
+        enum class Token : uint8_t {
             EnterBlock,
             LeaveBlock,
             Line,
@@ -1327,7 +1340,7 @@ struct Generator {
             Target,
         };
 
-        enum class TokenState {
+        enum class TokenState : uint8_t {
             InitWS,
             Slash1,
             Slash2,
@@ -1337,20 +1350,26 @@ struct Generator {
         std::string tblock;
 
         const std::string_view cb(codeBlock);
-        auto it = cb.begin();
-        auto ite = cb.end();
+        const auto* it = cb.begin();
+        const auto* ite = cb.end();
 
         // skip initial empty lines, if any
         while ((it != ite) && ((*it == '\r') || (*it == '\n'))) {
-            ++it;
+#if defined(__clang__)
+#pragma clang unsafe_buffer_usage begin
+#endif
+            ++it; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+#if defined(__clang__)
+#pragma clang unsafe_buffer_usage end
+#endif
         }
 
         bool skip = false;
         std::vector<std::string_view> eblockNames;
 
         while (it != ite) {
-            auto itb = it;
-            auto itl = it;
+            const auto* itb = it;
+            const auto* itl = it;
             bool initWS = true;
             while ((it != ite) && (*it != '\n')) {
                 if (initWS) {
@@ -1363,7 +1382,7 @@ struct Generator {
                 #if defined(__clang__)
                 #pragma clang unsafe_buffer_usage begin
                 #endif
-                ++it;
+                ++it; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
                 #if defined(__clang__)
                 #pragma clang unsafe_buffer_usage end
                 #endif
@@ -1411,7 +1430,7 @@ struct Generator {
 //#define PRINT(...) std::println(__VA_ARGS__)
 #define PRINT(...)
 
-            auto indent = outerIndent + std::string(innerIndent);
+            auto indent = std::string(outerIndent) + std::string(innerIndent);
 
             switch (token) {
             case Token::EnterBlock: {
@@ -1429,7 +1448,7 @@ struct Generator {
                 }
 
                 if (eblockName == "repl") {
-                    if (amalgamatedFile == true) {
+                    if (opts().amalgamatedFile == true) {
                         tw.writeln("#define HAS_REPL {}", (grammar.hasREPL == true)?1:0);
                         skip = false;
                     }else{
@@ -1439,7 +1458,7 @@ struct Generator {
                 }
 
                 if (eblockName == "fmain") {
-                    if (amalgamatedFile == true) {
+                    if (opts().amalgamatedFile == true) {
                         skip = false;
                     }else{
                         skip = true;
@@ -1501,7 +1520,7 @@ struct Generator {
                 }else if (segmentName == "prologue") {
                     generateCodeBlock(tw, grammar.prologue, indent, true, vars);
                 }else if (segmentName == "initWalkers") {
-                    if(amalgamatedFile) {
+                    if(opts().amalgamatedFile == true) {
                         generateInitWalkers(tw, indent);
                     }
                 }else if (segmentName == "walkerCalls") {
@@ -1555,15 +1574,14 @@ struct Generator {
             }
             case Token::Target: {
                 PRINT("Line::TARGET:{}", line);
-                if ((!amalgamatedFile) && (targetName == "SOURCE")) {
-                    auto hdrName = srcName;
+                if ((opts().amalgamatedFile == false) && (targetName == "SOURCE")) {
                     auto nsrcName = filebase.string() + ".cpp";
                     PRINT("reopening:{}", nsrcName);
                     tw.open(nsrcName);
                     if (tw.isOpen() == false) {
                         throw GeneratorError(__LINE__, __FILE__, grammar.pos(), "ERROR_OPENING_SRC:{}", nsrcName);
                     }
-                    tw.writeln("#include \"{}\"", std::filesystem::path(hdrName).filename().string());
+                    tw.writeln("#include \"{}\"", std::filesystem::path(srcName).filename().string());
                 }
                 break;
             }
@@ -1582,7 +1600,7 @@ struct Generator {
             #if defined(__clang__)
             #pragma clang unsafe_buffer_usage begin
             #endif
-            ++it;
+            ++it; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
             #if defined(__clang__)
             #pragma clang unsafe_buffer_usage end
             #endif
@@ -1602,7 +1620,7 @@ struct Generator {
         throwError = grammar.throwError;
 
         auto srcName = filebase.string() + ".hpp";
-        if(amalgamatedFile) {
+        if(opts().amalgamatedFile == true) {
             srcName = filebase.string() + ".cpp";
         }
         TextFileWriter tw;
@@ -1610,19 +1628,19 @@ struct Generator {
         if (tw.isOpen() == false) {
             throw GeneratorError(__LINE__, __FILE__, grammar.pos(), "ERROR_OPENING_SRC:{}", srcName);
         }
-        if(amalgamatedFile == false) {
+        if(opts().amalgamatedFile == false) {
             tw.writeln("#pragma once");
         }
 
         // token IDs
         std::unordered_set<std::string> tnames;
-        for (auto& t : grammar.regexes) {
+        for (const auto& t : grammar.regexes) {
             if (tnames.contains(t->regexName)) {
                 continue;
             }
             tnames.insert(t->regexName);
         }
-        for (auto& t : grammar.ruleSets) {
+        for (const auto& t : grammar.ruleSets) {
             if (tnames.contains(t->name)) {
                 assert(false);
                 continue;

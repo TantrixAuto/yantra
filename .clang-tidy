@@ -1,0 +1,48 @@
+---
+# Minimal clang-tidy configuration tuned for a C++20 project.
+# - Uses the file-formatting rules from .clang-format (FormatStyle: file)
+# - Runs a conservative set of checks: static analyzer, bugprone, modernize,
+#   performance, readability, and C++ Core Guidelines.
+# - Limit analysis to sources under src/ using HeaderFilterRegex.
+
+Checks: >
+  clang-analyzer-*,
+  performance-*,
+
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+
+  modernize-*,
+  -modernize-use-nodiscard,
+  -modernize-pass-by-value,
+
+  readability-*,
+  -readability-identifier-length,
+  -readability-redundant-inline-specifier,
+  -readability-simplify-boolean-expr,
+  -readability-container-size-empty,
+  -readability-function-cognitive-complexity,
+  -readability-use-concise-preprocessor-directives,
+  -readability-static-accessed-through-instance,
+  -readability-named-parameter,
+
+  cppcoreguidelines-*,
+  -cppcoreguidelines-avoid-const-or-ref-data-members,
+  -cppcoreguidelines-special-member-functions,
+
+  hicpp-*,
+  -hicpp-special-member-functions,
+  -hicpp-named-parameter
+
+# Do not treat clang-tidy warnings as errors by default; CI can override.
+WarningsAsErrors: ''
+
+# Only run on headers/translation units under `src/` by default to keep
+# third-party and generated code out of the default sweep.
+HeaderFilterRegex: 'src/.*'
+
+# Use .clang-format file to determine formatting-related fixes.
+FormatStyle: file
+
+# Enable a couple of analyzer options to catch more lifetime/temporary issues.
+#AnalyzeTemporaryDtors: true

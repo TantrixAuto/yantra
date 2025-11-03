@@ -33,19 +33,13 @@ A token definition consists of:
 - a token name, which must consist of uppercase letters,
 - followed by a `:=`
 - followed by a regular expression that defines the token.
-- optionally followed by a precedence specifier
+- optionally followed by a lexer mode specifier
 - ending with either a semi-colon
 
 This is an example of a token that ends with a semi-colon.
 ```
 STAR := "\*";
 ```
-
-This is an example of a token that defines a precedence.
-```
-SLASH := "/" [STAR];
-```
-In this case, the SLASH token has the same precedence as the STAR token.
 
 ### Lexer Modes
 Yantra supports multiple lexer modes, where the same regex can result in a different token, depending on the current lexer mode.

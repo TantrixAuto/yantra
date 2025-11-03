@@ -17,7 +17,7 @@ struct CodeBlock {
     std::string code;
 
     /// @brief true if this codeblock is not empty
-    inline bool hasCode() const {
+    inline auto hasCode() const -> bool{
         return code.size() > 0;
     }
 

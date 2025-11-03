@@ -16,7 +16,7 @@ struct LexerStateMachineBuilder {
     inline LexerStateMachineBuilder(yg::Grammar& g, yglx::State* s)
         : grammar(g), currentState(s) {}
 
-    inline yglx::State* getCurrentState() const {
+    inline auto getCurrentState() const -> yglx::State* {
         assert(currentState != nullptr);
         return currentState;
     }
@@ -32,12 +32,12 @@ struct LexerStateMachineBuilder {
         }
     }
 
-    inline const yglx::Atom& atom() const {
+    inline auto atom() const -> const yglx::Atom& {
         assert(_atom);
         return *_atom;
     }
 
-    struct Tracer {
+    struct Tracer : public NonCopyable {
         const LexerStateMachineBuilder& lxb;
         const std::string fn;
 
@@ -61,14 +61,14 @@ struct LexerStateMachineBuilder {
     };
 
     template<typename AtomT>
-    inline yglx::State* updateStateX(const yglx::Primitive& pa, const AtomT& a, yglx::State* state, yglx::State* nextState) {
+    inline auto updateStateX(const yglx::Primitive& pa, const AtomT& a, yglx::State* state, yglx::State* nextState) -> yglx::State* {
         yglx::Transition* t = state->getTransition(a);
         if((t != nullptr) && (t->next != nullptr)) {
             setStartClosureTransition(t);
             return t->next;
         }
 
-        auto s = nextState;
+        auto* s = nextState;
         if(s == nullptr) {
             s = grammar.createNewState(pa.pos);
         }
@@ -101,7 +101,7 @@ struct LexerStateMachineBuilder {
     inline void operator()(const yglx::Primitive& a) {
         Tracer _t(*this, std::format("Primitive:{}", a.str()));
 
-        std::visit([this, &a](const auto& ax){
+        std::visit([this, &a](const auto& ax) -> void {
             updateState(a, ax);
         }, a.atom);
     }
@@ -116,14 +116,14 @@ struct LexerStateMachineBuilder {
             return;
         }
 
-        auto xstate = grammar.createNewState(a.pos);
+        auto* xstate = grammar.createNewState(a.pos);
         t = grammar.addClassTransition(a, getCurrentState(), xstate, inCapture);
         setStartClosureTransition(t);
         setCurrentState(xstate);
     }
 
     inline void operator()(const yglx::Sequence& a) {
-        Tracer _t(*this, std::format("Sequence:{}", a.str()));
+        Tracer _t(*this, std::format("Sequence:{}", a.str())); //NOLINT(readability-static-accessed-through-instance)
 
         process(*(a.lhs));
         process(*(a.rhs));
@@ -132,9 +132,9 @@ struct LexerStateMachineBuilder {
     inline void operator()(const yglx::Disjunct& a) {
         Tracer _t(*this, std::format("Disjunct:{}", a.str()));
 
-        auto s0 = getCurrentState();
+        auto* s0 = getCurrentState();
         process(*(a.lhs));
-        auto s1 = getCurrentState();
+        auto* s1 = getCurrentState();
 
         setCurrentState(s0);
         process(*(a.rhs));
@@ -157,23 +157,23 @@ struct LexerStateMachineBuilder {
         Tracer _t(*this, std::format("Closure:{}", a.str()));
 
         startClosureTransition = nullptr;
-        auto s0 = getCurrentState();
+        auto* s0 = getCurrentState();
         process(*(a.atom));
-        auto s1 = getCurrentState();
+        auto* s1 = getCurrentState();
         assert(startClosureTransition != nullptr);
 
         if(s1->closure != nullptr) {
             assert(s1->leaveClosureTransition != nullptr);
             assert(s1->checkClosureTransition != nullptr);
             assert(startClosureTransition->compare(*(s1->checkClosureTransition)) == 0);
-            auto sx = s1->leaveClosureTransition->next;
+            auto* sx = s1->leaveClosureTransition->next;
             setCurrentState(sx);
         }else{
-            auto s2 = grammar.createNewState(a.pos);
-            auto enterClosureTransition = grammar.addEnterClosureTransition(a, getCurrentState(), s2, inCapture, 1);
+            auto* s2 = grammar.createNewState(a.pos);
+            auto* enterClosureTransition = grammar.addEnterClosureTransition(a, getCurrentState(), s2, inCapture, 1);
             setCurrentState(s2);
 
-            auto s3 = grammar.createNewState(a.pos);
+            auto* s3 = grammar.createNewState(a.pos);
             if(a.min > 1) {
                 grammar.addPreLoopTransition(a, s2, s3, inCapture);
                 setCurrentState(s3);
@@ -187,11 +187,11 @@ struct LexerStateMachineBuilder {
             process(*(a.atom));
             grammar.redirectState(s2, getCurrentState());
             assert(s3->transitions.size() == 1);
-            auto checkClosureTransition = s3->transitions.at(0);
+            auto* checkClosureTransition = s3->transitions.at(0);
 
-            auto sx = grammar.createNewState(a.pos);
+            auto* sx = grammar.createNewState(a.pos);
             grammar.addPostLoopTransition(a, s2, sx, inCapture);
-            auto leaveClosureTransition = grammar.addLeaveClosureTransition(a, s3, sx, inCapture);
+            auto* leaveClosureTransition = grammar.addLeaveClosureTransition(a, s3, sx, inCapture);
             if(a.min == 0) {
                 closureState = s0;
             }
@@ -211,7 +211,7 @@ struct LexerStateMachineBuilder {
     void process(const yglx::Atom& a) {
         auto xindent = indent;
         indent = indent + "-";
-        auto xatom = _atom;
+        const auto* xatom = _atom;
         _atom = &a;
         std::visit(*this, a.atom);
         _atom = xatom;
@@ -223,9 +223,9 @@ struct Optimizer {
     yg::Grammar& grammar;
     std::unordered_set<const yglx::State*> vset;
 
-    inline Optimizer(yg::Grammar& g) : grammar(g) {}
+    explicit inline Optimizer(yg::Grammar& g) : grammar(g) {}
 
-    inline bool isVisited(const yglx::State* state) {
+    inline auto isVisited(const yglx::State* state) -> bool {
         if(vset.contains(state) == true) {
             return true;
         }
@@ -233,16 +233,15 @@ struct Optimizer {
         return false;
     }
 
-    inline bool contains(std::vector<yglx::Transition*>& dst, const yglx::Transition* tx) {
-        for (auto& ptx : dst) {
-            if(ptx->compare(*tx) == 0) {
-                return true;
-            }
-        }
-        return false;
+    static inline auto
+    contains(std::vector<yglx::Transition*>& dst, const yglx::Transition* tx) -> bool {
+        return std::ranges::any_of(dst, [&](yglx::Transition* ptx) -> bool {
+            return ptx->compare(*tx) == 0;
+        });
     }
 
-    inline bool contains(yglx::State* state, yglx::Transition* stx) {
+    static inline auto
+    contains(yglx::State* state, yglx::Transition* stx) -> bool {
         if(contains(state->transitions, stx) || contains(state->superTransitions, stx) || contains(state->shadowTransitions, stx)) {
             return true;
         }
@@ -251,9 +250,13 @@ struct Optimizer {
 
     //TODO: find smallest superset
     // right now this function returns the first valid superset
-    inline const yglx::Transition*
-    _findSmallestSuperset(const yglx::Transition* subTx, const yglx::State* superState, const bool& isClosure) const {
-        for(auto& superTx : superState->transitions) {
+    static inline auto
+    _findSmallestSuperset(
+        const yglx::Transition* subTx,
+        const yglx::State* superState,
+        const bool& isClosure
+    ) -> const yglx::Transition* {
+        for(const auto& superTx : superState->transitions) {
             if(isClosure == true) {
                 if(superTx->next->closure == nullptr) {
                     continue;
@@ -275,35 +278,35 @@ struct Optimizer {
         return nullptr;
     }
 
-    inline const yglx::Transition*
-    findSmallestSuperset(const yglx::Transition* subTx, const yglx::State* superState) const {
+    static inline auto
+    findSmallestSuperset(const yglx::Transition* subTx, const yglx::State* superState) -> const yglx::Transition* {
         return _findSmallestSuperset(subTx, superState, false);
     }
 
-    inline const yglx::Transition*
-    findSmallestClosureSuperset(const yglx::Transition* subTx, const yglx::State* superState) const {
+    static inline auto
+    findSmallestClosureSuperset(const yglx::Transition* subTx, const yglx::State* superState) -> const yglx::Transition* {
         return _findSmallestSuperset(subTx, superState, true);
     }
 
-    inline yglx::Transition*
-    cloneTransition(const yglx::Transition& srcTx, yglx::State* from, yglx::State* next) {
-        auto ntx = grammar.cloneTransition(srcTx, from, next);
+    inline auto
+    cloneTransition(const yglx::Transition& srcTx, yglx::State* from, yglx::State* next) -> yglx::Transition* {
+        auto* ntx = grammar.cloneTransition(srcTx, from, next);
         from->superTransitions.push_back(ntx);
         return ntx;
     }
 
-    inline yglx::Transition*
+    inline auto
     createEnterTransition(
         const yglx::Transition& checkClosureTx,
         const yglx::Transition& enterClosureTx,
         yglx::State* from,
         yglx::State* next,
         const size_t& initialCount
-    ) {
-        auto istate = grammar.createNewState(from->pos);
+    ) -> yglx::Transition* {
+        auto* istate = grammar.createNewState(from->pos);
         cloneTransition(checkClosureTx, from, istate);
-        auto ntx = cloneTransition(enterClosureTx, istate, next);
-        if(auto nctx = ntx->isClosure(yglx::ClosureTransition::Type::Enter)) {
+        auto* ntx = cloneTransition(enterClosureTx, istate, next);
+        if(auto* nctx = ntx->isClosure(yglx::ClosureTransition::Type::Enter)) {
             nctx->initialCount = initialCount;
         }else{
             assert(false);
@@ -320,11 +323,11 @@ struct Optimizer {
         assert(superTx->next->closure != nullptr);
         assert(superTx->next->closureState != nullptr);
 
-        auto& nextClosure = *(superTx->next->closure);
+        const auto& nextClosure = *(superTx->next->closure);
         auto& nextClosureState = *(superTx->next->closureState);
-        auto& enterClosureTx = superTx->next->enterClosureTx();
-        auto& leaveClosureTx = superTx->next->leaveClosureTx();
-        auto& checkClosureTx = superTx->next->checkClosureTx();
+        const auto& enterClosureTx = superTx->next->enterClosureTx();
+        const auto& leaveClosureTx = superTx->next->leaveClosureTx();
+        const auto& checkClosureTx = superTx->next->checkClosureTx();
 
         for(auto& subTx : state->transitions) {
             if(subTx == superTx) {
@@ -358,7 +361,7 @@ struct Optimizer {
         const std::string& indent
     ) {
         for(auto& subTx : subState->transitions) {
-            auto superTx = findSmallestSuperset(subTx, superState);
+            const auto* superTx = findSmallestSuperset(subTx, superState);
             if(superTx == nullptr) {
                 continue;
             }
@@ -368,11 +371,11 @@ struct Optimizer {
                     continue;
                 }
                 if(stx->next->closure != nullptr) {
-                    auto& nextClosure = *(stx->next->closure);
+                    const auto& nextClosure = *(stx->next->closure);
                     if(nextClosure.min == 0) {
-                        auto& enterClosureTx = stx->next->enterClosureTx();
-                        auto& checkClosureTx = stx->next->checkClosureTx();
-                        auto& leaveClosureTx = stx->next->leaveClosureTx();
+                        const auto& enterClosureTx = stx->next->enterClosureTx();
+                        const auto& checkClosureTx = stx->next->checkClosureTx();
+                        const auto& leaveClosureTx = stx->next->leaveClosureTx();
                         createEnterTransition(checkClosureTx, enterClosureTx, subTx->next, stx->next->closureState, initialCount);
                         cloneTransition(leaveClosureTx, subTx->next, leaveClosureTx.next);
                     }
@@ -393,7 +396,7 @@ struct Optimizer {
         setSuperState(state, state, 1, indent);
 
         for(auto& subTx : state->transitions) {
-            auto superTx = findSmallestClosureSuperset(subTx, state);
+            const auto* superTx = findSmallestClosureSuperset(subTx, state);
             if(superTx == nullptr) {
                 continue;
             }

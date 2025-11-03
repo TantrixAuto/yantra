@@ -19,10 +19,10 @@ set(LINE "")
 math(EXPR index 0)
 
 # write code to declare the string literal
-file(APPEND ${CODEBLOCK_FILE} "extern const char* ${VARNAME};\n")
+file(APPEND ${CODEBLOCK_FILE} "extern const char* const ${VARNAME};\n")
 
 # write code to open the string literal
-file(APPEND ${CODEBLOCK_FILE} "const char* ${VARNAME} = R\"ENDTABLES(\n")
+file(APPEND ${CODEBLOCK_FILE} "const char* const ${VARNAME} = R\"ENDTABLES(\n")
 
 # iterate over each character in `file_content`
 while(index LESS length)

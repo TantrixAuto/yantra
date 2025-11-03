@@ -8,17 +8,12 @@
 #include "tx_table.hpp"
 #include "grammar_printer.hpp"
 #include "config.hpp"
+#include "options.hpp"
 
-/// @brief filename where the AST is logged in markdown format
-static std::string gfilename;
-
-bool amalgamatedFile = false;
 static bool verbose = false;
 
-extern bool genLines;
-bool genLines = true;
-
 namespace {
+
 using LexerTable = Table<const yglx::State*, std::string, std::string>;
 inline void generateLexerTable(std::ostream& os, const yg::Grammar& g) {
     LexerTable pt;
@@ -150,7 +145,7 @@ inline void processInputEx(
     std::filesystem::path d(odir);
     auto f = d / oname;
 
-    printGrammar(g, gfilename);
+    printGrammar(g, opts().gfilename);
 
     if(verbose == true) {
         std::println("Generating: {}", f.string());
@@ -192,8 +187,13 @@ inline int help(const std::string& xname, const std::string& msg) {
     return 1;
 }
 
+static Options options;
 std::ofstream logfile;
 std::ostream* logc = nullptr;
+}
+
+const Options& opts() {
+    return options;
 }
 
 std::ostream& Logger::olog() {
@@ -266,20 +266,20 @@ int main(int argc, const char* argv[]) {
             }
             logname = argv[i];
         }else if(a == "-a") {
-            amalgamatedFile = true;
+            options.amalgamatedFile = true;
         }else if(a == "-m") {
             verbose = true;
         }else if((a == "-v") || (a == "--version")) {
             std::println("{}", YANTRA_VERSION_STRING);
             return 0;
         }else if(a == "-r") {
-            genLines = false;
+            options.genLines = false;
         }else if(a == "-g") {
             ++i;
             if(i >= argc) {
                 return help(argv[0], "invalid grammar filename");
             }
-            gfilename = argv[i];
+            options.gfilename = argv[i];
         }else {
             return help(argv[0], "unknown option:" + a);
         }

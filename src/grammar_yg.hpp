@@ -20,7 +20,7 @@ namespace yg {
 /// @brief this class represents a Walker, used to traverse an AST
 struct Walker : public NonCopyable {
     /// @brief the traversal mode
-    enum class TraversalMode {
+    enum class TraversalMode : uint8_t {
         /// @brief the parent nodes must explicitly call the child nodes
         Manual,
 
@@ -30,7 +30,7 @@ struct Walker : public NonCopyable {
     };
 
     /// @brief output type for this walker
-    enum class OutputType {
+    enum class OutputType : uint8_t {
         /// @brief no output
         None,
 
@@ -106,7 +106,7 @@ struct Walker : public NonCopyable {
     /// @brief all codeblocks defined in this walker, mapped by Rule
     std::unordered_map<const ygp::Rule*, std::vector<CodeInfo>> codeblocks;
 
-    inline Walker(const std::string& n, const Walker* b) : name(n), base(b) {}
+    inline Walker(std::string n, const Walker* b) : name(std::move(n)), base(b) {}
 
     /// @brief set traversal mode for this walker
     inline void setTraversalMode(const TraversalMode& m) {
@@ -130,10 +130,14 @@ struct Walker : public NonCopyable {
     }
 
     /// @brief check if this walker, or any of it base walkers, have a function sig
-    inline const FunctionSig* hasFunctionSig(const ygp::RuleSet& rs, const std::string& func) const {
+    inline auto
+    hasFunctionSig(
+        const ygp::RuleSet& rs,
+        const std::string& func
+    ) const -> const FunctionSig*{
         if(auto it = functionSigs.find(&rs); it != functionSigs.end()) {
-            auto& tlist = it->second;
-            for(auto& t : tlist) {
+            const auto& tlist = it->second;
+            for(const auto& t : tlist) {
                 if(t.func == func) {
                     return &t;
                 }
@@ -146,13 +150,13 @@ struct Walker : public NonCopyable {
     }
 
     /// @brief get list of all function sigs defined for specified RuleSet, in this walker,
-    inline std::vector<const FunctionSig*> getFunctions(const ygp::RuleSet& rs) const {
+    inline auto getFunctions(const ygp::RuleSet& rs) const -> std::vector<const FunctionSig*>{
         std::vector<const FunctionSig*> l;
 
         bool defaultFunctionDefined = false;
-        for(auto& fsig : functionSigs) {
+        for(const auto& fsig : functionSigs) {
             if(fsig.first->name == rs.name) {
-                for(auto& i : fsig.second) {
+                for(const auto& i : fsig.second) {
                     if(i.func.size() > 0) {
                         l.push_back(&i);
                         if(i.func == defaultFunctionName) {
@@ -185,7 +189,7 @@ struct Walker : public NonCopyable {
             throw GeneratorError(__LINE__, __FILE__, npos, "DUPLICATE_FUNCTION:{}/{}::{}", rs.name, name, func);
         }
         auto& tlist = functionSigs[&rs];
-        tlist.push_back(FunctionSig());
+        tlist.emplace_back();
         auto& ti = tlist.back();
         ti.isUDF = isUDF;
         ti.func = func;
@@ -195,10 +199,14 @@ struct Walker : public NonCopyable {
     }
 
     /// @brief check if a codeblock is defined for specified function in this walker,
-    inline const CodeInfo* hasCodeblock(const ygp::Rule& r, const std::string& func) const {
+    inline auto
+    hasCodeblock(
+        const ygp::Rule& r,
+        const std::string& func
+    ) const -> const CodeInfo* {
         if(auto it = codeblocks.find(&r); it != codeblocks.end()) {
-            auto& tlist = it->second;
-            for(auto& t : tlist) {
+            const auto& tlist = it->second;
+            for(const auto& t : tlist) {
                 if(t.func == func) {
                     return &t;
                 }
@@ -213,7 +221,7 @@ struct Walker : public NonCopyable {
         const ygp::Rule& r,
         const std::string& func,
         const std::string& codeblock
-        ) {
+    ) {
         if((hasFunctionSig(*(r.ruleSet), func) == nullptr) && (func.size() > 0) && (func != defaultFunctionName)) {
             throw GeneratorError(__LINE__, __FILE__, npos, "UNKNOWN_FUNCTION:{}", func);
         }
@@ -221,7 +229,7 @@ struct Walker : public NonCopyable {
             throw GeneratorError(__LINE__, __FILE__, npos, "DUPLICATE_CODEBLOCK:{}::{}::{}", r.ruleSetName(), name, func);
         }
         auto& tlist = codeblocks[&r];
-        tlist.push_back(CodeInfo());
+        tlist.emplace_back();
         auto& ci = tlist.back();
         ci.func = func;
         ci.codeblock.setCode(npos, codeblock);
@@ -229,8 +237,8 @@ struct Walker : public NonCopyable {
 };
 
 /// @brief This class contains the grammar's AST
-struct Grammar {
-    std::string ns = "";
+struct Grammar : public NonCopyable { // NOLINT(cppcoreguidelines-special-member-functions)
+    std::string ns;
     std::string className = "YantraModule";
     std::vector<std::string> classMembers;
 
@@ -239,7 +247,7 @@ struct Grammar {
 
     std::string tokenClass = "Token";
     std::string astClass = "AbSynTree";
-    std::string defaultMode = "";
+    std::string defaultMode;
     std::string start = "start";
     std::string end = "_tEND";
     std::string empty = "_tEMPTY";
@@ -254,8 +262,8 @@ struct Grammar {
     bool autoResolve = true;
     bool warnResolve = true;
     bool unicodeEnabled = true;
-    size_t smallRangeSize = 16;
-    size_t maxRepCount = 65535;
+    size_t smallRangeSize = 16; // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+    size_t maxRepCount = 65535; // NOLINT(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 
     bool stdHeadersEnabled = true;
     std::string pchHeader;
@@ -278,26 +286,26 @@ struct Grammar {
 
     ygp::ItemSet* initialState = nullptr;
 
-    inline const Walker* hasDefaultWalker() const {
+    inline auto hasDefaultWalker() const -> const Walker* {
         return defaultWalkerClass;
     }
 
-    inline Walker* hasDefaultWalker() {
+    inline auto hasDefaultWalker() -> Walker* { // NOLINT(readability-make-member-function-const)
         return defaultWalkerClass;
     }
 
-    inline const Walker& getDefaultWalker() const {
+    inline auto getDefaultWalker() const -> const Walker& {
         assert(defaultWalkerClass != nullptr);
         return *defaultWalkerClass;
     }
 
-    inline Walker& getDefaultWalker() {
+    inline auto getDefaultWalker() -> Walker& { // NOLINT(readability-make-member-function-const)
         assert(defaultWalkerClass != nullptr);
         return *defaultWalkerClass;
     }
 
-    inline bool isWalker(const Walker& walker) const {
-        for(auto& w : walkers) {
+    inline auto isWalker(const Walker& walker) const -> bool {
+        for(const auto& w : walkers) {
             if(w.get() == &walker) {
                 return true;
             }
@@ -306,18 +314,20 @@ struct Grammar {
     }
 
     // not derived from any walker
-    inline bool isRootWalker(const Walker& walker) const {
+    static inline auto
+    isRootWalker(const Walker& walker) -> bool {
          return walker.base == nullptr;
     }
 
     // is derived from another walker
-    inline bool isDerivedWalker(const Walker& walker) const {
+    static inline auto
+    isDerivedWalker(const Walker& walker) -> bool {
         return walker.base != nullptr;
     }
 
     // has 1 or more derived walkers
-    inline bool isBaseWalker(const Walker& walker) const { //TODO: can this be replaced with isRootWalker?
-        for(auto& w : walkers) {
+    inline auto isBaseWalker(const Walker& walker) const -> bool { //TODO: can this be replaced with isRootWalker?
+        for(const auto& w : walkers) {
             if(w->base == &walker) {
                 return true;
             }
@@ -325,8 +335,8 @@ struct Grammar {
         return false;
     }
 
-    inline const Walker* getWalker(const std::string& name) const {
-        for(auto& w : walkers) {
+    inline auto getWalker(const std::string& name) const -> const Walker* {
+        for(const auto& w : walkers) {
             if(w->name == name) {
                 return w.get();
             }
@@ -334,10 +344,10 @@ struct Grammar {
         return nullptr;
     }
 
-    inline Walker* getWalker(const std::string& name) {
-        auto& This = static_cast<const Grammar&>(*this);
-        auto walker = This.getWalker(name);
-        return const_cast<Walker*>(walker);
+    inline auto getWalker(const std::string& name) -> Walker*{
+        const auto& This = static_cast<const Grammar&>(*this);
+        const auto* walker = This.getWalker(name);
+        return const_cast<Walker*>(walker); // NOLINT(cppcoreguidelines-pro-type-const-cast)
     }
 
     inline void resetWalkers() {
@@ -346,7 +356,7 @@ struct Grammar {
         defaultWalkerClass = nullptr;
     }
 
-    inline Walker* addWalker(const std::string& name, const Walker* base) {
+    inline auto addWalker(const std::string& name, const Walker* base) -> Walker* {
         assert(getWalker(name) == nullptr);
         walkers.push_back(std::make_unique<Walker>(name, base));
         auto& lw = walkers.back();
@@ -358,7 +368,7 @@ struct Grammar {
     }
 
     inline void setDefaultWalker(const FilePos& npos, const std::string& name) {
-        if(auto w = getWalker(name)) {
+        if(auto* w = getWalker(name)) {
             defaultWalkerClassName = name;
             defaultWalkerClass = w;
         }else{
@@ -366,7 +376,7 @@ struct Grammar {
         }
     }
 
-    inline yglx::State* createNewState(const FilePos& p) {
+    inline auto createNewState(const FilePos& p) -> yglx::State* {
         states.push_back(std::make_unique<yglx::State>());
         auto& s = *(states.back());
         s.id = states.size();
@@ -423,7 +433,7 @@ struct Grammar {
         states.pop_back();
     }
 
-    inline yglx::Transition* _addTransition(std::unique_ptr<yglx::Transition>& tx) {
+    inline auto _addTransition(std::unique_ptr<yglx::Transition>& tx) -> yglx::Transition* {
         yglx::Transition* t = tx.get();
         auto it = transitions.begin();
         auto ite = transitions.end();
@@ -442,60 +452,60 @@ struct Grammar {
         return t;
     }
 
-    inline yglx::Transition* _addTransitionToState(yglx::State* s, std::unique_ptr<yglx::Transition>& tx) {
-        auto t = _addTransition(tx);
+    inline auto _addTransitionToState(yglx::State* s, std::unique_ptr<yglx::Transition>& tx) -> yglx::Transition* {
+        auto* t = _addTransition(tx);
         s->addTransition(t);
         return t;
     }
 
-    inline yglx::Transition* cloneTransition(const yglx::Transition& tx, yglx::State* s, yglx::State* n) {
+    inline auto cloneTransition(const yglx::Transition& tx, yglx::State* s, yglx::State* n) -> yglx::Transition* {
         auto nt = std::make_unique<yglx::Transition>(tx.t, s, n, tx.capture);
-        auto t = _addTransition(nt);
+        auto* t = _addTransition(nt);
         return t;
     }
 
-    inline yglx::Transition* addClassTransition(const yglx::Class& a, yglx::State* s, yglx::State* n, const bool& c) {
+    inline auto addClassTransition(const yglx::Class& a, yglx::State* s, yglx::State* n, const bool& c) -> yglx::Transition* {
         auto t = std::make_unique<yglx::Transition>(yglx::ClassTransition(a), s, n, c);
         return _addTransitionToState(s, t);
     }
 
-    inline yglx::Transition* addEnterClosureTransition(const yglx::Closure& a, yglx::State* s, yglx::State* n, const bool& c, const size_t& ic) {
+    inline auto addEnterClosureTransition(const yglx::Closure& a, yglx::State* s, yglx::State* n, const bool& c, const size_t& ic) -> yglx::Transition* {
         auto t = std::make_unique<yglx::Transition>(yglx::ClosureTransition(*this, a, yglx::ClosureTransition::Type::Enter, ic), s, n, c);
         return _addTransitionToState(s, t);
     }
 
-    inline yglx::Transition* addPreLoopTransition(const yglx::Closure& a, yglx::State* s, yglx::State* n, const bool& c) {
+    inline auto addPreLoopTransition(const yglx::Closure& a, yglx::State* s, yglx::State* n, const bool& c) -> yglx::Transition* {
         auto t = std::make_unique<yglx::Transition>(yglx::ClosureTransition(*this, a, yglx::ClosureTransition::Type::PreLoop), s, n, c);
         return _addTransitionToState(s, t);
     }
 
-    inline yglx::Transition* addInLoopTransition(const yglx::Closure& a, yglx::State* s, yglx::State* n, const bool& c) {
+    inline auto addInLoopTransition(const yglx::Closure& a, yglx::State* s, yglx::State* n, const bool& c) -> yglx::Transition* {
         auto t = std::make_unique<yglx::Transition>(yglx::ClosureTransition(*this, a, yglx::ClosureTransition::Type::InLoop), s, n, c);
         return _addTransitionToState(s, t);
     }
 
-    inline yglx::Transition* addPostLoopTransition(const yglx::Closure& a, yglx::State* s, yglx::State* n, const bool& c) {
+    inline auto addPostLoopTransition(const yglx::Closure& a, yglx::State* s, yglx::State* n, const bool& c) -> yglx::Transition* {
         auto t = std::make_unique<yglx::Transition>(yglx::ClosureTransition(*this, a, yglx::ClosureTransition::Type::PostLoop), s, n, c);
         return _addTransitionToState(s, t);
     }
 
-    inline yglx::Transition* addLeaveClosureTransition(const yglx::Closure& a, yglx::State* s, yglx::State* n, const bool& c) {
+    inline auto addLeaveClosureTransition(const yglx::Closure& a, yglx::State* s, yglx::State* n, const bool& c) -> yglx::Transition* {
         auto t = std::make_unique<yglx::Transition>(yglx::ClosureTransition(*this, a, yglx::ClosureTransition::Type::Leave), s, n, c);
         return _addTransitionToState(s, t);
     }
 
-    inline yglx::Transition* addSlideTransition(yglx::State* s, yglx::State* n, const bool& c) {
+    inline auto addSlideTransition(yglx::State* s, yglx::State* n, const bool& c) -> yglx::Transition* {
         auto t = std::make_unique<yglx::Transition>(yglx::SlideTransition(), s, n, c);
-        auto tx = _addTransitionToState(s, t);
+        auto* tx = _addTransitionToState(s, t);
         return tx;
     }
 
-    inline yglx::Transition* addTransition(const yglx::Primitive& a, yglx::State* s, yglx::State* n, const bool& c) {
+    inline auto addTransition(const yglx::Primitive& a, yglx::State* s, yglx::State* n, const bool& c) -> yglx::Transition* {
         auto t = std::make_unique<yglx::Transition>(yglx::PrimitiveTransition(a), s, n, c);
         return _addTransitionToState(s, t);
     }
 
-    inline yglx::RegexSet* hasRegexSet(const std::string& name) {
+    inline auto hasRegexSet(const std::string& name) -> yglx::RegexSet* {
         for(auto& rs : regexSets) {
             if(rs->name == name) {
                 return rs.get();
@@ -504,11 +514,11 @@ struct Grammar {
         return nullptr;
     }
 
-    inline size_t getNextPrecedence() {
+    inline auto getNextPrecedence() -> size_t {
         return ++nextPrecedence;
     }
 
-    inline yglx::RegexSet* addRegexSet(const std::string& name, const yglx::RegexSet::Assoc& assoc, const size_t& precedence) {
+    inline auto addRegexSet(const std::string& name, const yglx::RegexSet::Assoc& assoc, const size_t& precedence) -> yglx::RegexSet* {
         regexSets.push_back(std::make_unique<yglx::RegexSet>());
         auto& regexSet = regexSets.back();
         regexSet->id = regexSets.size();
@@ -523,7 +533,7 @@ struct Grammar {
         auto& regex = *(regexes.back());
         regex.id = regexes.size();
 
-        auto regexSet = hasRegexSet(regex.regexName);
+        auto* regexSet = hasRegexSet(regex.regexName);
         if(regexSet == nullptr) {
             auto precedence = getNextPrecedence();
             regexSet = addRegexSet(regex.regexName, assoc, precedence);
@@ -539,8 +549,8 @@ struct Grammar {
         addRegex(regex, assoc);
     }
 
-    inline yglx::RegexSet* hasRegexSet(const std::string& name) const {
-        for(auto& t : regexSets) {
+    inline auto hasRegexSet(const std::string& name) const -> yglx::RegexSet* {
+        for(const auto& t : regexSets) {
             if(t->name == name) {
                 return t.get();
             }
@@ -548,16 +558,16 @@ struct Grammar {
         return nullptr;
     }
 
-    inline yglx::RegexSet& getRegexSet(const ygp::Node& node) const {
-        auto p = hasRegexSet(node.name);
+    inline auto getRegexSet(const ygp::Node& node) const -> yglx::RegexSet& {
+        auto* p = hasRegexSet(node.name);
         if(p == nullptr) {
             throw GeneratorError(__LINE__, __FILE__, node.pos, "INVALID_TOKEN:{}", node.name);
         }
         return *p;
     }
 
-    inline yglx::RegexSet& getRegexSetByName(const FilePos& npos, const std::string& name) const {
-        auto p = hasRegexSet(name);
+    inline auto getRegexSetByName(const FilePos& npos, const std::string& name) const -> yglx::RegexSet& {
+        auto* p = hasRegexSet(name);
         if(p == nullptr) {
             throw GeneratorError(__LINE__, __FILE__, npos, "INVALID_TOKEN:{}", name);
         }
@@ -565,7 +575,7 @@ struct Grammar {
     }
 
     inline void addLexerMode(const FilePos& npos, const std::string& name) {
-        if (lexerModes.find(name) != lexerModes.end()) {
+        if (lexerModes.contains(name) == true) {
             throw GeneratorError(__LINE__, __FILE__, npos, "DUPLICATE_MODE:{}", name);
         }
         lexerModes[name] = std::make_unique<yglx::LexerMode>();
@@ -575,25 +585,34 @@ struct Grammar {
         mode.root->isRoot = true;
     }
 
-    inline yglx::LexerMode& getLexerMode(const yglx::Regex& regex) const {
-        if (lexerModes.find(regex.mode) == lexerModes.end()) {
+    inline auto getLexerMode(const yglx::Regex& regex) const -> yglx::LexerMode& {
+        if (lexerModes.contains(regex.mode) == false) {
             throw GeneratorError(__LINE__, __FILE__, regex.pos, "UNKNOWN_MODE:{}", regex.mode);
         }
-        auto& mode = lexerModes.at(regex.mode);
+
+        const auto& mode = lexerModes.at(regex.mode);
         assert(mode);
         return *mode;
     }
 
-    inline yglx::LexerMode& getRegexNextMode(const yglx::Regex& regex) const {
-        if (lexerModes.find(regex.nextMode) == lexerModes.end()) {
+    inline auto getRegexNextMode(const yglx::Regex& regex) const -> yglx::LexerMode& {
+        if (lexerModes.contains(regex.nextMode) == false) {
             throw GeneratorError(__LINE__, __FILE__, regex.pos, "UNKNOWN_MODE:{}", regex.nextMode);
         }
-        auto& mode = lexerModes.at(regex.nextMode);
+
+        const auto& mode = lexerModes.at(regex.nextMode);
         assert(mode);
         return *mode;
     }
 
-    inline ygp::Rule& addRule(const FilePos& npos, const std::string& name, std::unique_ptr<ygp::Rule>& prule, const bool& anchorSet, const bool& isEmpty) {
+    inline auto
+    addRule(
+        const FilePos& npos,
+        const std::string& name,
+        std::unique_ptr<ygp::Rule>& prule,
+        const bool& anchorSet,
+        const bool& isEmpty
+    ) -> ygp::Rule& {
         ygp::RuleSet* ruleSet = nullptr;
         for(auto& rs : ruleSets) {
             if(rs->name == name) {
@@ -640,8 +659,8 @@ struct Grammar {
         return rule;
     }
 
-    inline ygp::RuleSet& getRuleSetByName(const FilePos& p, const std::string& name) const {
-        for(auto& r : ruleSets) {
+    inline auto getRuleSetByName(const FilePos& p, const std::string& name) const -> ygp::RuleSet& {
+        for(const auto& r : ruleSets) {
             if(r->name == name) {
                 return *r;
             }
@@ -649,7 +668,7 @@ struct Grammar {
         throw GeneratorError(__LINE__, __FILE__, p, "UNKNOWN_RULESET:{}", name);
     }
 
-    inline const ygp::Config& createConfig(const ygp::Rule& r, const size_t& p) {
+    inline auto createConfig(const ygp::Rule& r, const size_t& p) -> ygp::Config& {
         assert(p <= r.nodes.size());
         for(auto& c : configs) {
             if((&(c->rule) == &r) && (c->cpos == p)) {
@@ -661,21 +680,21 @@ struct Grammar {
         return cfg;
     }
 
-    inline ygp::ItemSet& _createItemSet() {
+    inline auto _createItemSet() -> ygp::ItemSet& {
         itemSets.push_back(std::make_unique<ygp::ItemSet>());
         auto& is = *(itemSets.back());
         is.id = itemSets.size();
         return is;
     }
 
-    inline ygp::ItemSet& createItemSet(std::vector<const ygp::Config*>& cfgs) {
+    inline auto createItemSet(std::vector<const ygp::Config*>& cfgs) -> ygp::ItemSet& {
         auto& is = _createItemSet();
         is.configs = std::move(cfgs);
         return is;
     }
 
-    inline ygp::ItemSet* hasItemSet(const std::vector<const ygp::Config*>& cfgs) const {
-        for(auto& is : itemSets) {
+    inline auto hasItemSet(const std::vector<const ygp::Config*>& cfgs) const -> ygp::ItemSet* {
+        for(const auto& is : itemSets) {
             if(is->configs.size() != cfgs.size()) {
                 continue;
             }
@@ -686,8 +705,8 @@ struct Grammar {
             auto cite = cfgs.end();
             bool mismatch = false;
             while((iit != iite) && (cit != cite)) {
-                auto& icfg = *(*iit);
-                auto& ccfg = *(*cit);
+                const auto& icfg = *(*iit);
+                const auto& ccfg = *(*cit);
 
                 if(&(icfg.rule) != &(ccfg.rule)) {
                     mismatch = true;
@@ -708,21 +727,23 @@ struct Grammar {
         return nullptr;
     }
 
-    inline ygp::ItemSet& getItemSet(const FilePos& npos, const std::vector<const ygp::Config*>& cfgs) const {
-        auto is = hasItemSet(cfgs);
+    inline auto getItemSet(const FilePos& npos, const std::vector<const ygp::Config*>& cfgs) const -> ygp::ItemSet& {
+        auto* is = hasItemSet(cfgs);
         if(is == nullptr) {
             throw GeneratorError(__LINE__, __FILE__, npos, "INVALID_ITEMSET");
         }
         return *is;
     }
 
-    inline FilePos pos() const {
+    inline auto pos() const -> FilePos {
         FilePos npos;
         if(rules.size() > 0) {
             npos = rules.at(0)->pos;
         }
         return npos;
     }
+
+    inline Grammar() = default;
 
     inline ~Grammar() {
         for(auto& gs : states) {
