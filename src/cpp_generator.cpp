@@ -1350,8 +1350,8 @@ struct Generator {
         std::string tblock;
 
         const std::string_view cb(codeBlock);
-        const auto* it = cb.begin();
-        const auto* ite = cb.end();
+        auto it = cb.begin(); // NOLINT(readability-qualified-auto)
+        auto ite = cb.end(); // NOLINT(readability-qualified-auto)
 
         // skip initial empty lines, if any
         while ((it != ite) && ((*it == '\r') || (*it == '\n'))) {
@@ -1368,8 +1368,8 @@ struct Generator {
         std::vector<std::string_view> eblockNames;
 
         while (it != ite) {
-            const auto* itb = it;
-            const auto* itl = it;
+            auto itb = it; // NOLINT(readability-qualified-auto)
+            auto itl = it; // NOLINT(readability-qualified-auto)
             bool initWS = true;
             while ((it != ite) && (*it != '\n')) {
                 if (initWS) {
