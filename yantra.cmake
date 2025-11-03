@@ -36,7 +36,7 @@ FUNCTION(ADD_YANTRA)
     add_custom_command(
       OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${FNAME}.cpp"
       COMMAND "${YANTRACC}"
-        -o "${CMAKE_CURRENT_BINARY_DIR}"
+        -d "${CMAKE_CURRENT_BINARY_DIR}"
         -a
         -f "${SRC}"
       COMMENT "Compiling ${SRC}"
