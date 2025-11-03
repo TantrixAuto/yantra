@@ -19,33 +19,30 @@ set(LINE "")
 math(EXPR index 0)
 
 # write code to declare the string literal
-file(APPEND ${CODEBLOCK_FILE} "extern const char* const ${VARNAME};\n")
+string(APPEND LINE "extern const char* const ${VARNAME};\n")
 
 # write code to open the string literal
-file(APPEND ${CODEBLOCK_FILE} "const char* const ${VARNAME} = R\"ENDTABLES(\n")
+string(APPEND LINE "const char* const ${VARNAME} = R\"ENDTABLES(\n")
 
 # iterate over each character in `file_content`
 while(index LESS length)
+    # read the next character from file_content
     string(SUBSTRING "${file_content}" ${index} 1 char)
 
-    # if the character is a newline, append the current line to the output file
-    if(char STREQUAL "\n")
-        # append the current line to the output file
-        file(APPEND ${CODEBLOCK_FILE} "${LINE}\n")
-        set(LINE "")
+    # append the character to the output string
+    string(APPEND LINE "${char}")
 
+    # check if the character is a newline
+    if(char STREQUAL "\n")
         # increment the block size
         math(EXPR BLOCK_SIZE "${BLOCK_SIZE} + 1" )
 
         # if 50 lines were written so far, close and reopen the raw string literal
         if( ${BLOCK_SIZE} GREATER 50)
-            file(APPEND ${CODEBLOCK_FILE} ")ENDTABLES\"\n")
-            file(APPEND ${CODEBLOCK_FILE} "R\"ENDTABLES(\n")
+            string(APPEND LINE ")ENDTABLES\"\n")
+            string(APPEND LINE "R\"ENDTABLES(\n")
             set(BLOCK_SIZE 0)
         endif()
-    else()
-        # append the character to the current line
-        string(APPEND LINE "${char}")
     endif()
 
     # increment the index
@@ -53,4 +50,7 @@ while(index LESS length)
 endwhile()
 
 # write code to close the string literal
-file(APPEND ${CODEBLOCK_FILE} ")ENDTABLES\"; //${CBID}\n")
+string(APPEND LINE ")ENDTABLES\";\n")
+
+# write string to output file
+file(WRITE ${CODEBLOCK_FILE} "${LINE}")
