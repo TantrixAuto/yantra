@@ -1,3 +1,7 @@
+# Yantra Parser Generator
+
+![Yantra Logo](docs/icon.png)
+
 Yantra is a powerful compiler compiler and LALR(1) parser generator written in C++, with the following core features:
 - an integrated lexer
 - Built-in support for UNICODE/UTF8 input
