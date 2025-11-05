@@ -184,7 +184,7 @@ struct Walker : public NonCopyable {
         const std::string& args,
         const std::string& type,
         const bool& autowalk
-        ) {
+    ) {
         if(hasFunctionSig(rs, func) != nullptr) {
             throw GeneratorError(__LINE__, __FILE__, npos, "DUPLICATE_FUNCTION:{}/{}::{}", rs.name, name, func);
         }
@@ -259,6 +259,7 @@ struct Grammar : public NonCopyable { // NOLINT(cppcoreguidelines-special-member
     CodeBlock epilogue;
     CodeBlock throwError;
     bool checkUnusedTokens = true;
+    bool checkEmptyCodeblocks = true;
     bool autoResolve = true;
     bool warnResolve = true;
     bool unicodeEnabled = true;

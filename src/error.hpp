@@ -4,6 +4,22 @@
 #pragma once
 #include "filepos.hpp"
 
+/// @brief this function formats an error message
+static inline auto
+formatError(const FilePos& p, const std::string& msg) -> std::string {
+    auto ymsg = std::format("{}:{}:{}: error: {}", p.file, p.row, p.col, msg);
+    return ymsg;
+}
+
+template <typename ...ArgsT>
+static inline void
+printError(const FilePos& p, const std::format_string<ArgsT...>& msg, ArgsT... args){
+    auto ymsg = std::format(msg, std::forward<ArgsT>(args)...);
+    ymsg = formatError(p, ymsg);
+    std::println("{}", ymsg);
+}
+
+/// @brief This exception is thrown when a grammar error is encountered
 class GeneratorError : public std::runtime_error {
     static inline auto
     filename(const std::string& f) -> std::string{
@@ -19,8 +35,8 @@ class GeneratorError : public std::runtime_error {
 
     static inline auto
     _fmt(const size_t& l, const std::string& f, const FilePos& p, const std::string& m) -> std::string {
-        auto ymsg = std::format("{}({:03d},{:03d}):{} ({}:{})", p.file, p.row, p.col, m, filename(f), l);
-        return ymsg;
+        auto ymsg = std::format("{} ({}:{})", m, filename(f), l);
+        return formatError(p, ymsg);
     }
 
 public:

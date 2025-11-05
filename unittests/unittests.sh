@@ -36,15 +36,16 @@ done
 if [[ -n "$MSYSTEM" ]]; then
   MSYS2_ARG_CONV_EXCL=* # set this using export on command line
   CC="cl.exe"
-  FLAGS="/EHsc /nologo"
-  OUT="./out.exe"
+  FLAGS="/std:c++20 /EHsc /nologo /Fo/tmp/ /Fe/tmp/out.exe"
+  OUT="/tmp/out.exe"
 else
   CC="clang++"
-  FLAGS="-Wall -Werror -Weverything -Wno-padded -Wno-c++98-compat-pedantic -Wno-exit-time-destructors -Wno-global-constructors -Wno-weak-vtables -Wno-switch-default -Wno-switch-enum -Wno-header-hygiene -Wno-poison-system-directories"
-  if [ -f testpch.hpp.pch ]; then
-    FLAGS="$FLAGS -include-pch testpch.hpp.pch"
+  FLAGS="-std=c++20 -o /tmp/a.out"
+  FLAGS="$FLAGS -Wall -Werror -Weverything -Wno-padded -Wno-c++98-compat-pedantic -Wno-exit-time-destructors -Wno-global-constructors -Wno-weak-vtables -Wno-switch-default -Wno-switch-enum -Wno-header-hygiene -Wno-poison-system-directories"
+  if [ -f "/tmp/testpch.hpp.pch" ]; then
+    FLAGS="$FLAGS -include-pch /tmp/testpch.hpp.pch"
   fi
-  OUT="./a.out"
+  OUT="/tmp/a.out"
 fi
 
 if [ ! -f ${YCC} ]; then
@@ -52,9 +53,11 @@ if [ ! -f ${YCC} ]; then
   exit 1
 fi
 
-if [ ! -f testpch.hpp.pch ]; then
-  if [ -f testpch.hpp ]; then
-    ${CC} -c -std=c++20 testpch.hpp -o testpch.hpp.pch
+if [[ ! -n "$MSYSTEM" ]]; then
+  if [ ! -f "/tmp/testpch.hpp.pch" ]; then
+    if [ -f testpch.hpp ]; then
+      ${CC} -c -std=c++20 testpch.hpp -o /tmp/testpch.hpp.pch
+    fi
   fi
 fi
 
@@ -69,6 +72,8 @@ compile_grammar() {
   if [ $verbose -eq 1 ]; then
     echo ${BASH_LINENO}: Generating parser
   fi
+
+  # generate parser code
   ${YCC} -c ascii -s "$grammar" -a -n out -g out.md
   if [ $? -ne 0 ]; then
     if [ $xerr -eq 1 ]; then
@@ -88,12 +93,10 @@ compile_grammar() {
     echo ${BASH_LINENO}: Compiling parser
   fi
 
-  if [[ -n "$MSYSTEM" ]]; then
-    ${CC} /std:c++20 $FLAGS out.cpp
-  else
-    ${CC} -std=c++20 $FLAGS out.cpp
-  fi
+  # compile the generated code
+  ${CC} $FLAGS out.cpp
 
+  # check for expected compile error
   if [ $? -ne 0 ]; then
     if [ $xerr -eq 2 ]; then
       return

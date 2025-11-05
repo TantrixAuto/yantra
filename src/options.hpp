@@ -9,6 +9,9 @@ struct Options {
 
     /// @brief filename where the AST is logged in markdown format
     std::string gfilename;
+
+    /// @brief enable lexer logging
+    bool enableLexerLogging = false;
 };
 
 auto opts() -> const Options&;

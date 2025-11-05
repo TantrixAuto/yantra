@@ -159,7 +159,7 @@ processInput(std::istream& is, const std::string& filename, const std::string& c
         processInputEx(is, filename, charset, odir, oname);
         return 0;
     }catch(const GeneratorError& e) {
-        std::println("{}:{}:{}: error: {} ({}:{})", e.pos.file, e.pos.row, e.pos.col, e.msg, e.file, e.line);
+        printError(e.pos, "{} ({}:{})", e.msg, e.file, e.line);
     }catch(const std::exception& e) {
         std::println("{}: error: {}", filename, e.what());
     }catch(...) {
@@ -183,6 +183,7 @@ inline int help(const std::string& xname, const std::string& msg) {
     std::println("    -v (--version)  : print Yantra version");
     std::println("    -r              : don't generate #line messages");
     std::println("    -l <logname>    : generate log file to <logname>, use - for console");
+    std::println("    -j <+/-logsrc>  : enable or disable log source <logsrc> (e:g: +lexer)");
     std::println("    -g <gfilename>  : generate grammar file to <gfilename>");
     return 1;
 }
@@ -265,6 +266,18 @@ int main(int argc, const char* argv[]) {
                 return help(argv[0], "invalid log name");
             }
             logname = argv[i];
+        }else if(a == "-j") {
+            ++i;
+            if(i >= argc) {
+                return help(argv[0], "invalid log source");
+            }
+
+            std::string ls(argv[i]);
+            if(ls == "+lexer") {
+                options.enableLexerLogging = true;
+            }else{
+                return help(argv[0], "unknown log source:" + ls);
+            }
         }else if(a == "-a") {
             options.amalgamatedFile = true;
         }else if(a == "-m") {

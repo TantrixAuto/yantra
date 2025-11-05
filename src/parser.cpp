@@ -7,6 +7,7 @@
 #include "pch.hpp"
 #include "parser.hpp"
 #include "logger.hpp"
+#include "options.hpp"
 
 namespace {
 /// @brief Encapsulates all tokens identified by the lexer
@@ -429,16 +430,18 @@ struct Lexer {
 #endif
         while(!stream.eof()) {
             int ch = stream.peek();
-            log("{:>3}:  lexer: s={}, ch={}, ch={}, text={}, tpos={}, classDepth={}, groupDepth={}"
-                  , stream.pos.str()
-                  , sname(state)
-                  , isprint(ch)?static_cast<char>(ch):' '
-                  , static_cast<int>(ch)
-                  , t.text
-                  , t.pos.str()
-                  , classDepth
-                  , groupDepth
-            );
+            if(opts().enableLexerLogging == true) {
+                log("{:>3}:  lexer: s={}, ch={}, ch={}, text={}, tpos={}, classDepth={}, groupDepth={}"
+                    , stream.pos.str()
+                    , sname(state)
+                    , isprint(ch)?static_cast<char>(ch):' '
+                    , static_cast<int>(ch)
+                    , t.text
+                    , t.pos.str()
+                    , classDepth
+                    , groupDepth
+                );
+            }
 
             switch(state) {
             case State::Init:
@@ -1881,114 +1884,94 @@ struct Parser {
         std::string func;
 
         Token t = peek(tr);
-        if(t.id == Token::ID::ID) {
-            //%function expr Walker::eval() -> int;
-            //               ^
-            Token wname = peek(tr);
 
-            lexer.next();
-
-            t = peek(tr);
-            if(t.id == Token::ID::DBLCOLON) {
-                //%function expr Walker::eval() -> int;
-                //                     ^
-                walker = grammar.getWalker(wname.text);
-                if(walker == nullptr) {
-                    throw GeneratorError(__LINE__, __FILE__, wname.pos, "UNKNOWN_WALKER:{}", wname.text);
-                }
-
-                lexer.next();
-
-                //%function expr Walker::eval() -> int;
-                //                       ^
-                t = peek(tr);
-                if(t.id != Token::ID::ID) {
-                    throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
-                }
-                func = t.text;
-                lexer.next();
-
-            }else{
-                assert(t.id == Token::ID::LBRACKET);
-                //%function expr eval() -> int;
-                //                   ^
-                func = wname.text;
-            }
-
-            //%function expr Walker::eval() -> int;
-            //                           ^
-            t = peek(tr);
-            if(t.id != Token::ID::LBRACKET) {
-                throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
-            }
-
-            lexer.setMode_Args();
-            lexer.next();
-
-            //%function expr Walker::eval(int x) -> int;
-            //                            ^
-            Token args = peek(tr);
-            if(args.id != Token::ID::ARGS) {
-                throw GeneratorError(__LINE__, __FILE__, args.pos, "INVALID_INPUT");
-            }
-
-            lexer.next();
-
-            //%function expr Walker::eval(int x) -> int;
-            //                                 ^
-            t = peek(tr);
-            if(t.id != Token::ID::RBRACKET) {
-                throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
-            }
-
-            lexer.next();
-
-            bool autowalk = false;
-            //%function expr Walker::eval() -> int;
-            //                              ^
-            t = peek(tr);
-            if(t.id == Token::ID::POINTER) {
-            }else if(t.id == Token::ID::DBLPOINTER) {
-                autowalk = true;
-            }else{
-                throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
-            }
-
-            lexer.setMode_Type();
-            lexer.next();
-
-            //%function expr Walker::eval() -> int;
-            //                                 ^
-            Token rtype = peek(tr);
-            if(rtype.id != Token::ID::TYPE) {
-                throw GeneratorError(__LINE__, __FILE__, rtype.pos, "INVALID_INPUT");
-            }
-
-            addRsWalkerType(rname, *walker, func, args.text, autowalk, rtype);
-        }else{
-            bool autowalk = false;
-
-            //%function expr -> int;
-            //               ^
-            if(t.id == Token::ID::POINTER) {
-            }else if(t.id == Token::ID::DBLPOINTER) {
-                autowalk = true;
-            }else{
-                throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
-            }
-
-            lexer.setMode_Type();
-            lexer.next();
-
-            //%function expr -> int;
-            //                  ^
-            Token rtype = peek(tr);
-            if(rtype.id != Token::ID::TYPE) {
-                throw GeneratorError(__LINE__, __FILE__, rtype.pos, "INVALID_INPUT");
-            }
-
-            addRsWalkerType(rname, *walker, walker->defaultFunctionName, "", autowalk, rtype);
+        if(t.id != Token::ID::ID) {
+            throw GeneratorError(__LINE__, __FILE__, rname.pos, "INVALID_INPUT");
         }
+
+        //%function expr Walker::eval() -> int;
+        //               ^
+        Token wname = peek(tr);
+
+        lexer.next();
+
+        t = peek(tr);
+        if(t.id == Token::ID::DBLCOLON) {
+            //%function expr Walker::eval() -> int;
+            //                     ^
+            walker = grammar.getWalker(wname.text);
+            if(walker == nullptr) {
+                throw GeneratorError(__LINE__, __FILE__, wname.pos, "UNKNOWN_WALKER:{}", wname.text);
+            }
+
+            lexer.next();
+
+            //%function expr Walker::eval() -> int;
+            //                       ^
+            t = peek(tr);
+            if(t.id != Token::ID::ID) {
+                throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+            }
+            func = t.text;
+            lexer.next();
+
+        }else{
+            assert(t.id == Token::ID::LBRACKET);
+            //%function expr eval() -> int;
+            //                   ^
+            func = wname.text;
+        }
+
+        //%function expr Walker::eval() -> int;
+        //                           ^
+        t = peek(tr);
+        if(t.id != Token::ID::LBRACKET) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+        }
+
+        lexer.setMode_Args();
+        lexer.next();
+
+        //%function expr Walker::eval(int x) -> int;
+        //                            ^
+        Token args = peek(tr);
+        if(args.id != Token::ID::ARGS) {
+            throw GeneratorError(__LINE__, __FILE__, args.pos, "INVALID_INPUT");
+        }
+
+        lexer.next();
+
+        //%function expr Walker::eval(int x) -> int;
+        //                                 ^
+        t = peek(tr);
+        if(t.id != Token::ID::RBRACKET) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+        }
+
+        lexer.next();
+
+        bool autowalk = false;
+        //%function expr Walker::eval() -> int;
+        //                              ^
+        t = peek(tr);
+        if(t.id == Token::ID::POINTER) {
+        }else if(t.id == Token::ID::DBLPOINTER) {
+            autowalk = true;
+        }else{
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+        }
+
+        lexer.setMode_Type();
+        lexer.next();
+
+        //%function expr Walker::eval() -> int;
+        //                                 ^
+        Token rtype = peek(tr);
+        if(rtype.id != Token::ID::TYPE) {
+            throw GeneratorError(__LINE__, __FILE__, rtype.pos, "INVALID_INPUT");
+        }
+
+        addRsWalkerType(rname, *walker, func, args.text, autowalk, rtype);
 
         lexer.next();
         read_semi(tr);
@@ -2457,7 +2440,18 @@ struct Parser {
             }
         }
 
-        // grammar file fully parsed. Now add all function sigs to the walker
+        // set ruleName for each rule where it is not explicitly set
+        for(auto& r : grammar.rules) {
+            if(r->ruleName.size() == 0) {
+                auto rsname = r->ruleSetName();
+                if(rsname.ends_with('_') == true) {
+                    rsname += "r";
+                }
+                r->ruleName = std::format("{}_{}", rsname, r->id);
+            }
+        }
+
+        // Add all function sigs to the walker
         for(auto& rt : rsWalkerTypes) {
             auto& rs = grammar.getRuleSetByName(rt.rs.pos, rt.rs.text);
             assert(rt.walker != nullptr);
@@ -2476,17 +2470,6 @@ struct Parser {
             if(auto it = rulePrecedence.find(r->ruleSetName()); it != rulePrecedence.end()) {
                 auto& rx = grammar.getRegexSetByName(r->pos, it->second);
                 r->precedence = &rx;
-            }
-        }
-
-        // set ruleName for each rule where it is not explicitly set
-        for(auto& r : grammar.rules) {
-            if(r->ruleName.size() == 0) {
-                auto rsname = r->ruleSetName();
-                if(rsname.ends_with('_') == true) {
-                    rsname += "r";
-                }
-                r->ruleName = std::format("{}_{}", rsname, r->id);
             }
         }
 
@@ -2546,31 +2529,72 @@ void parseInput(yg::Grammar& g, Stream& is) {
         }
     }
 
-    std::vector<yglx::Regex*> unuseds;
-    for(auto& regex : g.regexes) {
-        if((regex->unused == false) && (regex->usageCount == 0) && (regex->regexName != g.empty)) {
-            unuseds.push_back(regex.get());
+    // check for undefined codeblocks
+    std::vector<std::tuple<const ygp::Rule*, const yg::Walker*, const yg::Walker::FunctionSig*>> noCodeblocks;
+    if(g.checkEmptyCodeblocks == true) {
+        for(auto& pw : g.walkers) {
+            auto& w = pw;
+            for(auto& fsig : w->functionSigs) {
+                for(auto& f : fsig.second) {
+                    for(auto& r : fsig.first->rules) {
+                        bool found = false;
+                        for(auto& cb : w->codeblocks) {
+                            if(cb.first == r) {
+                                for(auto& c : cb.second) {
+                                    if(c.func == f.func) {
+                                        found = true;
+                                    }
+                                }
+                            }
+                        }
+                        if(found == false) {
+                            noCodeblocks.emplace_back(r, w.get(), &f);
+                        }
+                    }
+                }
+            }
         }
     }
 
-    if((g.checkUnusedTokens == true) && (unuseds.size() > 0)) {
-        std::string s;
-        if(unuseds.size() > 1) {
-            s = "S";
-        }
-        FilePos pos;
-        std::string ftok;
-        bool pset = false;
-        std::stringstream uss;
-        for(auto& u : unuseds) {
-            uss << std::format("{}: {}\n", u->pos.str(), u->regexName);
-            if(pset == false) {
-                pos = u->pos;
-                ftok = u->regexName;
-                pset = true;
+    // check for unused tokens
+    std::vector<yglx::Regex*> unuseds;
+    if(g.checkUnusedTokens == true) {
+        for(auto& regex : g.regexes) {
+            if((regex->unused == false) && (regex->usageCount == 0) && (regex->regexName != g.empty)) {
+                unuseds.push_back(regex.get());
             }
         }
-        throw GeneratorError(__LINE__, __FILE__, pos, "UNUSED_TOKEN{}:{}\n{}", s, ftok, uss.str());
+    }
+
+    // report parse errors if any
+    if((unuseds.size() > 0) || (noCodeblocks.size() > 0)) {
+        FilePos pos;
+
+        for(auto& u : noCodeblocks) {
+            const ygp::Rule* r = std::get<0>(u);
+            const yg::Walker* w = std::get<1>(u);
+            const yg::Walker::FunctionSig* f = std::get<2>(u);
+            printError(r->pos, "Undefined codeblock: {}::{}({}) for {}({})", w->name, f->func, f->args, r->ruleSetName(), r->ruleName);
+            pos = r->pos;
+        }
+
+        for(auto& u : unuseds) {
+            printError(u->pos, "Unused token:{}", u->regexName);
+            pos = u->pos;
+        }
+
+        std::stringstream uss;
+        std::string sep;
+        if(unuseds.size() > 0) {
+            uss << std::format("Unused tokens:{}", unuseds.size());
+            sep = ", ";
+        }
+
+        if(noCodeblocks.size() > 0) {
+            uss << std::format("{}Undefined codeblocks:{}", sep, noCodeblocks.size());
+        }
+
+        throw GeneratorError(__LINE__, __FILE__, pos, "{}", uss.str());
     }
 
     for(auto& w : g.walkers) {
