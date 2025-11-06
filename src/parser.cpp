@@ -2583,18 +2583,20 @@ void parseInput(yg::Grammar& g, Stream& is) {
             pos = u->pos;
         }
 
-        std::stringstream uss;
-        std::string sep;
-        if(unuseds.size() > 0) {
-            uss << std::format("Unused tokens:{}", unuseds.size());
-            sep = ", ";
+        if(((unuseds.size() > 0) && (g.errorUnusedTokens == true)) || ((noCodeblocks.size() > 0) && (g.errorEmptyCodeblocks == true))) {
+            std::stringstream uss;
+            std::string sep;
+            if(unuseds.size() > 0) {
+                uss << std::format("Unused tokens:{}", unuseds.size());
+                sep = ", ";
+            }
+    
+            if(noCodeblocks.size() > 0) {
+                uss << std::format("{}Undefined codeblocks:{}", sep, noCodeblocks.size());
+            }
+    
+            throw GeneratorError(__LINE__, __FILE__, pos, "{}", uss.str());
         }
-
-        if(noCodeblocks.size() > 0) {
-            uss << std::format("{}Undefined codeblocks:{}", sep, noCodeblocks.size());
-        }
-
-        throw GeneratorError(__LINE__, __FILE__, pos, "{}", uss.str());
     }
 
     for(auto& w : g.walkers) {

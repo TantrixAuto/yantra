@@ -260,6 +260,8 @@ struct Grammar : public NonCopyable { // NOLINT(cppcoreguidelines-special-member
     CodeBlock throwError;
     bool checkUnusedTokens = true;
     bool checkEmptyCodeblocks = true;
+    bool errorUnusedTokens = true;
+    bool errorEmptyCodeblocks = false;
     bool autoResolve = true;
     bool warnResolve = true;
     bool unicodeEnabled = true;
