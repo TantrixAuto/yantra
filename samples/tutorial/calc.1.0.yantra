@@ -1,0 +1,8 @@
+%class Calculator;
+
+start := numexpr;
+
+numexpr := NUMBER;
+
+NUMBER := "\d+";
+WS := "\s+"!;

@@ -1,0 +1,27 @@
+%class Calculator;
+
+start := numexpr;
+
+addexpr := numexpr PLUS numexpr
+%{
+    std::cout << "Adding:" << std::endl;
+%}
+
+subexpr := numexpr MINUS numexpr
+%{
+    std::cout << "Subtracting:" << std::endl;
+%}
+
+numexpr := addexpr;
+numexpr := subexpr;
+numexpr := NUMBER (NUM)
+%{
+    std::cout << "Number: " << NUM.text << std::endl; 
+%}
+
+%left PLUS MINUS;
+
+NUMBER := "\d+";
+PLUS   := "\+";
+MINUS  := "-";
+WS     := "\s+"!;

@@ -1,0 +1,11 @@
+%class Calculator;
+
+start := numexpr;
+
+numexpr := NUMBER (NUM)
+%{
+    std::cout << "Number: " << NUM.text << std::endl; 
+%}
+
+NUMBER := "\d+";
+WS := "\s+"!;
