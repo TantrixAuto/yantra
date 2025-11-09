@@ -28,5 +28,11 @@ It is recommended that they be read in the given order.
 | [Build Instructions](docs/050_build.md)        | - Steps to build Yantra.              |
 | [Grammar Quickstart](docs/060_quickstart.md)   | - A quick introduction to the grammar file structure. |
 
-# Sample project
+# Essential links
+## Sample project
 See https://github.com/TantrixAuto/lingo for standalone sample project that uses yantra.
+
+## Language Server Extension
+This is a language server extension created by [Raj Chaudhuri](https://github.com/rajch) that provides syntax highlighting for Yantra files in vscode, qtcreator, and any other IDE that supports the Language Server Protocol.
+
+https://github.com/rajware/yantra-language-server
