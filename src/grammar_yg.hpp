@@ -91,6 +91,9 @@ struct Walker : public NonCopyable {
     /// @brief default output type of the walker
     OutputType outputType = OutputType::None;
 
+    /// @brief the external inteface for the walker, if any
+    std::string interfaceName;
+
     /// @brief instance name for the writer object in the walker, if nahy
     std::string writerName = "out";
 
@@ -119,6 +122,11 @@ struct Walker : public NonCopyable {
         ext = e;
     }
 
+    /// @brief set interface name for this walker
+    inline void setInterfaceName(const std::string& n) {
+        interfaceName = n;
+    }
+
     /// @brief set default function sig for this walker
     inline void init() {
         assert(!defaultFunctionSig);
@@ -134,7 +142,7 @@ struct Walker : public NonCopyable {
     hasFunctionSig(
         const ygp::RuleSet& rs,
         const std::string& func
-    ) const -> const FunctionSig*{
+    ) const -> const FunctionSig* {
         if(auto it = functionSigs.find(&rs); it != functionSigs.end()) {
             const auto& tlist = it->second;
             for(const auto& t : tlist) {
@@ -147,6 +155,20 @@ struct Walker : public NonCopyable {
             return base->hasFunctionSig(rs, func);
         }
         return nullptr;
+    }
+
+    /// @brief check if this walker, or any of it base walkers, have a function sig
+    inline auto
+    getRuleSetNativeType(
+        const ygp::RuleSet& rs,
+        const std::string& func,
+        const std::string& tokenClass
+    ) const -> std::string {
+        auto fsig = hasFunctionSig(rs, func);
+        if(fsig != nullptr) {
+            return fsig->type;
+        }
+        return tokenClass;
     }
 
     /// @brief get list of all function sigs defined for specified RuleSet, in this walker,

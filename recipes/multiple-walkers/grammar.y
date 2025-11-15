@@ -27,7 +27,7 @@ stmt := ID(I) EQUAL qualifiedID(qid) SEMI
 qualifiedID := qualifiedID(qid) DBLCOLON ID(I)
 @CppWalker::str
 %{
-    return str(qid) + "::" + I.text;
+    return str(qid) + "->" + I.text;
 %}
 @JavaWalker::str
 %{

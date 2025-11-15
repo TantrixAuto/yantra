@@ -41,7 +41,7 @@ if [[ -n "$MSYSTEM" ]]; then
 else
   CC="clang++"
   FLAGS="-std=c++20 -o /tmp/a.out"
-  FLAGS="$FLAGS -Wall -Werror -Weverything -Wno-padded -Wno-c++98-compat-pedantic -Wno-exit-time-destructors -Wno-global-constructors -Wno-weak-vtables -Wno-switch-default -Wno-switch-enum -Wno-header-hygiene -Wno-poison-system-directories"
+  FLAGS="$FLAGS -Wall -Werror -Weverything -Wno-padded -Wno-c++98-compat-pedantic -Wno-c++20-compat -Wno-exit-time-destructors -Wno-global-constructors -Wno-weak-vtables -Wno-switch-default -Wno-switch-enum -Wno-header-hygiene -Wno-poison-system-directories"
   if [ -f "/tmp/testpch.hpp.pch" ]; then
     FLAGS="$FLAGS -include-pch /tmp/testpch.hpp.pch"
   fi

@@ -70,10 +70,14 @@ struct TextFileWriter : public TextWriter<std::ofstream> {
         if(fname.empty()) {
             return;
         }
+        if(ss.is_open() == true) {
+            ss.close();
+        }
         ss.open(fname);
         if(ss.is_open() == false) {
             throw std::runtime_error("unable to open output file:" + fname.string());
         }
+        row = 1;
         file = fname;
     }
 

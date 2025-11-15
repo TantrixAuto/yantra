@@ -1736,6 +1736,37 @@ struct Parser {
         read_semi(tr);
     }
 
+    /// @brief read walker_interface pragma and set it in the specified walker
+    /// defines the external interface for the walker
+    inline void walker_interface() {
+        Tracer tr{lvl, "walker_interface"};
+
+        Token t = peek(tr);
+        if(t.id != Token::ID::ID) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+        }
+
+        auto walker = grammar.getWalker(t.text);
+        if(walker == nullptr) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "UNKNOWN_WALKER:{}", t.text);
+        }
+
+        if(grammar.isRootWalker(*walker) == false) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "WALKER_NOT_ROOT:{}", t.text);
+        }
+
+        lexer.next();
+        t = peek(tr);
+        if(t.id != Token::ID::ID) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+        }
+
+        walker->setInterfaceName(t.text);
+
+        lexer.next();
+        read_semi(tr);
+    }
+
     /// @brief read additional class members for the specified walker
     inline void walker_members() {
         Tracer tr{lvl, "walker_members"};
@@ -2044,6 +2075,10 @@ struct Parser {
 
         if(t.text == "walker_traversal") {
             return walker_traversal();
+        }
+
+        if(t.text == "walker_interface") {
+            return walker_interface();
         }
 
         if(t.text == "members") {
@@ -2529,16 +2564,27 @@ void parseInput(yg::Grammar& g, Stream& is) {
         }
     }
 
+    std::vector<std::pair<FilePos, std::string>> errors;
+
     // check for undefined codeblocks
-    std::vector<std::tuple<const ygp::Rule*, const yg::Walker*, const yg::Walker::FunctionSig*>> noCodeblocks;
-    if(g.checkEmptyCodeblocks == true) {
-        for(auto& pw : g.walkers) {
-            auto& w = pw;
-            for(auto& fsig : w->functionSigs) {
+    for(auto& pw : g.walkers) {
+        auto& w = *pw;
+        if(w.interfaceName.size() > 0) {
+            // if this is an external walker interface, verify
+            // that no codeblocks are defined for this walker
+            for(auto& cb : w.codeblocks) {
+                for(auto& ci : cb.second) {
+                    auto msg = std::format("Codeblock not allowed on external walkers");
+                    errors.emplace_back(ci.codeblock.pos, msg);
+                }
+            }
+        }else if(g.checkEmptyCodeblocks == true) {
+            // else verify that all codeblocks are defined for declared functions
+            for(auto& fsig : w.functionSigs) {
                 for(auto& f : fsig.second) {
                     for(auto& r : fsig.first->rules) {
                         bool found = false;
-                        for(auto& cb : w->codeblocks) {
+                        for(auto& cb : w.codeblocks) {
                             if(cb.first == r) {
                                 for(auto& c : cb.second) {
                                     if(c.func == f.func) {
@@ -2548,7 +2594,8 @@ void parseInput(yg::Grammar& g, Stream& is) {
                             }
                         }
                         if(found == false) {
-                            noCodeblocks.emplace_back(r, w.get(), &f);
+                            auto msg = std::format("Undefined codeblock: {}::{}({}) for {}({})", w.name, f.func, f.args, r->ruleSetName(), r->ruleName);
+                            errors.emplace_back(r->pos, msg);
                         }
                     }
                 }
@@ -2556,47 +2603,27 @@ void parseInput(yg::Grammar& g, Stream& is) {
         }
     }
 
+
     // check for unused tokens
-    std::vector<yglx::Regex*> unuseds;
     if(g.checkUnusedTokens == true) {
         for(auto& regex : g.regexes) {
             if((regex->unused == false) && (regex->usageCount == 0) && (regex->regexName != g.empty)) {
-                unuseds.push_back(regex.get());
+                auto msg = std::format("Unused token:{}", regex->regexName);
+                errors.emplace_back(regex->pos, msg);
             }
         }
     }
 
     // report parse errors if any
-    if((unuseds.size() > 0) || (noCodeblocks.size() > 0)) {
+    if(errors.size() > 0) {
         FilePos pos;
 
-        for(auto& u : noCodeblocks) {
-            const ygp::Rule* r = std::get<0>(u);
-            const yg::Walker* w = std::get<1>(u);
-            const yg::Walker::FunctionSig* f = std::get<2>(u);
-            printError(r->pos, "Undefined codeblock: {}::{}({}) for {}({})", w->name, f->func, f->args, r->ruleSetName(), r->ruleName);
-            pos = r->pos;
+        for(auto& e : errors) {
+            printError(e.first, "{}", e.second);
+            pos = e.first;
         }
 
-        for(auto& u : unuseds) {
-            printError(u->pos, "Unused token:{}", u->regexName);
-            pos = u->pos;
-        }
-
-        if(((unuseds.size() > 0) && (g.errorUnusedTokens == true)) || ((noCodeblocks.size() > 0) && (g.errorEmptyCodeblocks == true))) {
-            std::stringstream uss;
-            std::string sep;
-            if(unuseds.size() > 0) {
-                uss << std::format("Unused tokens:{}", unuseds.size());
-                sep = ", ";
-            }
-    
-            if(noCodeblocks.size() > 0) {
-                uss << std::format("{}Undefined codeblocks:{}", sep, noCodeblocks.size());
-            }
-    
-            throw GeneratorError(__LINE__, __FILE__, pos, "{}", uss.str());
-        }
+        throw GeneratorError(__LINE__, __FILE__, pos, "total: {}", errors.size());
     }
 
     for(auto& w : g.walkers) {

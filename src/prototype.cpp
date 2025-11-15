@@ -27,7 +27,11 @@
 #include "filepos.hpp"
 #include "nsutil.hpp"
 #include "print.hpp"
+
 #define TAG(X) X
+
+// there should be no spaces between X and Y whenever this tag is used in the code below
+#define TAG2(X,Y) X##Y
 
 #define CLSNAME CLASSQID
 
@@ -109,11 +113,7 @@ struct TAG(CLASSQID) {
     // read string into AST
     void readString(const std::string& s, const std::string_view& filename);
 
-    // walk AST, and write to output file
-    void walk(const std::vector<std::string>& walkers, const std::filesystem::path& odir, const std::string_view& filename);
-
-    // walk AST, no output file
-    void walk(const std::vector<std::string>& walkers);
+    ///PROTOTYPE_SEGMENT:walkerCallDecls
 
     // print AST
     void printAST(std::ostream& ss, const size_t& lvl, const std::string& indent) const;
@@ -148,7 +148,6 @@ throw TAG(CLASSQID)::Error(TAG(ROW), TAG(COL), TAG(SRC), TAG(MSG));
 
 namespace {
     ///PROTOTYPE_INCLUDE:nsutil
-    ///PROTOTYPE_INCLUDE:filepos
     ///PROTOTYPE_INCLUDE:textWriter
 
     static std::ostream* _log = nullptr;
@@ -157,11 +156,80 @@ namespace {
         assert(_log != nullptr);
         return *_log;
     }
+}
 
+///PROTOTYPE_ENTER:astNodeDeclsBlock
+///PROTOTYPE_INCLUDE:filepos
+namespace TAG2(CLASSQID,_AST) {
     struct TAG(AST);
+    struct TAG(TOKEN) {
+        FilePos pos;
+        std::string text;
+        inline TAG(TOKEN)() {}
+        inline TAG(TOKEN)(const FilePos& p, const std::string& t) : pos(p), text(t) {}
+        inline TAG(TOKEN)(const TAG(TOKEN)& src) : pos(src.pos), text(src.text) {}
+
+        inline void dump(std::ostream& ss, const size_t& lvl, const std::string& name, const std::string& indent, const size_t& depth) const {
+            if(lvl >= 2) {
+                ss << std::format("{}: {}+--{}({})\n", pos.str(), indent, name, text);
+            }else{
+                assert(lvl == 1);
+                ss << std::format("{}{}:{}({})", indent, depth, name, text);
+            }
+        }
+
+        inline const TAG(TOKEN)* get() const {
+            return this;
+        }
+
+        inline TAG(TOKEN)& go(TAG(AST)&) {
+            return *this;
+        }
+
+        inline TAG(TOKEN)& operator=(const TAG(TOKEN)& src) {
+            pos = src.pos;
+            text = src.text;
+            return *this;
+        }
+    };
+    ///PROTOTYPE_SEGMENT:astNodeDecls
+}
+///PROTOTYPE_LEAVE:astNodeDeclsBlock
+
+///PROTOTYPE_INCLUDE:astNodeDeclsBlock
+
+///PROTOTYPE_ENTER:SKIP
+namespace TAG2(CLASSQID,_AST) {
+    struct START_RULE {
+        inline START_RULE& go(TAG(AST)&) {
+            return *this;
+        }
+        inline void dump(std::ostream&, const size_t&, const std::string&, const size_t&) const {
+        }
+    };
+}
+///PROTOTYPE_LEAVE:SKIP
+
+namespace {
+    struct _astEmpty {
+        inline void dump(std::ostream&, const size_t&, const FilePos&, const std::string&, const size_t&) const {
+        }
+    };
+}
+
+namespace TAG2(CLASSQID,_AST) {
+    ///PROTOTYPE_SEGMENT:astNodeDefns
+}
+
+namespace {
+    ///PROTOTYPE_ENTER:SKIP
+    using AstNode = std::variant <
+        TAG2(CLASSQID,_AST)::TAG(TOKEN)
+    >;
+    ///PROTOTYPE_LEAVE:SKIP
+    ///PROTOTYPE_SEGMENT:astNodeItems
 
     struct TAG(AST) : public NonCopyable {
-        using Error = TAG(CLASSQID)::Error;
         TAG(CLASSQID)& pub;
 
         inline TAG(AST)(TAG(CLASSQID)& p) : pub(p) {}
@@ -171,75 +239,19 @@ namespace {
         inline TAG(AST)& operator=(const TAG(AST)&) = delete;
         inline TAG(AST)& operator=(TAG(AST)&&) = delete;
 
-        struct _astEmpty {
-            inline void dump(std::ostream&, const size_t&, const FilePos&, const std::string&, const size_t&) const {
-            }
-        };
-
-        struct TAG(TOKEN) {
-            FilePos pos;
-            std::string text;
-            inline TAG(TOKEN)() {}
-            inline TAG(TOKEN)(const FilePos& p, const std::string& t) : pos(p), text(t) {}
-            inline TAG(TOKEN)(const TAG(TOKEN)& src) : pos(src.pos), text(src.text) {}
-
-            inline void dump(std::ostream& ss, const size_t& lvl, const std::string& name, const std::string& indent, const size_t& depth) const {
-                if(lvl >= 2) {
-                    ss << std::format("{}: {}+--{}({})\n", pos.str(), indent, name, text);
-                }else{
-                    assert(lvl == 1);
-                    ss << std::format("{}{}:{}({})", indent, depth, name, text);
-                }
-            }
-
-            inline const TAG(TOKEN)* get() const {
-                return this;
-            }
-
-            inline TAG(TOKEN)& go(TAG(AST)&) {
-                return *this;
-            }
-
-            inline TAG(TOKEN)& operator=(const TAG(TOKEN)& src) {
-                pos = src.pos;
-                text = src.text;
-                return *this;
-            }
-        };
-
-        ///PROTOTYPE_ENTER:SKIP
-        struct START_RULE{
-            inline START_RULE& go(TAG(AST)&) {
-                return *this;
-            }
-            inline void dump(std::ostream&, const size_t&, const std::string&, const size_t&) const {
-            }
-        };
-
-        using AstNode = std::variant <
-            TAG(TOKEN)
-        >;
-        ///PROTOTYPE_LEAVE:SKIP
-
-        ///PROTOTYPE_SEGMENT:astNodeDecls
-
-        ///PROTOTYPE_SEGMENT:astNodeDefns
-
-        ///PROTOTYPE_SEGMENT:astNodeItems
-
         std::vector<std::unique_ptr<AstNode>> astNodes;
 
-        inline TAG(TOKEN)& createToken(const FilePos& p, const std::string& text) {
-            astNodes.push_back(std::make_unique<AstNode>(TAG(TOKEN)(p, text)));
+        inline TAG2(CLASSQID,_AST)::TAG(TOKEN)& createToken(const FilePos& p, const std::string& text) {
+            astNodes.push_back(std::make_unique<AstNode>(TAG2(CLASSQID,_AST)::TAG(TOKEN)(p, text)));
             AstNode& ri = *(astNodes.back());
-            return std::get<TAG(TOKEN)>(ri);
+            return std::get<TAG2(CLASSQID,_AST)::TAG(TOKEN)>(ri);
         }
 
         template<typename AstNodeT>
         ///PROTOTYPE_ENTER:SKIP
         [[maybe_unused]]
         ///PROTOTYPE_LEAVE:SKIP
-        inline AstNodeT& createAstNode(const FilePos& p, const TAG(TOKEN)& anchor) {
+        inline AstNodeT& createAstNode(const FilePos& p, const TAG2(CLASSQID,_AST)::TAG(TOKEN)& anchor) {
             auto w = std::make_unique<AstNode>();
             astNodes.push_back(std::move(w));
             AstNode& astNode = *(astNodes.back());
@@ -247,49 +259,42 @@ namespace {
             return std::get<AstNodeT>(astNode);
         }
 
-        TAG(START_RULE)* R_start = nullptr;
+        TAG2(CLASSQID,_AST)::TAG(START_RULE)* R_start = nullptr;
 
-        ///PROTOTYPE_ENTER:SKIP
-        struct TAG(WALKER) {
-            inline TAG(WALKER)(TAG(CLASSQID)&) {}
-
-            inline std::unique_ptr<TAG(TOKEN)> go(TAG(START_RULE)&) {
-                return nullptr;
-            }
-            inline void layout() {
-            }
-        };
-        ///PROTOTYPE_LEAVE:SKIP
-
-        ///PROTOTYPE_SEGMENT:prologue
-
-        template<typename T>
-        struct WalkerNodeRef : public NonCopyable {
-            const T& node;
-            bool called = false;
-            inline WalkerNodeRef(const T& n, const bool& c = false) : node(n), called(c) {}
-        };
-
-        template<typename T>
-        struct WalkerNodeCommit : public NonCopyable {
-            WalkerNodeRef<T>& node;
-            inline WalkerNodeCommit(WalkerNodeRef<T>& n) : node(n) {}
-            inline ~WalkerNodeCommit() {
-                node.called = true;
-            }
-        };
-
-        ///PROTOTYPE_SEGMENT:walkers
-
-        ///PROTOTYPE_SEGMENT:epilogue
-
-        inline TAG(START_RULE)& _root() const {
+        inline TAG2(CLASSQID,_AST)::TAG(START_RULE)& _root() const {
             assert(R_start);
             return *(R_start);
         }
     }; // TAG(AST)
-} // namespace
 
+    ///PROTOTYPE_ENTER:SKIP
+    struct TAG(WALKER) {
+        inline TAG(WALKER)(TAG(CLASSQID)&) {}
+
+        inline std::unique_ptr<TAG2(CLASSQID,_AST)::TAG(TOKEN)> go(TAG2(CLASSQID,_AST)::TAG(START_RULE)&) {
+            return nullptr;
+        }
+    };
+    ///PROTOTYPE_LEAVE:SKIP
+
+    template<typename W, typename T>
+    struct WalkerNodeCommit : public NonCopyable {
+        using NR = W::template NodeRef<T>;
+        NR& node;
+        inline WalkerNodeCommit(NR& n) : node(n) {}
+        inline ~WalkerNodeCommit() {
+            node.called = true;
+        }
+    };
+
+    ///PROTOTYPE_SEGMENT:prologue
+}
+
+///PROTOTYPE_SEGMENT:walkers
+
+namespace {
+    ///PROTOTYPE_SEGMENT:epilogue
+} // namespace
 
 namespace {
 [[maybe_unused]]
@@ -508,14 +513,14 @@ struct Parser {
 }; // Parser
 
 template<>
-inline TAG(AST)::TAG(TOKEN)& Parser::create<TAG(AST)::TAG(TOKEN)>(const ValueItem& vi) {
+inline TAG2(CLASSQID,_AST)::TAG(TOKEN)& Parser::create<TAG2(CLASSQID,_AST)::TAG(TOKEN)>(const ValueItem& vi) {
     auto& cel = ast.createToken(vi.token.pos, vi.token.text);
     return cel;
 }
 
 ///PROTOTYPE_ENTER:SKIP
 template<>
-inline TAG(AST)::TAG(START_RULE)& Parser::create<TAG(AST)::TAG(START_RULE)>(const ValueItem&) {
+inline TAG2(CLASSQID,_AST)::TAG(START_RULE)& Parser::create<TAG2(CLASSQID,_AST)::TAG(START_RULE)>(const ValueItem&) {
     // control flow won't usually reach here
     throw std::runtime_error("Don't do this please");
 }
@@ -553,7 +558,7 @@ inline void Parser::leave() {
         throw std::runtime_error("parse error");
     }
     auto& vi = *(valueStack.at(0));
-    auto& R_start = create<TAG(AST)::TAG(START_RULE)>(vi);
+    auto& R_start = create<TAG2(CLASSQID,_AST)::TAG(START_RULE)>(vi);
     ast.R_start = &R_start;
 }
 
@@ -675,19 +680,7 @@ struct TAG(CLASSQID)::Impl {
         endStream();
     }
 
-    inline void walk(std::vector<std::string> walkers, const std::filesystem::path& odir, const std::string_view& filename) {
-        auto& start = ast._root();
-        ///PROTOTYPE_ENTER:SKIP
-        unused(start, odir, filename);
-        ///PROTOTYPE_LEAVE:SKIP
-
-        WalkingGuard wg(*this);
-        for(auto& w : walkers) {
-            if(w == "") {
-            }
-            ///PROTOTYPE_SEGMENT:walkerCalls
-        }
-    }
+    ///PROTOTYPE_SEGMENT:walkerCallImpls
 
     inline void printAST(std::ostream& ss, const size_t& lvl, const std::string& indent) const {
         auto& start = ast._root();
@@ -714,13 +707,7 @@ void TAG(CLASSQID)::endStream() {
     return _impl->endStream();
 }
 
-void TAG(CLASSQID)::walk(const std::vector<std::string>& walkers, const std::filesystem::path& odir, const std::string_view& filename) {
-    return _impl->walk(walkers, odir, filename);
-}
-
-void TAG(CLASSQID)::walk(const std::vector<std::string>& walkers) {
-    return _impl->walk(walkers, "", "");
-}
+///PROTOTYPE_SEGMENT:walkerCallDefns
 
 void TAG(CLASSQID)::readFile(const std::string& filename) {
     std::ifstream is(filename);
@@ -762,12 +749,10 @@ inline int help(const std::string& xname, const std::string& msg) {
     if(msg.size() > 0) {
         std::print("== {} ==\n", msg);
     }
-#if HAS_REPL
     std::print("{} <options>\n", xxname.string());
     std::print("options:\n");
+#if HAS_REPL
     std::print("    -i              : read input interactively from console\n");
-#else
-    std::print("{} -f <filename> -s <string> -l <log>\n", xxname.string());
 #endif
     std::print("    -f <filename>   : read input from file <filename>\n");
     std::print("    -s <string>     : read input from <string> passed on commandline\n");
@@ -780,11 +765,22 @@ inline int help(const std::string& xname, const std::string& msg) {
     return 1;
 }
 
-inline void printASTIf(const size_t& printAstLevel, const TAG(CLASSQID)& mp) {
+inline void doWalk(const size_t& printAstLevel, TAG(CLASSQID)& mp, std::vector<std::string> walkers, const std::filesystem::path& odir, const std::string_view& filename) {
     if(printAstLevel > 0) {
         mp.printAST(std::cout, printAstLevel, "");
         if(printAstLevel == 1) {
             std::cout << std::endl;
+        }
+    }
+    // mp.walk(walkers, odir, filename);
+    unused(walkers, odir, filename);
+
+    for(auto& w : walkers) {
+        if(w == "") {
+        }
+        ///PROTOTYPE_SEGMENT:walkerCalls
+        else {
+            throw std::runtime_error("unknown walker: " + w);
         }
     }
 }
@@ -896,8 +892,7 @@ int main(int argc, char* argv[]) {
                 // instance of the module
                 TAG(CLASSQID) mp("main", log);
                 mp.readFile(f);
-                printASTIf(printAstLevel, mp);
-                mp.walk(walkers, outf, f);
+                doWalk(printAstLevel, mp, walkers, outf, f);
             }catch(const std::exception& ex) {
                 ++errs;
                 std::print("err:{}\n", ex.what());
@@ -915,8 +910,7 @@ int main(int argc, char* argv[]) {
                 // instance of the module
                 TAG(CLASSQID) mp("main", log);
                 mp.readString(f, inn);
-                printASTIf(printAstLevel, mp);
-                mp.walk(walkers);
+                doWalk(printAstLevel, mp, walkers, "", "");
             }catch(const std::exception& ex) {
                 std::print("err:{}\n", ex.what());
                 ++errs;
@@ -936,8 +930,7 @@ int main(int argc, char* argv[]) {
 
             try {
                 mp.readFile(f);
-                printASTIf(printAstLevel, mp);
-                mp.walk(walkers);
+                doWalk(printAstLevel, mp, walkers, "", "");
             }catch(const std::exception& ex) {
                 std::print("err:{}\n", ex.what());
             }
@@ -950,8 +943,7 @@ int main(int argc, char* argv[]) {
 
             try {
                 mp.readString(f, "<str>");
-                printASTIf(printAstLevel, mp);
-                mp.walk(walkers);
+                doWalk(printAstLevel, mp, walkers, "", "");
             }catch(const std::exception& ex) {
                 std::print("err:{}\n", ex.what());
             }
