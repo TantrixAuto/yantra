@@ -1,6 +1,7 @@
 #include <iostream>
 #include <format>
 #include <filesystem>
+#include <functional>
 #include <assert.h>
 #include "CompilerBase.hpp"
 

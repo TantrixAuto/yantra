@@ -164,7 +164,7 @@ struct Walker : public NonCopyable {
         const std::string& func,
         const std::string& tokenClass
     ) const -> std::string {
-        auto fsig = hasFunctionSig(rs, func);
+        auto fsig = hasFunctionSig(rs, func); // NOLINT(readability-qualified-auto)
         if(fsig != nullptr) {
             return fsig->type;
         }

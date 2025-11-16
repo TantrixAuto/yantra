@@ -469,7 +469,8 @@ struct Generator {
     }
 
     /// @brief generates function sig for walker
-    inline std::string generateWalkerSig(const yg::Walker& w) {
+    static inline auto
+    generateWalkerSig(const yg::Walker& w) -> std::string{
         std::stringstream ss;
         std::string sep;
         ss << std::format("walk_{}(", w.name);
@@ -485,7 +486,8 @@ struct Generator {
     }
 
     /// @brief generates calls to each walker
-    inline std::string generateWalkerCall(const yg::Walker& w) {
+    static inline auto
+    generateWalkerCall(const yg::Walker& w) -> std::string {
         std::stringstream ss;
         std::string sep;
         if(w.interfaceName.size() > 0) {
@@ -752,7 +754,12 @@ struct Generator {
 
             if (n->varName.size() > 0) {
                 if(n->isRule() == true) {
-                    tw.writeln("{}            NodeRef<{}_AST::{}> {}(_n.{}, {}); /*var-1*/", indent, grammar.className, n->name, n->varName, n->varName, called);
+                    if((n->name != grammar.end) && (fsig.isUDF == false)) {
+                        tw.writeln("{}            NodeRef<{}_AST::{}> {}(_n.{}, {}, [&](){{return {}({});}}); /*var-1x*/", indent, grammar.className, n->name, n->varName, n->varName, called, fsig.func, n->varName);
+                    }else{
+                        tw.writeln("{}            NodeRef<{}_AST::{}> {}(_n.{}); /*var-1y*/", indent, grammar.className, n->name, n->varName, n->varName);
+                    }
+
                 }else{
                     tw.writeln("{}            const {}_AST::{}& {} = _n.{}; /*var-2*/", indent, grammar.className, grammar.tokenClass, n->varName, n->varName);
                 }
@@ -771,9 +778,9 @@ struct Generator {
             for (const auto& n : r.nodes) {
                 if((n->name != grammar.end) && (n->isRule() == true) && (fsig.isUDF == false)) {
                     if (n->varName.size() > 0) {
-                        tw.writeln("{}            if({}.called == false) {}({});", indent, n->varName, fsig.func, n->varName);
+                        //tw.writeln("{}            if({}.called == false) {}({}); /*var-4*/", indent, n->varName, fsig.func, n->varName);
                     }else{
-                        tw.writeln("{}            NodeRef<{}_AST::{}> {}(_n.{}, {}); /*var-3*/", indent, grammar.className, n->name, n->idxName, n->idxName, called);
+                        tw.writeln("{}            NodeRef<{}_AST::{}> {}(_n.{}); /*var-3*/", indent, grammar.className, n->name, n->idxName, n->idxName);
                         tw.writeln("{}            {}({});", indent, fsig.func, n->idxName);
                     }
                 }
@@ -882,11 +889,7 @@ struct Generator {
             }
 
             tw.writeln("{}template<typename T>", indent);
-            tw.writeln("{}struct NodeRef {{", indent);
-            tw.writeln("{}    const T& node;", indent);
-            tw.writeln("{}    bool called = false;", indent);
-            tw.writeln("{}    inline NodeRef(const T& n, const bool& c = false) : node(n), called(c) {{}}", indent);
-            tw.writeln("{}}};", indent);
+            tw.writeln("{}using NodeRef = {}_AST::NodeRef<T>;", indent, grammar.className);
             tw.writeln();
 
             if((walker.interfaceName.size() > 0) && (opts().amalgamatedFile == true)) {
@@ -931,7 +934,7 @@ struct Generator {
                     if(fsig.args.size() > 0) {
                         args = std::format(", {}", fsig.args);
                     }
-                    tw.writeln("{}virtual {} {}(NodeRef<{}_AST::{}>& node{}) = 0;", indent, fsig.type, fsig.func, grammar.className, rs.name, args);
+                    tw.writeln("{}auto {}(NodeRef<{}_AST::{}>& node{}) -> {};", indent, fsig.func, grammar.className, rs.name, args, fsig.type);
                     tw.writeln();
                 }
             }
@@ -960,8 +963,6 @@ struct Generator {
         const std::unordered_map<std::string, std::string>& vars,
         const std::string_view& indent
     ) {
-        auto xindent = std::string(indent) + "    ";
-
         // generate Walker
         for (const auto& pwalker : grammar.walkers) {
             auto& walker = *pwalker;
@@ -980,64 +981,54 @@ struct Generator {
                 generateWalkerInterface(walker, tw, wname, vars, indent);
             }
 
-            // generate Visitor implementation
-            // this is a separate struct that inherits from the interface because
-            // - the go() function implementation cannot be inline in the interface
-            //   since it could be generated in a separate .hpp file
-            // - the go() function body cannot be defined outside the class hierarchy
-            //   since it might refer to a type defined as a member of the walker
-            tw.writeln("{}struct Visitor_{} : public {} {{", indent, wname, wname);
-            if(auto twi = TextFileIndenter(tw)) {
-                for(const auto& prs : grammar.ruleSets) {
-                    auto& rs = *prs;
-                    auto funcl = walker.getFunctions(rs);
-    
-                    for(auto& pfsig : funcl) {
-                        const auto& fsig = *pfsig;
-                        std::string args;
-                        if(fsig.args.size() > 0) {
-                            args = std::format(", {}", fsig.args);
-                        }
-                        tw.writeln("{}virtual {} {}(NodeRef<{}_AST::{}>& node{}) override {{", indent, fsig.type, fsig.func, grammar.className, rs.name, args);
-                        if(fsig.isUDF == false) {
-                            tw.writeln("{}    WalkerNodeCommit<{}, {}_AST::{}> _wc(node);", indent, wname, grammar.className, rs.name);
-                        }
-                
-                        auto xparams = extractParams(fsig.args);
-                
-                        std::string called;
-                        if(walker.traversalMode == yg::Walker::TraversalMode::Manual) {
-                            called = "true";
-                        }else{
-                            called = "false";
-                        }
-                
-                        // generate Visitor
-                        tw.writeln("{}    return std::visit(overload{{", indent);
-                
-                        if(true) {
-                            tw.writeln("{}        [&](const _astEmpty&) -> {} {{", indent, fsig.type);
-                            tw.writeln("{}            throw std::runtime_error(\"internal_error\"); //should never reach here", indent);
-                            tw.writeln("{}        }},", indent);
-                            tw.writeln();
-                        }
-                
-                        // generate handlers for all rules in ruleset
-                        for (const auto& r : rs.rules) {
-                            generateRuleVisitorBody(tw, walker, fsig, rs, *r, called, xparams, indent);
-                        }
-                        tw.writeln("{}    }}, node.node.rule);", indent);
-                        tw.writeln("{}}}", indent);
+            for(const auto& prs : grammar.ruleSets) {
+                auto& rs = *prs;
+                auto funcl = walker.getFunctions(rs);
+
+                for(auto& pfsig : funcl) {
+                    const auto& fsig = *pfsig;
+                    std::string args;
+                    if(fsig.args.size() > 0) {
+                        args = std::format(", {}", fsig.args);
+                    }
+
+                    tw.writeln("{}auto {}::{}(NodeRef<{}_AST::{}>& node{}) -> {} {{", indent, wname, fsig.func, grammar.className, rs.name, args, fsig.type);
+                    if(fsig.isUDF == false) {
+                        tw.writeln("{}    WalkerNodeCommit<{}, {}_AST::{}> _wc(node);", indent, wname, grammar.className, rs.name);
+                    }
+            
+                    auto xparams = extractParams(fsig.args);
+            
+                    std::string called;
+                    if(walker.traversalMode == yg::Walker::TraversalMode::Manual) {
+                        called = "true";
+                    }else{
+                        called = "false";
+                    }
+            
+                    // generate Visitor
+                    tw.writeln("{}    return std::visit(overload{{", indent);
+            
+                    if(true) {
+                        tw.writeln("{}        [&](const _astEmpty&) -> {} {{", indent, fsig.type);
+                        tw.writeln("{}            throw std::runtime_error(\"internal_error\"); //should never reach here", indent);
+                        tw.writeln("{}        }},", indent);
                         tw.writeln();
                     }
+            
+                    // generate handlers for all rules in ruleset
+                    for (const auto& r : rs.rules) {
+                        generateRuleVisitorBody(tw, walker, fsig, rs, *r, called, xparams, indent);
+                    }
+                    tw.writeln("{}    }}, node.node.rule);", indent);
+                    tw.writeln("{}}}", indent);
+                    tw.writeln();
                 }
             }
-            tw.writeln("{}}};", indent);
-            tw.writeln();
 
             if(walker.interfaceName.size() == 0) {
                 // generate Walker implementation
-                tw.writeln("{}struct Walker_{} : public Visitor_{} {{", indent, walker.name, wname);
+                tw.writeln("{}struct Walker_{} : public {} {{", indent, walker.name, wname);
                 if(auto twi = TextFileIndenter(tw)) {
                     generateWriter(tw, walker, indent);
                 }
@@ -1073,7 +1064,6 @@ struct Generator {
                 continue;
             }
 
-            auto wname = std::format("Walker_{}", walker.name);
             tw.writeln("{}else if(w == \"{}\") {{", indent, walker.name);
             if(walker.interfaceName.size() > 0) {
                 tw.writeln("{}    auto pwalker = {}::create();", indent, walker.interfaceName);
@@ -1859,7 +1849,7 @@ struct Generator {
                 }else if (includeName == "astNodeDeclsBlock") {
                     TextFileWriter* ptw = &tw;
                     TextFileWriter xtw;
-                    for(auto& pw : grammar.walkers) {
+                    for(const auto& pw : grammar.walkers) {
                         auto& w = *pw;
                         if(w.interfaceName.size() > 0) {
                             auto astFile = std::format("{}_astnodes.hpp", grammar.className);
@@ -1897,10 +1887,7 @@ struct Generator {
                 if (skip == false) {
                     PRINT("ind:[{}]:[{}]:[{}]", outerIndent, innerIndent, tline);
                     generatePrototypeLine(tw, tline, vars, indent);
-                }else if(eblockName == "astNodeDeclsBlock") {
-                    tBlock += "\n";
-                    tBlock += line;
-                }else if(eblockName == "throwError") {
+                }else if((eblockName == "astNodeDeclsBlock") || (eblockName == "throwError")) {
                     tBlock += "\n";
                     tBlock += line;
                 }

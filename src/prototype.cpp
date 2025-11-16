@@ -54,6 +54,7 @@ constexpr const char* MSG = "";
 #include <ranges>
 #include <format>
 #include <filesystem>
+#include <functional>
 #include <unordered_map>
 #include <assert.h>
 ///PROTOTYPE_LEAVE:stdHeaders
@@ -63,19 +64,19 @@ constexpr const char* MSG = "";
 struct TAG(CLASSQID) {
     struct Error : public std::runtime_error {
         template <typename ...ArgsT>
-        static inline std::string
-        fmtT(const std::format_string<ArgsT...>& msg, ArgsT... args) {
+        static inline auto
+        fmtT(const std::format_string<ArgsT...>& msg, ArgsT... args) -> std::string {
             auto xmsg = std::format(msg, std::forward<ArgsT>(args)...);
             return xmsg;
         }
-        static inline std::string
-        fmt(const size_t& r, const size_t& c, const std::string_view& f, const std::string& m) {
+        static inline auto
+        fmt(const size_t& r, const size_t& c, const std::string_view& f, const std::string& m) -> std::string {
             auto ymsg = std::format("{}({:03d},{:03d}):{}", f, r, c, m);
             return ymsg;
         }
         template <typename ...ArgsT>
-        static inline std::string
-        fmt(const size_t& r, const size_t& c, const std::string_view& f, const std::format_string<ArgsT...>& msg, ArgsT... args) {
+        static inline auto
+        fmt(const size_t& r, const size_t& c, const std::string_view& f, const std::format_string<ArgsT...>& msg, ArgsT... args) -> std::string {
             auto xmsg = fmtT(msg, args...);
             auto ymsg = fmt(r, c, f, xmsg);
             return ymsg;
@@ -100,7 +101,7 @@ struct TAG(CLASSQID) {
 
     ///PROTOTYPE_SEGMENT:classMembers
 
-    TAG(CLASSQID)(const std::string& name, const std::string& logger = "");
+    explicit TAG(CLASSQID)(const std::string& name, const std::string& logger = "");
     ~TAG(CLASSQID)();
 
     void beginStream();
@@ -193,6 +194,19 @@ namespace TAG2(CLASSQID,_AST) {
         }
     };
     ///PROTOTYPE_SEGMENT:astNodeDecls
+    template<typename T>
+    struct NodeRef {
+        const T& node;
+        bool called = false;
+        std::function<void()> fn;
+        inline NodeRef(const T& n, const bool& c, std::function<void()> f) : node(n), called(c), fn(f) {}
+        inline NodeRef(const T& n) : node(n), called(true) {}
+        inline ~NodeRef() {
+            if((called == false) && (fn)) {
+                fn();
+            }
+        }
+    };
 }
 ///PROTOTYPE_LEAVE:astNodeDeclsBlock
 
