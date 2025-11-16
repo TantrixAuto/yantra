@@ -1912,74 +1912,78 @@ struct Parser {
         if(walker == nullptr) {
             throw GeneratorError(__LINE__, __FILE__, rname.pos, "NO_DEFAULT_WALKER");
         }
-        std::string func;
+
+        auto func = walker->defaultFunctionName;
+        Token args;
 
         Token t = peek(tr);
 
-        if(t.id != Token::ID::ID) {
-            throw GeneratorError(__LINE__, __FILE__, rname.pos, "INVALID_INPUT");
-        }
-
-        //%function expr Walker::eval() -> int;
-        //               ^
-        Token wname = peek(tr);
-
-        lexer.next();
-
-        t = peek(tr);
-        if(t.id == Token::ID::DBLCOLON) {
+        if(t.id == Token::ID::ID) {
             //%function expr Walker::eval() -> int;
-            //                     ^
-            walker = grammar.getWalker(wname.text);
-            if(walker == nullptr) {
-                throw GeneratorError(__LINE__, __FILE__, wname.pos, "UNKNOWN_WALKER:{}", wname.text);
-            }
-
+            //               ^
+            Token wname = peek(tr);
+    
             lexer.next();
-
-            //%function expr Walker::eval() -> int;
-            //                       ^
+    
             t = peek(tr);
-            if(t.id != Token::ID::ID) {
+            if(t.id == Token::ID::DBLCOLON) {
+                //%function expr Walker::eval() -> int;
+                //                     ^
+                walker = grammar.getWalker(wname.text);
+                if(walker == nullptr) {
+                    throw GeneratorError(__LINE__, __FILE__, wname.pos, "UNKNOWN_WALKER:{}", wname.text);
+                }
+    
+                lexer.next();
+    
+                //%function expr Walker::eval() -> int;
+                //                       ^
+                t = peek(tr);
+                if(t.id != Token::ID::ID) {
+                    throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+                }
+                func = t.text;
+                lexer.next();
+    
+            }else{
+                assert(t.id == Token::ID::LBRACKET);
+                //%function expr eval() -> int;
+                //                   ^
+                func = wname.text;
+            }
+    
+            //%function expr Walker::eval() -> int;
+            //                           ^
+            t = peek(tr);
+            if(t.id != Token::ID::LBRACKET) {
                 throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
             }
-            func = t.text;
+    
+            lexer.setMode_Args();
             lexer.next();
-
+    
+            //%function expr Walker::eval(int x) -> int;
+            //                            ^
+            args = peek(tr);
+            if(args.id != Token::ID::ARGS) {
+                throw GeneratorError(__LINE__, __FILE__, args.pos, "INVALID_INPUT");
+            }
+    
+            lexer.next();
+    
+            //%function expr Walker::eval(int x) -> int;
+            //                                 ^
+            t = peek(tr);
+            if(t.id != Token::ID::RBRACKET) {
+                throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+            }
+    
+            lexer.next();
         }else{
-            assert(t.id == Token::ID::LBRACKET);
-            //%function expr eval() -> int;
-            //                   ^
-            func = wname.text;
+            if(t.id != Token::ID::POINTER) {
+                throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+            }
         }
-
-        //%function expr Walker::eval() -> int;
-        //                           ^
-        t = peek(tr);
-        if(t.id != Token::ID::LBRACKET) {
-            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
-        }
-
-        lexer.setMode_Args();
-        lexer.next();
-
-        //%function expr Walker::eval(int x) -> int;
-        //                            ^
-        Token args = peek(tr);
-        if(args.id != Token::ID::ARGS) {
-            throw GeneratorError(__LINE__, __FILE__, args.pos, "INVALID_INPUT");
-        }
-
-        lexer.next();
-
-        //%function expr Walker::eval(int x) -> int;
-        //                                 ^
-        t = peek(tr);
-        if(t.id != Token::ID::RBRACKET) {
-            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
-        }
-
-        lexer.next();
 
         bool autowalk = false;
         //%function expr Walker::eval() -> int;
