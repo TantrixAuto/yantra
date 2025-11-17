@@ -2570,6 +2570,19 @@ void parseInput(yg::Grammar& g, Stream& is) {
 
     std::vector<std::pair<FilePos, std::string>> errors;
 
+    for(auto& pw : g.walkers) {
+        auto& w = *pw;
+        for(auto& fsig : w.functionSigs) {
+            for(auto& f : fsig.second) {
+                if(f.func == "skip") {
+                    auto msg = std::format("reserved function name: skip");
+                    assert(fsig.first->rules.size() > 0);
+                    errors.emplace_back(fsig.first->rules.at(0)->pos, msg);
+                }
+            }
+        }
+    }
+
     // check for undefined codeblocks
     for(auto& pw : g.walkers) {
         auto& w = *pw;

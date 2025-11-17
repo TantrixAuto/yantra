@@ -194,17 +194,29 @@ namespace TAG2(CLASSQID,_AST) {
         }
     };
     ///PROTOTYPE_SEGMENT:astNodeDecls
-    template<typename T>
-    struct NodeRef {
-        const T& node;
+    struct NodeRefBase {
         bool called = false;
-        std::function<void()> fn;
-        inline NodeRef(const T& n, const bool& c, std::function<void()> f) : node(n), called(c), fn(f) {}
-        inline NodeRef(const T& n) : node(n), called(true) {}
-        inline ~NodeRef() {
-            if((called == false) && (fn)) {
-                fn();
+    };
+
+    template<typename T>
+    struct NodeRef : public NodeRefBase {
+        const T& node;
+        inline NodeRef(const T& n) : node(n) {}
+    };
+
+    struct NodeRefPostExec {
+        std::vector<std::pair<NodeRefBase*, std::function<void()>>> nodeRefs;
+        inline ~NodeRefPostExec() {
+            for(auto& pnr : nodeRefs) {
+                auto& nr = *(pnr.first);
+                auto& fn = pnr.second;
+                if((nr.called == false) && (fn)) {
+                    fn();
+                }
             }
+        }
+        inline void add(NodeRefBase& nr, std::function<void()> fn) {
+            nodeRefs.emplace_back(&nr, fn);
         }
     };
 }

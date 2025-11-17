@@ -671,48 +671,6 @@ struct Generator {
         tw.writeln("{}>;", indent);
     }
 
-    /// @brief generates member function corresponding to the semantic action for each rule
-    inline void generateRuleHandler(
-        TextFileWriter& tw,
-        const yg::Walker& walker,
-        const ygp::Rule& r,
-        const yg::Walker::FunctionSig& fsig,
-        const std::string& isVirtual,
-        const std::string& isOverride,
-        const yg::Walker::CodeInfo* ci,
-        const std::unordered_map<std::string, std::string>& vars,
-        const std::string_view& indent
-    ) {
-        auto hname = getFunctionName(r, fsig.func);
-        std::string returnType = fsig.type;
-
-        // infer indent for function args
-        tw.writeln("{}//RULE_HANDLER({}):{}", indent, walker.name, r.str(false));
-
-        // get args list as indented string
-        StringStreamWriter sw;
-        getArgs(sw, r, fsig, ci, indent);
-
-        // open function
-        if(sw.wrote == true) {
-            tw.writeln("{}{} {}", indent, isVirtual, returnType);
-            tw.writeln("{}{}(", indent, hname);
-            tw.swrite(sw);
-            tw.writeln("{}){} {{", indent, isOverride);
-        }else{
-            tw.writeln("{}{} {} {}(){} {{", indent, isVirtual, returnType, hname, isOverride);
-        }
-
-        // generate function body, if any
-        if(ci != nullptr) {
-            generateCodeBlock(tw, ci->codeblock, std::string(indent) + "    ", true, vars);
-        }
-
-        // close function
-        tw.writeln("{}}}", indent);
-        tw.writeln();
-    }
-
     /// @brief generates visitor overload to invoke the corresponding member function
     inline void generateRuleVisitorBody(
         TextFileWriter& tw,
@@ -720,7 +678,6 @@ struct Generator {
         const yg::Walker::FunctionSig& fsig,
         const ygp::RuleSet& rs,
         const ygp::Rule& r,
-        const std::string_view& called,
         const std::string& xparams,
         const std::string_view& indent
     ) {
@@ -745,6 +702,7 @@ struct Generator {
 
         // open anonymous function
         tw.writeln("{}        [&]({}const {}_AST::{}::{}& _n) -> {} {{", indent, node_unused, grammar.className, rs.name, r.ruleName, fsig.type);
+        tw.writeln("{}            NodeRefPostExec _nrpx;", indent);
 
         // generate node-refs
         for (const auto& n : r.nodes) {
@@ -752,40 +710,38 @@ struct Generator {
                 continue;
             }
 
+            auto autowalk = false;
+            if(
+                (n->isRule() == true) &&
+                (walker.traversalMode == yg::Walker::TraversalMode::TopDown) &&
+                (n->name != grammar.end) &&
+                ((fsig.isUDF == false) || (fsig.func == walker.defaultFunctionName))
+            ) {
+                autowalk = true;
+            }
+
+            unused(autowalk);
             if (n->varName.size() > 0) {
                 if(n->isRule() == true) {
-                    if((n->name != grammar.end) && (fsig.isUDF == false)) {
-                        tw.writeln("{}            NodeRef<{}_AST::{}> {}(_n.{}, {}, [&](){{return {}({});}}); /*var-1x*/", indent, grammar.className, n->name, n->varName, n->varName, called, fsig.func, n->varName);
-                    }else{
-                        tw.writeln("{}            NodeRef<{}_AST::{}> {}(_n.{}); /*var-1y*/", indent, grammar.className, n->name, n->varName, n->varName);
+                    tw.writeln("{}            NodeRef<{}_AST::{}> {}(_n.{}); /*var-4x*/", indent, grammar.className, n->name, n->varName, n->varName);
+                    if(autowalk == true) {
+                        tw.writeln("{}            _nrpx.add({}, [&](){{return {}({});}}); /*var-4x*/", indent, n->varName, fsig.func, n->varName);
                     }
-
                 }else{
                     tw.writeln("{}            const {}_AST::{}& {} = _n.{}; /*var-2*/", indent, grammar.className, grammar.tokenClass, n->varName, n->varName);
                 }
-            }
-        }
-
-        // call the handler
-        if(fsig.isUDF == false) {
-            tw.writeln("{}            {}({});/*call-1*/", indent, hname, params.str());
-        }else{
-            tw.writeln("{}            return {}({});/*call-2*/", indent, hname, params.str());
-        }
-
-        // if top-down traversal, invoke all nodes that were not invoked in the handler
-        if(walker.traversalMode == yg::Walker::TraversalMode::TopDown) {
-            for (const auto& n : r.nodes) {
-                if((n->name != grammar.end) && (n->isRule() == true) && (fsig.isUDF == false)) {
-                    if (n->varName.size() > 0) {
-                        //tw.writeln("{}            if({}.called == false) {}({}); /*var-4*/", indent, n->varName, fsig.func, n->varName);
-                    }else{
-                        tw.writeln("{}            NodeRef<{}_AST::{}> {}(_n.{}); /*var-3*/", indent, grammar.className, n->name, n->idxName, n->idxName);
-                        tw.writeln("{}            {}({});", indent, fsig.func, n->idxName);
-                    }
+            }else{
+                if(autowalk == true) {
+                    tw.writeln("{}            NodeRef<{}_AST::{}> {}(_n.{}); /*var-4z*/", indent, grammar.className, n->name, n->idxName, n->idxName);
+                    tw.writeln("{}            _nrpx.add({}, [&](){{return {}({});}}); /*var-4x*/", indent, n->idxName, fsig.func, n->idxName);
                 }
             }
         }
+        tw.writeln();
+
+        // call the handler
+        tw.writeln("{}            return {}({});/*call-1*/", indent, hname, params.str());
+
 
         // close anonymous function
         tw.writeln("{}        }},", indent);
@@ -874,6 +830,10 @@ struct Generator {
     ) {
         if(grammar.isRootWalker(walker) == true) {
             tw.writeln("{}struct {} {{", indent, wname);
+            for(const auto& prs : grammar.ruleSets) {
+                auto& rs = *prs;
+                tw.writeln("{}    using {} = {}_AST::{};", indent, rs.name, grammar.className, rs.name);
+            }
         }else{
             assert(walker.base != nullptr);
             auto bname = std::format("{}", walker.base->name);
@@ -891,6 +851,8 @@ struct Generator {
             tw.writeln("{}template<typename T>", indent);
             tw.writeln("{}using NodeRef = {}_AST::NodeRef<T>;", indent, grammar.className);
             tw.writeln();
+            tw.writeln("{}using NodeRefPostExec = {}_AST::NodeRefPostExec;", indent, grammar.className);
+            tw.writeln();
 
             if((walker.interfaceName.size() > 0) && (opts().amalgamatedFile == true)) {
                 tw.writeln("{}static std::unique_ptr<{}> create();", indent, wname);
@@ -899,6 +861,8 @@ struct Generator {
             if(walker.outputType == yg::Walker::OutputType::TextFile) {
                 tw.writeln("{}virtual void open(const std::filesystem::path& odir, const std::string_view& filename) = 0;", indent);
             }
+            tw.writeln("{}template<typename T>", indent);
+            tw.writeln("{}void skip(NodeRef<T>& nr);", indent);
 
             for(const auto& prs : grammar.ruleSets) {
                 auto& rs = *prs;
@@ -981,6 +945,11 @@ struct Generator {
                 generateWalkerInterface(walker, tw, wname, vars, indent);
             }
 
+            tw.writeln("{}template<typename T>", indent);
+            tw.writeln("{}void {}::skip(NodeRef<T>& nr) {{", indent, wname);
+            tw.writeln("{}    nr.called = true;", indent);
+            tw.writeln("{}}}", indent);
+
             for(const auto& prs : grammar.ruleSets) {
                 auto& rs = *prs;
                 auto funcl = walker.getFunctions(rs);
@@ -993,19 +962,12 @@ struct Generator {
                     }
 
                     tw.writeln("{}auto {}::{}(NodeRef<{}_AST::{}>& node{}) -> {} {{", indent, wname, fsig.func, grammar.className, rs.name, args, fsig.type);
-                    if(fsig.isUDF == false) {
+                    if((fsig.isUDF == false) || fsig.func == walker.defaultFunctionName) {
                         tw.writeln("{}    WalkerNodeCommit<{}, {}_AST::{}> _wc(node);", indent, wname, grammar.className, rs.name);
                     }
             
                     auto xparams = extractParams(fsig.args);
-            
-                    std::string called;
-                    if(walker.traversalMode == yg::Walker::TraversalMode::Manual) {
-                        called = "true";
-                    }else{
-                        called = "false";
-                    }
-            
+                        
                     // generate Visitor
                     tw.writeln("{}    return std::visit(overload{{", indent);
             
@@ -1018,7 +980,7 @@ struct Generator {
             
                     // generate handlers for all rules in ruleset
                     for (const auto& r : rs.rules) {
-                        generateRuleVisitorBody(tw, walker, fsig, rs, *r, called, xparams, indent);
+                        generateRuleVisitorBody(tw, walker, fsig, rs, *r, xparams, indent);
                     }
                     tw.writeln("{}    }}, node.node.rule);", indent);
                     tw.writeln("{}}}", indent);
