@@ -667,6 +667,9 @@ struct RegexSet : public NonCopyable {
 struct LexerMode : public NonCopyable {
     /// @brief root state of this lexer mode
     State* root = nullptr;
+
+    /// @brief lexer modes included by this lexer mode
+    std::unordered_set<std::string> includes;
 };
 
 /// @brief returns the Wildcard atom, if this is a Wildcard transition

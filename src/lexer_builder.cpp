@@ -430,17 +430,19 @@ void buildLexer(yg::Grammar& g) {
             continue;
         }
 
-        auto& mode = g.getLexerMode(*regex);
-
-        LexerStateMachineBuilder lsmb(g, mode.root);
-        lsmb.process(*(regex->atom));
-        if(lsmb.getCurrentState()->id == 1) {
-            throw GeneratorError(__LINE__, __FILE__, regex->pos, "EMPTY_TOKEN:{}", regex->regexName);
-        }
-
-        lsmb.getCurrentState()->matchedRegex = regex.get();
-        if(lsmb.closureState != nullptr) {
-            lsmb.closureState->matchedRegex = regex.get();
+        auto lmodes = g.getLexerModes(*regex);
+        for(auto& pmode : lmodes) {
+            auto& mode = *pmode;
+            LexerStateMachineBuilder lsmb(g, mode.root);
+            lsmb.process(*(regex->atom));
+            if(lsmb.getCurrentState()->id == 1) {
+                throw GeneratorError(__LINE__, __FILE__, regex->pos, "EMPTY_TOKEN:{}", regex->regexName);
+            }
+    
+            lsmb.getCurrentState()->matchedRegex = regex.get();
+            if(lsmb.closureState != nullptr) {
+                lsmb.closureState->matchedRegex = regex.get();
+            }
         }
     }
 

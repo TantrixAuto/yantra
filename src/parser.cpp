@@ -1883,7 +1883,7 @@ struct Parser {
 
     /// @brief read pragma to change lexer mode
     inline void set_lexermode() {
-        Tracer tr{lvl, "lexermode"};
+        Tracer tr{lvl, "lexer_mode"};
 
         Token t = peek(tr);
         if(t.id != Token::ID::ID) {
@@ -1891,6 +1891,21 @@ struct Parser {
         }
         lexerMode = t.text;
         grammar.addLexerMode(t.pos, lexerMode);
+        lexer.next();
+        read_semi(tr);
+    }
+
+    /// @brief read pragma to include specified lexer mode into current lexer mode
+    inline void set_lexerinclude() {
+        Tracer tr{lvl, "lexer_include"};
+
+        Token t = peek(tr);
+        if(t.id != Token::ID::ID) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+        }
+        auto baseLexerMode = t.text;
+        auto& lmode = grammar.getLexerModeByName(t.pos, lexerMode);
+        lmode.includes.insert(baseLexerMode);
         lexer.next();
         read_semi(tr);
     }
@@ -2132,6 +2147,10 @@ struct Parser {
 
         if(t.text == "lexer_mode") {
             return set_lexermode();
+        }
+
+        if(t.text == "lexer_include") {
+            return set_lexerinclude();
         }
 
         throw GeneratorError(__LINE__, __FILE__, t.pos, "UNKNOWN_PRAGMA:{}", t.text);

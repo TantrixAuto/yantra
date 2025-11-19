@@ -610,14 +610,31 @@ struct Grammar : public NonCopyable { // NOLINT(cppcoreguidelines-special-member
         mode.root->isRoot = true;
     }
 
-    inline auto getLexerMode(const yglx::Regex& regex) const -> yglx::LexerMode& {
-        if (lexerModes.contains(regex.mode) == false) {
-            throw GeneratorError(__LINE__, __FILE__, regex.pos, "UNKNOWN_MODE:{}", regex.mode);
+    inline auto getLexerModeByName(const FilePos& npos, const std::string& name) const -> yglx::LexerMode& {
+        if (lexerModes.contains(name) == false) {
+            throw GeneratorError(__LINE__, __FILE__, npos, "UNKNOWN_MODE:{}", name);
         }
 
-        const auto& mode = lexerModes.at(regex.mode);
+        auto& mode = lexerModes.at(name);
         assert(mode);
         return *mode;
+    }
+
+    inline void _getLexerModes(const std::string& lmName, std::vector<yglx::LexerMode*>& rv) const {
+        for(auto& lm : lexerModes) {
+            if(lm.second->includes.contains(lmName) == true) {
+                rv.push_back(lm.second.get());
+                _getLexerModes(lm.first, rv);
+            }
+        }
+    }
+
+    inline auto getLexerModes(const yglx::Regex& regex) const -> std::vector<yglx::LexerMode*> {
+        std::vector<yglx::LexerMode*> rv;
+        auto& m = getLexerModeByName(regex.pos, regex.mode);
+        rv.push_back(&m);
+        _getLexerModes(regex.mode, rv);
+        return rv;
     }
 
     inline auto getRegexNextMode(const yglx::Regex& regex) const -> yglx::LexerMode& {

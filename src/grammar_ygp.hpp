@@ -276,9 +276,9 @@ struct ItemSet : public NonCopyable {
     /// @brief delete SHIFT action for the given token @arg rx
     /// This is used when resolving a SHIFT-REDUCE conflict in
     /// favour of a REDUCE
-    inline void delShift(const Node& node, const yglx::RegexSet& rx) {
+    inline void delShift(const FilePos& npos, const yglx::RegexSet& rx) {
         if(hasShift(rx) == nullptr) {
-            throw GeneratorError(__LINE__, __FILE__, node.pos, "UNKNOWN_SHIFT:{}", rx.name);
+            throw GeneratorError(__LINE__, __FILE__, npos, "UNKNOWN_SHIFT:{}", rx.name);
         }
         shifts.erase(&rx);
     }
