@@ -2589,6 +2589,32 @@ void parseInput(yg::Grammar& g, Stream& is) {
 
     std::vector<std::pair<FilePos, std::string>> errors;
 
+    for(auto& pr1 : g.rules) {
+        auto& r1 = *pr1;
+        for(auto& pr2 : g.rules) {
+            if(pr2.get() == pr1.get()) {
+                continue;
+            }
+            auto& r2 = *pr2;
+            if(r1.nodes.size() != r2.nodes.size()) {
+                continue;
+            }
+            bool identical = true;
+            for(size_t i = 0; i < r1.nodes.size(); ++i) {
+                auto& n1 = r1.nodes[i];
+                auto& n2 = r2.nodes[i];
+                if(n1->name != n2->name) {
+                    identical = false;
+                    break;
+                }
+            }
+            if(identical == true) {
+                auto msg = std::format("duplicate rule definition: {} and {}", r1.ruleName, r2.ruleName);
+                errors.emplace_back(r1.pos, msg);
+            }
+        }
+    }
+
     for(auto& pw : g.walkers) {
         auto& w = *pw;
         for(auto& fsig : w.functionSigs) {
