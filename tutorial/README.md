@@ -850,12 +850,6 @@ Here's an exercise for you: make `Calc` the default walker instead of `ShowTree`
 
 At this point, our grammar can perform complete calculations, and defines two walkers: one that shows the order of evaluation, and one that actually calculates the input expression.
 
-Yes, the previous response was already in Markdown format.
-
-Here is the conclusion again, ensuring all formatting is strictly Markdown:
-
----
-
 ## Conclusion: Your Parser is Ready!
 
 Congratulations! You have successfully completed the Yantra Quick Start Tutorial and built a fully functional **integer arithmetic expression evaluator**.
