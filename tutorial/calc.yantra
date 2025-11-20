@@ -1,0 +1,142 @@
+%class Calculator;
+
+// Region: Walker declarations
+
+%walkers ShowTree Calc;
+%default_walker ShowTree;
+
+// Region:Functions
+
+%function numexpr Calc::eval () -> int;
+%function addorsubexpr Calc::eval () -> int;
+%function mulordivexpr Calc::eval () -> int;
+%function valexpr Calc::eval () -> int;
+
+// Region:Rules
+
+start := numexpr (n)
+@Calc
+%{
+    std::cout << "Result:" << eval(n) << std::endl;
+%}
+
+numexpr := addorsubexpr (e)
+@Calc::eval 
+%{
+    return eval(e);
+%}
+
+addorsubexpr := addorsubexpr (lhs) PLUS mulordivexpr (rhs)
+%{
+    startExpression("Adding:");
+%}
+@Calc::eval
+%{
+    return eval(lhs) + eval(rhs);
+%}
+
+addorsubexpr := addorsubexpr (lhs) MINUS mulordivexpr (rhs)
+%{
+    startExpression("Subtracting:");
+%}
+@Calc::eval
+%{
+    return eval(lhs) - eval(rhs);
+%}
+
+addorsubexpr := mulordivexpr (mde)
+@Calc::eval
+%{
+    return eval(mde);
+%}
+
+mulordivexpr := mulordivexpr (lhs) MUL valexpr (rhs)
+%{
+    startExpression("Multiplying:");
+%}
+@Calc::eval
+%{
+    return eval(lhs) * eval(rhs);
+%}
+
+mulordivexpr := mulordivexpr (lhs) DIV valexpr (rhs)
+%{
+    startExpression("Dividing:");
+%}
+@Calc::eval
+%{
+    return eval(lhs) / eval(rhs);
+%}
+
+mulordivexpr := valexpr (v)
+@Calc::eval
+%{
+    return eval(v);
+%}
+
+valexpr := LPAREN numexpr(n) RPAREN
+@Calc::eval
+%{
+    return eval(n);
+%}
+
+valexpr := NUMBER (NUM)
+%{
+    appendNumber(NUM.text);
+%}
+@Calc::eval
+%{
+    int result = std::stoi(NUM.text);
+    return result;
+%}
+
+// Region:Tokens
+
+%left PLUS MINUS;
+%left MUL DIV;
+
+NUMBER := "\d+";
+PLUS   := "\+";
+MINUS  := "-";
+MUL    := "\*";
+DIV    := "/";
+LPAREN := "\(";
+RPAREN := "\)";
+WS     := "\s+"!;
+
+// Region:Walker Members
+%members ShowTree
+%{
+    int level = 0; // Current level of indentation
+    int inExpression = 0; // Position of current NUMBER
+    
+    // Return as many spaces as value of `level`,
+    // for indenting.
+    std::string indentLevel() {
+        std::string result(level,' ');
+        return result;
+    }
+    
+    // Start a new level, when a new expression 
+    // starts.
+    void startExpression(std::string exprName) {
+        std::cout << indentLevel() << exprName << std::endl;
+    
+        level++;
+        inExpression = 0;
+    }
+    
+    // When a number is output, increase 
+    // `inExpression`. If it is even (because our
+    // expressions take two numbers), decrease 
+    // the level because the expression is done.
+    void appendNumber(std::string numText) {
+        std::cout << indentLevel() << "Number: " << numText << std::endl; 
+    
+        inExpression++;
+        if(inExpression % 2 == 0) {
+            level--;
+            inExpression--;
+        }
+    }
+%}
