@@ -58,7 +58,9 @@ namespace {
 /// @brief This class generates the cpp parser
 struct Generator {
     const yg::Grammar& grammar;
-    std::string qid;
+    std::string qidNamespace;
+    std::string qidClassName;
+    std::string qidNameAST;
     CodeBlock cb_astNodeDecls;
     CodeBlock throwError;
 
@@ -359,9 +361,9 @@ struct Generator {
 
             std::string nativeTypeNode;
             if(n->isRegex() == true) {
-                nativeTypeNode = std::format("const {}_AST::{}", grammar.className, grammar.tokenClass);
+                nativeTypeNode = std::format("const {}", grammar.tokenClass);
             }else{
-                nativeTypeNode = std::format("NodeRef<{}_AST::{}>", grammar.className, n->name);
+                nativeTypeNode = std::format("NodeRef<{}>", n->name);
             }
 
             sw.writeln("{}    {}{}{}& {}", indent, sep, isUnused, nativeTypeNode, varName);
@@ -515,7 +517,7 @@ struct Generator {
             auto& w = *pw;
             auto wsig = generateWalkerSig(w);
             auto wcall = generateWalkerCall(w);
-            tw.writeln("{}void {}::{} {{", indent, grammar.className, wsig);
+            tw.writeln("{}void {}::{} {{", indent, qidClassName, wsig);
             tw.writeln("{}    return _impl->walk_{}({});", indent, w.name, wcall);
             tw.writeln("{}}}", indent);
             tw.writeln();
@@ -664,9 +666,9 @@ struct Generator {
     /// @brief generates a variant that contains all AST nodes
     inline void generateAstNodeItems(TextFileWriter& tw, const std::string_view& indent) {
         tw.writeln("{}using AstNode = std::variant<", indent);
-        tw.writeln("{}    {}_AST::{}", indent, grammar.className, grammar.tokenClass);
+        tw.writeln("{}    {}::{}", indent, qidNameAST, grammar.tokenClass);
         for (const auto& rs : grammar.ruleSets) {
-            tw.writeln("{}    ,{}_AST::{}", indent, grammar.className, rs->name);
+            tw.writeln("{}    ,{}::{}", indent, qidNameAST, rs->name);
         }
         tw.writeln("{}>;", indent);
     }
@@ -701,7 +703,7 @@ struct Generator {
         }
 
         // open anonymous function
-        tw.writeln("{}        [&]({}const {}_AST::{}::{}& _n) -> {} {{", indent, node_unused, grammar.className, rs.name, r.ruleName, fsig.type);
+        tw.writeln("{}        [&]({}const {}::{}& _n) -> {} {{", indent, node_unused, rs.name, r.ruleName, fsig.type);
         tw.writeln("{}            NodeRefPostExec _nrpx;", indent);
 
         // generate node-refs
@@ -720,19 +722,18 @@ struct Generator {
                 autowalk = true;
             }
 
-            unused(autowalk);
             if (n->varName.size() > 0) {
                 if(n->isRule() == true) {
-                    tw.writeln("{}            NodeRef<{}_AST::{}> {}(_n.{}); /*var-4x*/", indent, grammar.className, n->name, n->varName, n->varName);
+                    tw.writeln("{}            NodeRef<{}> {}(_n.{}); /*var-4x*/", indent, n->name, n->varName, n->varName);
                     if(autowalk == true) {
                         tw.writeln("{}            _nrpx.add({}, [&](){{return {}({});}}); /*var-4x*/", indent, n->varName, fsig.func, n->varName);
                     }
                 }else{
-                    tw.writeln("{}            const {}_AST::{}& {} = _n.{}; /*var-2*/", indent, grammar.className, grammar.tokenClass, n->varName, n->varName);
+                    tw.writeln("{}            const {}& {} = _n.{}; /*var-2*/", indent, grammar.tokenClass, n->varName, n->varName);
                 }
             }else{
                 if(autowalk == true) {
-                    tw.writeln("{}            NodeRef<{}_AST::{}> {}(_n.{}); /*var-4z*/", indent, grammar.className, n->name, n->idxName, n->idxName);
+                    tw.writeln("{}            NodeRef<{}> {}(_n.{}); /*var-4z*/", indent, n->name, n->idxName, n->idxName);
                     tw.writeln("{}            _nrpx.add({}, [&](){{return {}({});}}); /*var-4x*/", indent, n->idxName, fsig.func, n->idxName);
                 }
             }
@@ -820,6 +821,17 @@ struct Generator {
         }
     }
 
+    inline void generateUsingASTNodes(
+        TextFileWriter& tw,
+        const std::string_view& indent
+    ) const {
+        tw.writeln("{}using {} = {}::{};", indent, grammar.tokenClass, qidNameAST, grammar.tokenClass);
+        for(const auto& prs : grammar.ruleSets) {
+            auto& rs = *prs;
+            tw.writeln("{}using {} = {}::{};", indent, rs.name, qidNameAST, rs.name);
+        }
+    }
+
     /// @brief generates Walker interface
     inline void generateWalkerInterface(
         const yg::Walker& walker,
@@ -830,9 +842,8 @@ struct Generator {
     ) {
         if(grammar.isRootWalker(walker) == true) {
             tw.writeln("{}struct {} {{", indent, wname);
-            for(const auto& prs : grammar.ruleSets) {
-                auto& rs = *prs;
-                tw.writeln("{}    using {} = {}_AST::{};", indent, rs.name, grammar.className, rs.name);
+            if(auto twi = TextFileIndenter(tw)) {
+                generateUsingASTNodes(tw, indent);
             }
         }else{
             assert(walker.base != nullptr);
@@ -849,9 +860,9 @@ struct Generator {
             }
 
             tw.writeln("{}template<typename T>", indent);
-            tw.writeln("{}using NodeRef = {}_AST::NodeRef<T>;", indent, grammar.className);
+            tw.writeln("{}using NodeRef = {}::NodeRef<T>;", indent, qidNameAST);
             tw.writeln();
-            tw.writeln("{}using NodeRefPostExec = {}_AST::NodeRefPostExec;", indent, grammar.className);
+            tw.writeln("{}using NodeRefPostExec = {}::NodeRefPostExec;", indent, qidNameAST);
             tw.writeln();
 
             if((walker.interfaceName.size() > 0) && (opts().amalgamatedFile == true)) {
@@ -898,7 +909,7 @@ struct Generator {
                     if(fsig.args.size() > 0) {
                         args = std::format(", {}", fsig.args);
                     }
-                    tw.writeln("{}auto {}(NodeRef<{}_AST::{}>& node{}) -> {};", indent, fsig.func, grammar.className, rs.name, args, fsig.type);
+                    tw.writeln("{}auto {}(NodeRef<{}>& node{}) -> {};", indent, fsig.func, rs.name, args, fsig.type);
                     tw.writeln();
                 }
             }
@@ -961,9 +972,9 @@ struct Generator {
                         args = std::format(", {}", fsig.args);
                     }
 
-                    tw.writeln("{}auto {}::{}(NodeRef<{}_AST::{}>& node{}) -> {} {{", indent, wname, fsig.func, grammar.className, rs.name, args, fsig.type);
+                    tw.writeln("{}auto {}::{}(NodeRef<{}>& node{}) -> {} {{", indent, wname, fsig.func, rs.name, args, fsig.type);
                     if((fsig.isUDF == false) || fsig.func == walker.defaultFunctionName) {
-                        tw.writeln("{}    WalkerNodeCommit<{}, {}_AST::{}> _wc(node);", indent, wname, grammar.className, rs.name);
+                        tw.writeln("{}    WalkerNodeCommit<{}, {}> _wc(node);", indent, wname, rs.name);
                     }
             
                     auto xparams = extractParams(fsig.args);
@@ -1068,7 +1079,7 @@ struct Generator {
     inline void generateCreateASTNodesDecls(TextFileWriter& tw) {
         for (const auto& rs : grammar.ruleSets) {
             tw.writeln("template<>");
-            tw.writeln("inline {}_AST::{}& Parser::create<{}_AST::{}>(const ValueItem& vi);", grammar.className, rs->name, grammar.className, rs->name);
+            tw.writeln("inline {}::{}& Parser::create<{}::{}>(const ValueItem& vi);", qidNameAST, rs->name, qidNameAST, rs->name);
             tw.writeln();
         }
     }
@@ -1078,7 +1089,7 @@ struct Generator {
     inline void generateCreateASTNodesDefns(TextFileWriter& tw, const std::unordered_map<std::string, std::string>& vars) {
         for (const auto& rs : grammar.ruleSets) {
             tw.writeln("template<>");
-            tw.writeln("inline {}_AST::{}& Parser::create<{}_AST::{}>(const ValueItem& vi) {{", grammar.className, rs->name, grammar.className, rs->name);
+            tw.writeln("inline {}::{}& Parser::create<{}::{}>(const ValueItem& vi) {{", qidNameAST, rs->name, qidNameAST, rs->name);
             tw.writeln("    switch(vi.ruleID) {{");
 
             for (auto& r : rs->rules) {
@@ -1104,9 +1115,9 @@ struct Generator {
 
                         auto rt = getNodeType(*n);
                         tw.writeln("        auto& _cv_{} = *(vi.childs.at({}));", varName, idx);
-                        tw.writeln("        auto& p{} = create<{}_AST::{}>(_cv_{});", varName, grammar.className, rt, varName);
+                        tw.writeln("        auto& p{} = create<{}::{}>(_cv_{});", varName, qidNameAST, rt, varName);
                         if (idx == r->anchor) {
-                            tw.writeln("        auto& anchor = create<{}_AST::{}>(_cv_{});", grammar.className, grammar.tokenClass, varName);
+                            tw.writeln("        auto& anchor = create<{}::{}>(_cv_{});", qidNameAST, grammar.tokenClass, varName);
                             hasAnchor = ", anchor";
                         }
                         ss << std::format("{}p{}", sep, varName);
@@ -1114,15 +1125,15 @@ struct Generator {
                     }
                 }else{
                     assert(rs->hasEpsilon == true);
-                    tw.writeln("        auto& p{}0 = create<{}_AST::{}>(vi);", grammar.empty, grammar.className, grammar.tokenClass);
+                    tw.writeln("        auto& p{}0 = create<{}::{}>(vi);", grammar.empty, qidNameAST, grammar.tokenClass);
                     tw.writeln("        auto& anchor = p{}0;", grammar.empty);
                     hasAnchor = ", anchor";
                     ss << std::format("{}p{}0", sep, grammar.empty);
                     sep = ", ";
                 }
 
-                tw.writeln("        auto& cel = ast.createAstNode<{}_AST::{}>(vi.token.pos{});", grammar.className, rs->name, hasAnchor);
-                tw.writeln("        cel.rule.emplace<{}_AST::{}::{}>({});", grammar.className, rs->name, r->ruleName, ss.str());
+                tw.writeln("        auto& cel = ast.createAstNode<{}::{}>(vi.token.pos{});", qidNameAST, rs->name, hasAnchor);
+                tw.writeln("        cel.rule.emplace<{}::{}::{}>({});", qidNameAST, rs->name, r->ruleName, ss.str());
                 tw.writeln("        return cel;");
                 tw.writeln("    }} // case");
             }
@@ -1524,11 +1535,16 @@ struct Generator {
         const std::string& srcName,
         const std::string_view& outerIndent
     ) {
-        const std::string_view prefixEnterBlock = "///PROTOTYPE_ENTER:";
-        const std::string_view prefixLeaveBlock = "///PROTOTYPE_LEAVE:";
-        const std::string_view prefixSegment = "///PROTOTYPE_SEGMENT:";
-        const std::string_view includeSegment = "///PROTOTYPE_INCLUDE:";
-        const std::string_view prefixTarget = "///PROTOTYPE_TARGET:";
+        static const std::string_view prefixEnterBlock = "///PROTOTYPE_ENTER:";
+        static const std::string_view prefixLeaveBlock = "///PROTOTYPE_LEAVE:";
+        static const std::string_view prefixSegment = "///PROTOTYPE_SEGMENT:";
+        static const std::string_view includeSegment = "///PROTOTYPE_INCLUDE:";
+        static const std::string_view prefixTarget = "///PROTOTYPE_TARGET:";
+
+        static std::unordered_set<std::string_view> dontPrintBlocks = {
+            "SKIP",
+            "IF_HAS_NS",
+        };
 
         enum class Token : uint8_t {
             EnterBlock,
@@ -1628,14 +1644,24 @@ struct Generator {
                     token = Token::Line;
                 }
             }else{
+                // if we are in a capture block,
+                // check if we are leaving the capture block
+                // if not, add the line to the capture block
                 if(tline.starts_with(prefixLeaveBlock)) {
-                    token = Token::LeaveBlock;
                     lblockName = tline.substr(prefixLeaveBlock.size());
                     if(eblockNames.size() == 0) {
                         throw GeneratorError(__LINE__, __FILE__, grammar.pos(), "PROTOTYPE_NO_EBLOCK_ERROR:{}", lblockName);
                     }
                     eblockName = eblockNames.back();
-                    eblockNames.pop_back();
+                    if(eblockName == lblockName) {
+                        token = Token::LeaveBlock;
+                        eblockNames.pop_back();
+                    }else{
+                        if(eblockNames.size() > 0) {
+                            eblockName = eblockNames.back();
+                        }
+                        token = Token::Line;
+                    }
                 }else {
                     if(eblockNames.size() > 0) {
                         eblockName = eblockNames.back();
@@ -1645,15 +1671,15 @@ struct Generator {
             }
 
 
-//#define PRINT(...) std::println(__VA_ARGS__)
+// #define PRINT(...) std::println(__VA_ARGS__)
 #define PRINT(...)
 
             auto indent = std::string(outerIndent) + std::string(innerIndent);
 
             switch (token) {
             case Token::EnterBlock: {
-                PRINT("Init::EB:{}", line);
-                if (eblockName != "SKIP") {
+                PRINT("Line::EB:{}, eb={}, lb={}", line, eblockName, lblockName);
+                if (dontPrintBlocks.contains(eblockName) == false) {
                     tw.writeln("{}", line);
                 }
                 if (eblockName == "stdHeaders") {
@@ -1693,6 +1719,15 @@ struct Generator {
                     break;
                 }
 
+                if (eblockName == "IF_HAS_NS") {
+                    if(grammar.ns.size() > 0) {
+                        skip = false;
+                    }else{
+                        skip = true;
+                    }
+                    break;
+                }
+
                 if (eblockName == "throwError") {
                     tBlock.clear();
                     assert(capturing == false);
@@ -1713,7 +1748,7 @@ struct Generator {
             }
             case Token::LeaveBlock: {
                 PRINT("Line::LB:{}, eb={}, lb={}", line, eblockName, lblockName);
-                if (eblockName != "SKIP") {
+                if (dontPrintBlocks.contains(eblockName) == false) {
                     tw.writeln("{}", line);
                 }
                 assert(lblockName == eblockName);
@@ -1913,19 +1948,19 @@ struct Generator {
         }
 
         if (grammar.ns.empty() == false) {
-            qid = grammar.ns;
+            qidNamespace = std::format("{}::", grammar.ns);
         }
 
-        if (grammar.className.empty() == false) {
-            if (qid.size() > 0) {
-                qid += "::";
-            }
-            qid += grammar.className;
-        }
+        assert(grammar.className.empty() == false);
+        qidClassName = std::format("{}{}", qidNamespace, grammar.className);
+        qidNameAST = std::format("{}_AST", qidClassName);
 
         const std::unordered_map<std::string, std::string> vars = {
+            {"NSNAME", grammar.ns},
+            {"Q_NSNAME", qidNamespace},
             {"CLSNAME", grammar.className},
-            {"CLASSQID", qid},
+            {"Q_CLSNAME", qidClassName},
+            {"Q_ASTNS", qidNameAST},
             {"TOKEN", grammar.tokenClass},
             {"WALKER", grammar.getDefaultWalker().name},
             {"START_RULE", std::format("{}", grammar.start)},

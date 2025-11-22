@@ -21,7 +21,7 @@ It is recommended that they be read in the given order.
 
 | Name                                           | Description.                          |
 |------------------------------------------------|---------------------------------------|
-| [Tutorial](tutorial/).                         | - A step-by-step walk-through for getting started with Yantra.    |
+| [Tutorial](tutorial/)                          | - A step-by-step walk-through for getting started with Yantra.    |
 | [Overview](docs/010_overview.md)               | - A high-level overview of Yantra.    |
 | [Concepts](docs/020_concepts.md)               | - Key concepts of Yantra.             |
 | [User Manual](docs/030_manual.md)              | - User manual describing the grammar.<br/>- List of pragmas. |

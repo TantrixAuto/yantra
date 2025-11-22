@@ -2591,6 +2591,11 @@ void parseInput(yg::Grammar& g, Stream& is) {
 
     for(auto& pr1 : g.rules) {
         auto& r1 = *pr1;
+        assert(r1.nodes.size() > 0);
+        auto& n0 = *(r1.nodes.at(0));
+        if((r1.nodes.size() == 1) && (n0.isRegex() == true) && (n0.name == g.empty)) {
+            continue;
+        }
         for(auto& pr2 : g.rules) {
             if(pr2.get() == pr1.get()) {
                 continue;
@@ -2609,6 +2614,7 @@ void parseInput(yg::Grammar& g, Stream& is) {
                 }
             }
             if(identical == true) {
+                std::println("dup:r1={}, r2={}", r1.str(false), r2.str(false));
                 auto msg = std::format("duplicate rule definition: {} and {}", r1.ruleName, r2.ruleName);
                 errors.emplace_back(r1.pos, msg);
             }
