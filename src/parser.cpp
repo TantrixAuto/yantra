@@ -2569,6 +2569,7 @@ void parseInput(yg::Grammar& g, Stream& is) {
     for(auto& rule : g.rules) {
         for(auto& node : rule->nodes) {
             if(node->isRule()) {
+                g.getRuleSetByName(node->pos, node->name);
                 continue;
             }
             assert(node->isRegex());
