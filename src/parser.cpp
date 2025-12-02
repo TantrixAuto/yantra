@@ -158,14 +158,18 @@ struct Tracer {
     [[maybe_unused]]
     inline Tracer(const size_t& l, const std::string& n) : lvl{l}, name{n} {
 #if DO_TRACER
-        log("{}:{}: enter", lvl, name);
+        if(opts().enableParserLogging == true) {
+            log("{}:{}: enter", lvl, name);
+        }
 #endif
     }
 
     [[maybe_unused]]
     inline ~Tracer() {
 #if DO_TRACER
-        log("{}:{}: leave", lvl, name);
+        if(opts().enableParserLogging == true) {
+            log("{}:{}: leave", lvl, name);
+        }
 #endif
     }
 };
@@ -1250,8 +1254,9 @@ struct Parser {
     /// this is a wrapper around lexer.peek(), but additionally logs the peeked token for debugging purposes
     inline const Token& peek(const Tracer& tr) {
         auto& t = lexer.peek();
-        unused(tr);
-        log("{:>3}:>parser: lvl={}, s={}, tok={}, text=[{}], pos={}", lexer.stream.pos.str(), lvl, tr.name, Token::sname(t), t.text, t.pos.str());
+        if(opts().enableParserLogging == true) {
+            log("{:>3}:>parser: lvl={}, s={}, tok={}, text=[{}], pos={}", lexer.stream.pos.str(), lvl, tr.name, Token::sname(t), t.text, t.pos.str());
+        }
         return t;
     }
 
@@ -1736,6 +1741,93 @@ struct Parser {
         read_semi(tr);
     }
 
+    /// @brief read walker_interface pragma and set it in the specified walker
+    /// defines the external interface for the walker
+    inline void walker_interface() {
+        Tracer tr{lvl, "walker_interface"};
+
+        Token t = peek(tr);
+        if(t.id != Token::ID::ID) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+        }
+
+        auto walker = grammar.getWalker(t.text);
+        if(walker == nullptr) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "UNKNOWN_WALKER:{}", t.text);
+        }
+
+        if(grammar.isRootWalker(*walker) == false) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "WALKER_NOT_ROOT:{}", t.text);
+        }
+
+        lexer.next();
+        t = peek(tr);
+        if(t.id != Token::ID::ID) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+        }
+
+        walker->setInterfaceName(t.text);
+
+        lexer.next();
+        read_semi(tr);
+    }
+
+    /// @brief read additional ctor statements for the specified walker
+    inline void walker_ctor() {
+        Tracer tr{lvl, "walker_ctor"};
+
+        Token t = peek(tr);
+        if(t.id != Token::ID::ID) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+        }
+
+        auto walker = grammar.getWalker(t.text);
+        if(walker == nullptr) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "UNKNOWN_WALKER:{}", t.text);
+        }
+
+        lexer.next();
+        t = peek(tr);
+        if(t.id != Token::ID::CODEBLOCK) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+        }
+
+        walker->xctor.setCode(t.pos, t.text);
+        lexer.next();
+    }
+
+    /// @brief read additional ctor args for the specified walker
+    inline void walker_ctor_args() {
+        Tracer tr{lvl, "walker_ctor_args"};
+
+        Token t = peek(tr);
+        if(t.id != Token::ID::ID) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+        }
+
+        auto walker = grammar.getWalker(t.text);
+        if(walker == nullptr) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "UNKNOWN_WALKER:{}", t.text);
+        }
+
+        lexer.setMode_Type();
+        lexer.next();
+
+        t = peek(tr);
+        if(t.id != Token::ID::TYPE) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+        }
+
+        walker->xctor_args = t.text;
+        lexer.next();
+
+        t = peek(tr);
+        if(t.id != Token::ID::SEMI) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+        }
+        lexer.next();
+    }
+
     /// @brief read additional class members for the specified walker
     inline void walker_members() {
         Tracer tr{lvl, "walker_members"};
@@ -1852,7 +1944,7 @@ struct Parser {
 
     /// @brief read pragma to change lexer mode
     inline void set_lexermode() {
-        Tracer tr{lvl, "lexermode"};
+        Tracer tr{lvl, "lexer_mode"};
 
         Token t = peek(tr);
         if(t.id != Token::ID::ID) {
@@ -1860,6 +1952,21 @@ struct Parser {
         }
         lexerMode = t.text;
         grammar.addLexerMode(t.pos, lexerMode);
+        lexer.next();
+        read_semi(tr);
+    }
+
+    /// @brief read pragma to include specified lexer mode into current lexer mode
+    inline void set_lexerinclude() {
+        Tracer tr{lvl, "lexer_include"};
+
+        Token t = peek(tr);
+        if(t.id != Token::ID::ID) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+        }
+        auto baseLexerMode = t.text;
+        auto& lmode = grammar.getLexerModeByName(t.pos, lexerMode);
+        lmode.includes.insert(baseLexerMode);
         lexer.next();
         read_semi(tr);
     }
@@ -1881,74 +1988,78 @@ struct Parser {
         if(walker == nullptr) {
             throw GeneratorError(__LINE__, __FILE__, rname.pos, "NO_DEFAULT_WALKER");
         }
-        std::string func;
+
+        auto func = walker->defaultFunctionName;
+        Token args;
 
         Token t = peek(tr);
 
-        if(t.id != Token::ID::ID) {
-            throw GeneratorError(__LINE__, __FILE__, rname.pos, "INVALID_INPUT");
-        }
-
-        //%function expr Walker::eval() -> int;
-        //               ^
-        Token wname = peek(tr);
-
-        lexer.next();
-
-        t = peek(tr);
-        if(t.id == Token::ID::DBLCOLON) {
+        if(t.id == Token::ID::ID) {
             //%function expr Walker::eval() -> int;
-            //                     ^
-            walker = grammar.getWalker(wname.text);
-            if(walker == nullptr) {
-                throw GeneratorError(__LINE__, __FILE__, wname.pos, "UNKNOWN_WALKER:{}", wname.text);
-            }
-
+            //               ^
+            Token wname = peek(tr);
+    
             lexer.next();
-
-            //%function expr Walker::eval() -> int;
-            //                       ^
+    
             t = peek(tr);
-            if(t.id != Token::ID::ID) {
+            if(t.id == Token::ID::DBLCOLON) {
+                //%function expr Walker::eval() -> int;
+                //                     ^
+                walker = grammar.getWalker(wname.text);
+                if(walker == nullptr) {
+                    throw GeneratorError(__LINE__, __FILE__, wname.pos, "UNKNOWN_WALKER:{}", wname.text);
+                }
+    
+                lexer.next();
+    
+                //%function expr Walker::eval() -> int;
+                //                       ^
+                t = peek(tr);
+                if(t.id != Token::ID::ID) {
+                    throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+                }
+                func = t.text;
+                lexer.next();
+    
+            }else{
+                assert(t.id == Token::ID::LBRACKET);
+                //%function expr eval() -> int;
+                //                   ^
+                func = wname.text;
+            }
+    
+            //%function expr Walker::eval() -> int;
+            //                           ^
+            t = peek(tr);
+            if(t.id != Token::ID::LBRACKET) {
                 throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
             }
-            func = t.text;
+    
+            lexer.setMode_Args();
             lexer.next();
-
+    
+            //%function expr Walker::eval(int x) -> int;
+            //                            ^
+            args = peek(tr);
+            if(args.id != Token::ID::ARGS) {
+                throw GeneratorError(__LINE__, __FILE__, args.pos, "INVALID_INPUT");
+            }
+    
+            lexer.next();
+    
+            //%function expr Walker::eval(int x) -> int;
+            //                                 ^
+            t = peek(tr);
+            if(t.id != Token::ID::RBRACKET) {
+                throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+            }
+    
+            lexer.next();
         }else{
-            assert(t.id == Token::ID::LBRACKET);
-            //%function expr eval() -> int;
-            //                   ^
-            func = wname.text;
+            if(t.id != Token::ID::POINTER) {
+                throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+            }
         }
-
-        //%function expr Walker::eval() -> int;
-        //                           ^
-        t = peek(tr);
-        if(t.id != Token::ID::LBRACKET) {
-            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
-        }
-
-        lexer.setMode_Args();
-        lexer.next();
-
-        //%function expr Walker::eval(int x) -> int;
-        //                            ^
-        Token args = peek(tr);
-        if(args.id != Token::ID::ARGS) {
-            throw GeneratorError(__LINE__, __FILE__, args.pos, "INVALID_INPUT");
-        }
-
-        lexer.next();
-
-        //%function expr Walker::eval(int x) -> int;
-        //                                 ^
-        t = peek(tr);
-        if(t.id != Token::ID::RBRACKET) {
-            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
-        }
-
-        lexer.next();
 
         bool autowalk = false;
         //%function expr Walker::eval() -> int;
@@ -2046,8 +2157,20 @@ struct Parser {
             return walker_traversal();
         }
 
+        if(t.text == "walker_interface") {
+            return walker_interface();
+        }
+
         if(t.text == "members") {
             return walker_members();
+        }
+
+        if(t.text == "ctor") {
+            return walker_ctor();
+        }
+
+        if(t.text == "ctor_args") {
+            return walker_ctor_args();
         }
 
         if(t.text == "public") {
@@ -2093,6 +2216,10 @@ struct Parser {
 
         if(t.text == "lexer_mode") {
             return set_lexermode();
+        }
+
+        if(t.text == "lexer_include") {
+            return set_lexerinclude();
         }
 
         throw GeneratorError(__LINE__, __FILE__, t.pos, "UNKNOWN_PRAGMA:{}", t.text);
@@ -2511,6 +2638,7 @@ void parseInput(yg::Grammar& g, Stream& is) {
     for(auto& rule : g.rules) {
         for(auto& node : rule->nodes) {
             if(node->isRule()) {
+                g.getRuleSetByName(node->pos, node->name);
                 continue;
             }
             assert(node->isRegex());
@@ -2529,16 +2657,72 @@ void parseInput(yg::Grammar& g, Stream& is) {
         }
     }
 
+    std::vector<std::pair<FilePos, std::string>> errors;
+
+    for(auto& pr1 : g.rules) {
+        auto& r1 = *pr1;
+        assert(r1.nodes.size() > 0);
+        auto& n0 = *(r1.nodes.at(0));
+        if((r1.nodes.size() == 1) && (n0.isRegex() == true) && (n0.name == g.empty)) {
+            continue;
+        }
+        for(auto& pr2 : g.rules) {
+            if(pr2.get() == pr1.get()) {
+                continue;
+            }
+            auto& r2 = *pr2;
+            if(r1.nodes.size() != r2.nodes.size()) {
+                continue;
+            }
+            bool identical = true;
+            for(size_t i = 0; i < r1.nodes.size(); ++i) {
+                auto& n1 = r1.nodes[i];
+                auto& n2 = r2.nodes[i];
+                if(n1->name != n2->name) {
+                    identical = false;
+                    break;
+                }
+            }
+            if(identical == true) {
+                std::println("dup:r1={}, r2={}", r1.str(false), r2.str(false));
+                auto msg = std::format("duplicate rule definition: {} and {}", r1.ruleName, r2.ruleName);
+                errors.emplace_back(r1.pos, msg);
+            }
+        }
+    }
+
+    for(auto& pw : g.walkers) {
+        auto& w = *pw;
+        for(auto& fsig : w.functionSigs) {
+            for(auto& f : fsig.second) {
+                if(f.func == "skip") {
+                    auto msg = std::format("reserved function name: skip");
+                    assert(fsig.first->rules.size() > 0);
+                    errors.emplace_back(fsig.first->rules.at(0)->pos, msg);
+                }
+            }
+        }
+    }
+
     // check for undefined codeblocks
-    std::vector<std::tuple<const ygp::Rule*, const yg::Walker*, const yg::Walker::FunctionSig*>> noCodeblocks;
-    if(g.checkEmptyCodeblocks == true) {
-        for(auto& pw : g.walkers) {
-            auto& w = pw;
-            for(auto& fsig : w->functionSigs) {
+    for(auto& pw : g.walkers) {
+        auto& w = *pw;
+        if(w.interfaceName.size() > 0) {
+            // if this is an external walker interface, verify
+            // that no codeblocks are defined for this walker
+            for(auto& cb : w.codeblocks) {
+                for(auto& ci : cb.second) {
+                    auto msg = std::format("Codeblock not allowed on external walkers");
+                    errors.emplace_back(ci.codeblock.pos, msg);
+                }
+            }
+        }else if(g.checkEmptyCodeblocks == true) {
+            // else verify that all codeblocks are defined for declared functions
+            for(auto& fsig : w.functionSigs) {
                 for(auto& f : fsig.second) {
                     for(auto& r : fsig.first->rules) {
                         bool found = false;
-                        for(auto& cb : w->codeblocks) {
+                        for(auto& cb : w.codeblocks) {
                             if(cb.first == r) {
                                 for(auto& c : cb.second) {
                                     if(c.func == f.func) {
@@ -2548,7 +2732,8 @@ void parseInput(yg::Grammar& g, Stream& is) {
                             }
                         }
                         if(found == false) {
-                            noCodeblocks.emplace_back(r, w.get(), &f);
+                            auto msg = std::format("Undefined codeblock: {}::{}({}) for {}({})", w.name, f.func, f.args, r->ruleSetName(), r->ruleName);
+                            errors.emplace_back(r->pos, msg);
                         }
                     }
                 }
@@ -2556,47 +2741,27 @@ void parseInput(yg::Grammar& g, Stream& is) {
         }
     }
 
+
     // check for unused tokens
-    std::vector<yglx::Regex*> unuseds;
     if(g.checkUnusedTokens == true) {
         for(auto& regex : g.regexes) {
             if((regex->unused == false) && (regex->usageCount == 0) && (regex->regexName != g.empty)) {
-                unuseds.push_back(regex.get());
+                auto msg = std::format("Unused token:{}", regex->regexName);
+                errors.emplace_back(regex->pos, msg);
             }
         }
     }
 
     // report parse errors if any
-    if((unuseds.size() > 0) || (noCodeblocks.size() > 0)) {
+    if(errors.size() > 0) {
         FilePos pos;
 
-        for(auto& u : noCodeblocks) {
-            const ygp::Rule* r = std::get<0>(u);
-            const yg::Walker* w = std::get<1>(u);
-            const yg::Walker::FunctionSig* f = std::get<2>(u);
-            printError(r->pos, "Undefined codeblock: {}::{}({}) for {}({})", w->name, f->func, f->args, r->ruleSetName(), r->ruleName);
-            pos = r->pos;
+        for(auto& e : errors) {
+            printError(e.first, "{}", e.second);
+            pos = e.first;
         }
 
-        for(auto& u : unuseds) {
-            printError(u->pos, "Unused token:{}", u->regexName);
-            pos = u->pos;
-        }
-
-        if(((unuseds.size() > 0) && (g.errorUnusedTokens == true)) || ((noCodeblocks.size() > 0) && (g.errorEmptyCodeblocks == true))) {
-            std::stringstream uss;
-            std::string sep;
-            if(unuseds.size() > 0) {
-                uss << std::format("Unused tokens:{}", unuseds.size());
-                sep = ", ";
-            }
-    
-            if(noCodeblocks.size() > 0) {
-                uss << std::format("{}Undefined codeblocks:{}", sep, noCodeblocks.size());
-            }
-    
-            throw GeneratorError(__LINE__, __FILE__, pos, "{}", uss.str());
-        }
+        throw GeneratorError(__LINE__, __FILE__, pos, "total: {}", errors.size());
     }
 
     for(auto& w : g.walkers) {

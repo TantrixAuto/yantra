@@ -571,9 +571,26 @@ struct ParserStateMachineBuilder {
                 log("  reduce: rx={}, next_sz={}", rx.name, cfgs.next.size());
                 if(cfgs.next.size() != 1) {
                     // throw GeneratorError(__LINE__, __FILE__, config.rule->pos, "REDUCE_SHIFT_CONFLICT:ON:{}{}", rx->name, ss.str());
+                    std::println("R-R conflict: is={}, rx={}, next_sz={}", is.id, rx.name, cfgs.next.size());
+                    for(auto& pcfg : cfgs.next) {
+                        auto& config = *pcfg;
+                        auto p = resolveConflict(config, rx, "");
+                        std::println("    {}:reduce-cfg: {}, p={}", config.rule.pos.str(), config.str(false), p);
+                    }
                 }
+
                 // assert(cfgs.next.size() == 1);
                 auto& config = *(cfgs.next.at(0));
+                if(is.hasShift(rx) != nullptr) {
+                    auto p = resolveConflict(config, rx, "");
+                    // if resolved in favor of SHIFT, skip adding REDUCE
+                    if(p == 'S') {
+                        continue;
+                    }
+                    // remove existing SHIFT, and go on to add REDUCE
+                    is.delShift(config.rule.pos, rx);
+                }
+
                 auto& lastNode = *(config.rule.nodes.back());
                 assert(is.hasShift(rx) == nullptr);
                 assert(is.hasReduce(rx) == nullptr);
@@ -820,6 +837,17 @@ struct ParserStateMachineBuilder {
 
     inline void process() {
         buildLinks();
+
+        for(auto& prs : grammar.ruleSets) {
+            auto& rs = *prs;
+            if(rs.firsts.size() == 0) {
+                assert(rs.rules.size() > 0);
+                auto& r0 = *(rs.rules.at(0));
+                // this error is typically thrown when a left-recursive rule 
+                // does not have a non left-recursive alternative.
+                throw GeneratorError(__LINE__, __FILE__, r0.pos, "CANNOT_DETERMINE_RULE_FIRSTS:{}", rs.name);
+            }
+        }
 
         // calculate precedence of all rules
         for(auto& r : grammar.rules) {

@@ -75,7 +75,13 @@ struct Walker : public NonCopyable {
     /// @brief base walker of the walker
     const Walker* base = nullptr;
 
-    /// @brief addition user-define members in this walker
+    /// @brief additional ctor statements in this walker
+    CodeBlock xctor;
+
+    /// @brief additional ctor args in this walker
+    std::string xctor_args;
+
+    /// @brief additional user-define members in this walker
     CodeBlock xmembers;
 
     /// @brief name of the void type in this walker
@@ -90,6 +96,9 @@ struct Walker : public NonCopyable {
 
     /// @brief default output type of the walker
     OutputType outputType = OutputType::None;
+
+    /// @brief the external inteface for the walker, if any
+    std::string interfaceName;
 
     /// @brief instance name for the writer object in the walker, if nahy
     std::string writerName = "out";
@@ -119,6 +128,11 @@ struct Walker : public NonCopyable {
         ext = e;
     }
 
+    /// @brief set interface name for this walker
+    inline void setInterfaceName(const std::string& n) {
+        interfaceName = n;
+    }
+
     /// @brief set default function sig for this walker
     inline void init() {
         assert(!defaultFunctionSig);
@@ -134,7 +148,7 @@ struct Walker : public NonCopyable {
     hasFunctionSig(
         const ygp::RuleSet& rs,
         const std::string& func
-    ) const -> const FunctionSig*{
+    ) const -> const FunctionSig* {
         if(auto it = functionSigs.find(&rs); it != functionSigs.end()) {
             const auto& tlist = it->second;
             for(const auto& t : tlist) {
@@ -147,6 +161,20 @@ struct Walker : public NonCopyable {
             return base->hasFunctionSig(rs, func);
         }
         return nullptr;
+    }
+
+    /// @brief check if this walker, or any of it base walkers, have a function sig
+    inline auto
+    getRuleSetNativeType(
+        const ygp::RuleSet& rs,
+        const std::string& func,
+        const std::string& tokenClass
+    ) const -> std::string {
+        auto fsig = hasFunctionSig(rs, func); // NOLINT(readability-qualified-auto)
+        if(fsig != nullptr) {
+            return fsig->type;
+        }
+        return tokenClass;
     }
 
     /// @brief get list of all function sigs defined for specified RuleSet, in this walker,
@@ -588,14 +616,31 @@ struct Grammar : public NonCopyable { // NOLINT(cppcoreguidelines-special-member
         mode.root->isRoot = true;
     }
 
-    inline auto getLexerMode(const yglx::Regex& regex) const -> yglx::LexerMode& {
-        if (lexerModes.contains(regex.mode) == false) {
-            throw GeneratorError(__LINE__, __FILE__, regex.pos, "UNKNOWN_MODE:{}", regex.mode);
+    inline auto getLexerModeByName(const FilePos& npos, const std::string& name) const -> yglx::LexerMode& {
+        if (lexerModes.contains(name) == false) {
+            throw GeneratorError(__LINE__, __FILE__, npos, "UNKNOWN_MODE:{}", name);
         }
 
-        const auto& mode = lexerModes.at(regex.mode);
+        auto& mode = lexerModes.at(name);
         assert(mode);
         return *mode;
+    }
+
+    inline void _getLexerModes(const std::string& lmName, std::vector<yglx::LexerMode*>& rv) const {
+        for(auto& lm : lexerModes) {
+            if(lm.second->includes.contains(lmName) == true) {
+                rv.push_back(lm.second.get());
+                _getLexerModes(lm.first, rv);
+            }
+        }
+    }
+
+    inline auto getLexerModes(const yglx::Regex& regex) const -> std::vector<yglx::LexerMode*> {
+        std::vector<yglx::LexerMode*> rv;
+        auto& m = getLexerModeByName(regex.pos, regex.mode);
+        rv.push_back(&m);
+        _getLexerModes(regex.mode, rv);
+        return rv;
     }
 
     inline auto getRegexNextMode(const yglx::Regex& regex) const -> yglx::LexerMode& {

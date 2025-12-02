@@ -183,7 +183,7 @@ inline int help(const std::string& xname, const std::string& msg) {
     std::println("    -v (--version)  : print Yantra version");
     std::println("    -r              : don't generate #line messages");
     std::println("    -l <logname>    : generate log file to <logname>, use - for console");
-    std::println("    -j <+/-logsrc>  : enable or disable log source <logsrc> (e:g: +lexer)");
+    std::println("    -j <+/-logsrc>  : enable or disable log source <logsrc> (e:g: +lexer, +parser, +generator +walker)");
     std::println("    -g <gfilename>  : generate grammar file to <gfilename>");
     return 1;
 }
@@ -275,6 +275,12 @@ int main(int argc, const char* argv[]) {
             std::string ls(argv[i]);
             if(ls == "+lexer") {
                 options.enableLexerLogging = true;
+            }else if(ls == "+parser") {
+                options.enableParserLogging = true;
+            }else if(ls == "+generator") {
+                options.enableGeneratorLogging = true;
+            }else if(ls == "+walker") {
+                options.enableWalkerLogging = true;
             }else{
                 return help(argv[0], "unknown log source:" + ls);
             }

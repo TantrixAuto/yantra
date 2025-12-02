@@ -12,6 +12,15 @@ struct Options {
 
     /// @brief enable lexer logging
     bool enableLexerLogging = false;
+
+    /// @brief enable parser logging
+    bool enableParserLogging = false;
+
+    /// @brief enable generator logging
+    bool enableGeneratorLogging = false;
+
+    /// @brief enable walker logging
+    bool enableWalkerLogging = false;
 };
 
 auto opts() -> const Options&;

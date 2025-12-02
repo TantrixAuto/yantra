@@ -27,9 +27,14 @@
 #include "filepos.hpp"
 #include "nsutil.hpp"
 #include "print.hpp"
+
 #define TAG(X) X
 
-#define CLSNAME CLASSQID
+// there should be no spaces between X and Y whenever this tag is used in the code below
+#define TAG2(X,Y) X##Y
+
+#define Q_NSNAME NSNAME::
+//#define CLSNAME Q_CLSNAME
 
 constexpr const char* START_RULE_NAME = "";
 constexpr unsigned long MAX_REPEAT_COUNT = 100;
@@ -50,28 +55,32 @@ constexpr const char* MSG = "";
 #include <ranges>
 #include <format>
 #include <filesystem>
+#include <functional>
 #include <unordered_map>
 #include <assert.h>
 ///PROTOTYPE_LEAVE:stdHeaders
 
 ///PROTOTYPE_SEGMENT:hdrHeaders
 
-struct TAG(CLASSQID) {
+///PROTOTYPE_ENTER:IF_HAS_NS
+namespace TAG(NSNAME) {
+///PROTOTYPE_LEAVE:IF_HAS_NS
+struct TAG(CLSNAME) {
     struct Error : public std::runtime_error {
         template <typename ...ArgsT>
-        static inline std::string
-        fmtT(const std::format_string<ArgsT...>& msg, ArgsT... args) {
+        static inline auto
+        fmtT(const std::format_string<ArgsT...>& msg, ArgsT... args) -> std::string {
             auto xmsg = std::format(msg, std::forward<ArgsT>(args)...);
             return xmsg;
         }
-        static inline std::string
-        fmt(const size_t& r, const size_t& c, const std::string_view& f, const std::string& m) {
+        static inline auto
+        fmt(const size_t& r, const size_t& c, const std::string_view& f, const std::string& m) -> std::string {
             auto ymsg = std::format("{}({:03d},{:03d}):{}", f, r, c, m);
             return ymsg;
         }
         template <typename ...ArgsT>
-        static inline std::string
-        fmt(const size_t& r, const size_t& c, const std::string_view& f, const std::format_string<ArgsT...>& msg, ArgsT... args) {
+        static inline auto
+        fmt(const size_t& r, const size_t& c, const std::string_view& f, const std::format_string<ArgsT...>& msg, ArgsT... args) -> std::string {
             auto xmsg = fmtT(msg, args...);
             auto ymsg = fmt(r, c, f, xmsg);
             return ymsg;
@@ -96,8 +105,8 @@ struct TAG(CLASSQID) {
 
     ///PROTOTYPE_SEGMENT:classMembers
 
-    TAG(CLASSQID)(const std::string& name, const std::string& logger = "");
-    ~TAG(CLASSQID)();
+    explicit TAG(CLSNAME)(const std::string& name, const std::string& logger = "");
+    ~TAG(CLSNAME)();
 
     void beginStream();
     void readStream(std::istream& is, const std::string_view& filename);
@@ -109,15 +118,14 @@ struct TAG(CLASSQID) {
     // read string into AST
     void readString(const std::string& s, const std::string_view& filename);
 
-    // walk AST, and write to output file
-    void walk(const std::vector<std::string>& walkers, const std::filesystem::path& odir, const std::string_view& filename);
-
-    // walk AST, no output file
-    void walk(const std::vector<std::string>& walkers);
+    ///PROTOTYPE_SEGMENT:walkerCallDecls
 
     // print AST
     void printAST(std::ostream& ss, const size_t& lvl, const std::string& indent) const;
 };
+///PROTOTYPE_ENTER:IF_HAS_NS
+}
+///PROTOTYPE_LEAVE:IF_HAS_NS
 
 ///PROTOTYPE_ENTER:SKIP
 [[noreturn]]
@@ -129,7 +137,7 @@ inline void dummy() {
 ///PROTOTYPE_SEGMENT:srcHeaders
 
 ///PROTOTYPE_ENTER:throwError
-throw TAG(CLASSQID)::Error(TAG(ROW), TAG(COL), TAG(SRC), TAG(MSG));
+throw TAG(Q_NSNAME)TAG(CLSNAME)::Error(TAG(ROW), TAG(COL), TAG(SRC), TAG(MSG));
 ///PROTOTYPE_LEAVE:throwError
 
 ///PROTOTYPE_ENTER:SKIP
@@ -148,7 +156,6 @@ throw TAG(CLASSQID)::Error(TAG(ROW), TAG(COL), TAG(SRC), TAG(MSG));
 
 namespace {
     ///PROTOTYPE_INCLUDE:nsutil
-    ///PROTOTYPE_INCLUDE:filepos
     ///PROTOTYPE_INCLUDE:textWriter
 
     static std::ostream* _log = nullptr;
@@ -157,89 +164,124 @@ namespace {
         assert(_log != nullptr);
         return *_log;
     }
+}
 
+///PROTOTYPE_ENTER:astNodeDeclsBlock
+///PROTOTYPE_INCLUDE:filepos
+///PROTOTYPE_ENTER:IF_HAS_NS
+namespace TAG(NSNAME) {
+///PROTOTYPE_LEAVE:IF_HAS_NS
+struct TAG(CLSNAME);
+///PROTOTYPE_ENTER:IF_HAS_NS
+}
+///PROTOTYPE_LEAVE:IF_HAS_NS
+
+namespace TAG(Q_NSNAME)TAG2(CLSNAME,_AST) {
     struct TAG(AST);
+    struct TAG(TOKEN) {
+        FilePos pos;
+        std::string text;
+        inline TAG(TOKEN)() {}
+        inline TAG(TOKEN)(const FilePos& p, const std::string& t) : pos(p), text(t) {}
+
+        inline void dump(std::ostream& ss, const size_t& lvl, const std::string& name, const std::string& indent, const size_t& depth) const {
+            if(lvl >= 2) {
+                ss << std::format("{}: {}+--{}({})\n", pos.str(), indent, name, text);
+            }else{
+                assert(lvl == 1);
+                ss << std::format("{}{}:{}({})", indent, depth, name, text);
+            }
+        }
+
+        inline TAG(TOKEN)& go(TAG(AST)&) {
+            return *this;
+        }
+    };
+    ///PROTOTYPE_SEGMENT:astNodeDecls
+    struct NodeRefBase {
+        bool called = false;
+    };
+
+    template<typename T>
+    struct NodeRef : public NodeRefBase {
+        const T& node;
+        inline NodeRef(const T& n) : node(n) {}
+    };
+
+    struct NodeRefPostExec {
+        std::vector<std::pair<NodeRefBase*, std::function<void()>>> nodeRefs;
+        inline ~NodeRefPostExec() {
+            for(auto& pnr : nodeRefs) {
+                auto& nr = *(pnr.first);
+                auto& fn = pnr.second;
+                if((nr.called == false) && (fn)) {
+                    fn();
+                }
+            }
+        }
+        inline void add(NodeRefBase& nr, std::function<void()> fn) {
+            nodeRefs.emplace_back(&nr, fn);
+        }
+    };
+}
+///PROTOTYPE_LEAVE:astNodeDeclsBlock
+
+///PROTOTYPE_INCLUDE:astNodeDeclsBlock
+
+///PROTOTYPE_ENTER:SKIP
+namespace TAG(Q_NSNAME)TAG2(CLSNAME,_AST) {
+    struct START_RULE {
+        inline START_RULE& go(TAG(AST)&) {
+            return *this;
+        }
+        inline void dump(std::ostream&, const size_t&, const std::string&, const size_t&) const {
+        }
+    };
+}
+///PROTOTYPE_LEAVE:SKIP
+
+namespace {
+    struct _astEmpty {
+        inline void dump(std::ostream&, const size_t&, const FilePos&, const std::string&, const size_t&) const {
+        }
+    };
+}
+
+namespace TAG(Q_NSNAME)TAG2(CLSNAME,_AST) {
+    ///PROTOTYPE_SEGMENT:astNodeDefns
+}
+
+namespace {
+    ///PROTOTYPE_ENTER:SKIP
+    using AstNode = std::variant <
+    TAG(Q_NSNAME)TAG2(CLSNAME,_AST)::TAG(TOKEN)
+    >;
+    ///PROTOTYPE_LEAVE:SKIP
+    ///PROTOTYPE_SEGMENT:astNodeItems
 
     struct TAG(AST) : public NonCopyable {
-        using Error = TAG(CLASSQID)::Error;
-        TAG(CLASSQID)& pub;
+        TAG(Q_NSNAME)TAG(CLSNAME)& pub;
 
-        inline TAG(AST)(TAG(CLASSQID)& p) : pub(p) {}
+        inline TAG(AST)(TAG(Q_NSNAME)TAG(CLSNAME)& p) : pub(p) {}
 
         inline TAG(AST)(const TAG(AST)&) = delete;
         inline TAG(AST)(TAG(AST)&&) = delete;
         inline TAG(AST)& operator=(const TAG(AST)&) = delete;
         inline TAG(AST)& operator=(TAG(AST)&&) = delete;
 
-        struct _astEmpty {
-            inline void dump(std::ostream&, const size_t&, const FilePos&, const std::string&, const size_t&) const {
-            }
-        };
-
-        struct TAG(TOKEN) {
-            FilePos pos;
-            std::string text;
-            inline TAG(TOKEN)() {}
-            inline TAG(TOKEN)(const FilePos& p, const std::string& t) : pos(p), text(t) {}
-            inline TAG(TOKEN)(const TAG(TOKEN)& src) : pos(src.pos), text(src.text) {}
-
-            inline void dump(std::ostream& ss, const size_t& lvl, const std::string& name, const std::string& indent, const size_t& depth) const {
-                if(lvl >= 2) {
-                    ss << std::format("{}: {}+--{}({})\n", pos.str(), indent, name, text);
-                }else{
-                    assert(lvl == 1);
-                    ss << std::format("{}{}:{}({})", indent, depth, name, text);
-                }
-            }
-
-            inline const TAG(TOKEN)* get() const {
-                return this;
-            }
-
-            inline TAG(TOKEN)& go(TAG(AST)&) {
-                return *this;
-            }
-
-            inline TAG(TOKEN)& operator=(const TAG(TOKEN)& src) {
-                pos = src.pos;
-                text = src.text;
-                return *this;
-            }
-        };
-
-        ///PROTOTYPE_ENTER:SKIP
-        struct START_RULE{
-            inline START_RULE& go(TAG(AST)&) {
-                return *this;
-            }
-            inline void dump(std::ostream&, const size_t&, const std::string&, const size_t&) const {
-            }
-        };
-
-        using AstNode = std::variant <
-            TAG(TOKEN)
-        >;
-        ///PROTOTYPE_LEAVE:SKIP
-
-        ///PROTOTYPE_SEGMENT:astNodeDecls
-
-        ///PROTOTYPE_SEGMENT:astNodeDefns
-
-        ///PROTOTYPE_SEGMENT:astNodeItems
-
         std::vector<std::unique_ptr<AstNode>> astNodes;
 
-        inline TAG(TOKEN)& createToken(const FilePos& p, const std::string& text) {
-            astNodes.push_back(std::make_unique<AstNode>(TAG(TOKEN)(p, text)));
+        inline TAG(Q_NSNAME)TAG2(CLSNAME,_AST)::TAG(TOKEN)& createToken(const FilePos& p, const std::string& text) {
+            astNodes.push_back(std::make_unique<AstNode>(TAG(Q_NSNAME)TAG2(CLSNAME,_AST)::TAG(TOKEN)(p, text)));
             AstNode& ri = *(astNodes.back());
-            return std::get<TAG(TOKEN)>(ri);
+            return std::get<TAG(Q_NSNAME)TAG2(CLSNAME,_AST)::TAG(TOKEN)>(ri);
         }
 
         template<typename AstNodeT>
         ///PROTOTYPE_ENTER:SKIP
         [[maybe_unused]]
         ///PROTOTYPE_LEAVE:SKIP
-        inline AstNodeT& createAstNode(const FilePos& p, const TAG(TOKEN)& anchor) {
+        inline AstNodeT& createAstNode(const FilePos& p, const TAG(Q_NSNAME)TAG2(CLSNAME,_AST)::TAG(TOKEN)& anchor) {
             auto w = std::make_unique<AstNode>();
             astNodes.push_back(std::move(w));
             AstNode& astNode = *(astNodes.back());
@@ -247,49 +289,42 @@ namespace {
             return std::get<AstNodeT>(astNode);
         }
 
-        TAG(START_RULE)* R_start = nullptr;
+        TAG(Q_NSNAME)TAG2(CLSNAME,_AST)::TAG(START_RULE)* R_start = nullptr;
 
-        ///PROTOTYPE_ENTER:SKIP
-        struct TAG(WALKER) {
-            inline TAG(WALKER)(TAG(CLASSQID)&) {}
-
-            inline std::unique_ptr<TAG(TOKEN)> go(TAG(START_RULE)&) {
-                return nullptr;
-            }
-            inline void layout() {
-            }
-        };
-        ///PROTOTYPE_LEAVE:SKIP
-
-        ///PROTOTYPE_SEGMENT:prologue
-
-        template<typename T>
-        struct WalkerNodeRef : public NonCopyable {
-            const T& node;
-            bool called = false;
-            inline WalkerNodeRef(const T& n, const bool& c = false) : node(n), called(c) {}
-        };
-
-        template<typename T>
-        struct WalkerNodeCommit : public NonCopyable {
-            WalkerNodeRef<T>& node;
-            inline WalkerNodeCommit(WalkerNodeRef<T>& n) : node(n) {}
-            inline ~WalkerNodeCommit() {
-                node.called = true;
-            }
-        };
-
-        ///PROTOTYPE_SEGMENT:walkers
-
-        ///PROTOTYPE_SEGMENT:epilogue
-
-        inline TAG(START_RULE)& _root() const {
+        inline TAG(Q_NSNAME)TAG2(CLSNAME,_AST)::TAG(START_RULE)& _root() const {
             assert(R_start);
             return *(R_start);
         }
     }; // TAG(AST)
-} // namespace
 
+    ///PROTOTYPE_ENTER:SKIP
+    struct TAG(WALKER) {
+        inline TAG(WALKER)(TAG(Q_NSNAME)TAG(CLSNAME)&) {}
+
+        inline std::unique_ptr<TAG(Q_NSNAME)TAG2(CLSNAME,_AST)::TAG(TOKEN)> go(TAG(Q_NSNAME)TAG2(CLSNAME,_AST)::TAG(START_RULE)&) {
+            return nullptr;
+        }
+    };
+    ///PROTOTYPE_LEAVE:SKIP
+
+    template<typename W, typename T>
+    struct WalkerNodeCommit : public NonCopyable {
+        using NR = W::template NodeRef<T>;
+        NR& node;
+        inline WalkerNodeCommit(NR& n) : node(n) {}
+        inline ~WalkerNodeCommit() {
+            node.called = true;
+        }
+    };
+
+    ///PROTOTYPE_SEGMENT:prologue
+}
+
+///PROTOTYPE_SEGMENT:walkers
+
+namespace {
+    ///PROTOTYPE_SEGMENT:epilogue
+} // namespace
 
 namespace {
 [[maybe_unused]]
@@ -438,7 +473,9 @@ struct Parser {
             assert(cvi != nullptr);
             childs.push_back(cvi);
         }
+        ///PROTOTYPE_ENTER:IF_LOG_PARSER
         std::print(log(), "pop:{}\n", ss.str());
+        ///PROTOTYPE_LEAVE:IF_LOG_PARSER
         for (size_t i = 0; i < len; ++i) {
             stateStack.pop_back();
             valueStack.pop_back();
@@ -471,6 +508,7 @@ struct Parser {
         return true;
     }
 
+    ///PROTOTYPE_ENTER:IF_LOG_PARSER
     inline void printParserState() const {
         std::stringstream vss;
         for (auto& i : valueStack) {
@@ -490,6 +528,7 @@ struct Parser {
         printParserState();
         std::print(log(), "Token({}): {}\n", k.pos.str(), k.str());
     }
+    ///PROTOTYPE_LEAVE:IF_LOG_PARSER
 
     template<typename NodeT>
     inline NodeT& create(const ValueItem& vi);
@@ -508,14 +547,14 @@ struct Parser {
 }; // Parser
 
 template<>
-inline TAG(AST)::TAG(TOKEN)& Parser::create<TAG(AST)::TAG(TOKEN)>(const ValueItem& vi) {
+inline TAG(Q_NSNAME)TAG2(CLSNAME,_AST)::TAG(TOKEN)& Parser::create<TAG(Q_NSNAME)TAG2(CLSNAME,_AST)::TAG(TOKEN)>(const ValueItem& vi) {
     auto& cel = ast.createToken(vi.token.pos, vi.token.text);
     return cel;
 }
 
 ///PROTOTYPE_ENTER:SKIP
 template<>
-inline TAG(AST)::TAG(START_RULE)& Parser::create<TAG(AST)::TAG(START_RULE)>(const ValueItem&) {
+inline TAG(Q_NSNAME)TAG2(CLSNAME,_AST)::TAG(START_RULE)& Parser::create<TAG(Q_NSNAME)TAG2(CLSNAME,_AST)::TAG(START_RULE)>(const ValueItem&) {
     // control flow won't usually reach here
     throw std::runtime_error("Don't do this please");
 }
@@ -536,7 +575,10 @@ inline bool Parser::parse(const Tolkien& k0) {
     bool accepted = false;
     Tolkien k = k0;
     while (!accepted) {
+        ///PROTOTYPE_ENTER:IF_LOG_PARSER
         printParserState(k);
+        ///PROTOTYPE_LEAVE:IF_LOG_PARSER
+
         assert(stateStack.size() > 0);
         switch (stateStack.back()) {
             ///PROTOTYPE_SEGMENT:parserTransitions
@@ -546,14 +588,17 @@ inline bool Parser::parse(const Tolkien& k0) {
 } // parse()
 
 inline void Parser::leave() {
+    ///PROTOTYPE_ENTER:IF_LOG_PARSER
     std::print(log(), "parse done\n");
     printParserState();
+    ///PROTOTYPE_LEAVE:IF_LOG_PARSER
+
     if(valueStack.size() != 1) {
         // control flow won't usually reach here
         throw std::runtime_error("parse error");
     }
     auto& vi = *(valueStack.at(0));
-    auto& R_start = create<TAG(AST)::TAG(START_RULE)>(vi);
+    auto& R_start = create<TAG(Q_NSNAME)TAG2(CLSNAME,_AST)::TAG(START_RULE)>(vi);
     ast.R_start = &R_start;
 }
 
@@ -605,7 +650,9 @@ struct Lexer {
         token = Tolkien(stream.pos);
         while (!stream.eof()) {
             auto& ch = stream.peek();
+            ///PROTOTYPE_ENTER:IF_LOG_LEXER
             std::print(log(), "{}: Lexer:state={}, ch={}/{}, count={}\n", stream.pos.str(), state, (static_cast<int>(ch) == EOF ? "EOF" : std::to_string(ch)), std::isprint(static_cast<int>(ch)) ? static_cast<char>(ch) : ' ', counts.size());
+            ///PROTOTYPE_LEAVE:IF_LOG_LEXER
             switch (state) {
                 ///PROTOTYPE_SEGMENT:lexerStates
             } // switch(state)
@@ -616,8 +663,8 @@ struct Lexer {
 }; // Lexer
 } // namespace
 
-struct TAG(CLASSQID)::Impl {
-    TAG(CLSNAME)& module;
+struct TAG(Q_NSNAME)TAG(CLSNAME)::Impl {
+    TAG(CLSNAME)& ymodule;
     TAG(AST) ast;
     Parser parser;
     Lexer lexer;
@@ -636,19 +683,20 @@ struct TAG(CLASSQID)::Impl {
     };
 
     inline Impl(TAG(CLSNAME)& m, const std::string& lname)
-        : module(m)
-        , ast(module)
+        : ymodule(m)
+        , ast(ymodule)
         , parser(ast)
         , lexer(parser)
     {
-        unused(lname);
-        if(lname == "-") {
-            _log = &std::cout;
-        }else{
-            if(lname.size() > 0) {
-                flog.open(lname);
+        if(_log == nullptr) {
+            if(lname == "-") {
+                _log = &std::cout;
+            }else{
+                if(lname.size() > 0) {
+                    flog.open(lname);
+                }
+                _log = &flog;
             }
-            _log = &flog;
         }
     }
 
@@ -675,19 +723,7 @@ struct TAG(CLASSQID)::Impl {
         endStream();
     }
 
-    inline void walk(std::vector<std::string> walkers, const std::filesystem::path& odir, const std::string_view& filename) {
-        auto& start = ast._root();
-        ///PROTOTYPE_ENTER:SKIP
-        unused(start, odir, filename);
-        ///PROTOTYPE_LEAVE:SKIP
-
-        WalkingGuard wg(*this);
-        for(auto& w : walkers) {
-            if(w == "") {
-            }
-            ///PROTOTYPE_SEGMENT:walkerCalls
-        }
-    }
+    ///PROTOTYPE_SEGMENT:walkerCallImpls
 
     inline void printAST(std::ostream& ss, const size_t& lvl, const std::string& indent) const {
         auto& start = ast._root();
@@ -695,34 +731,28 @@ struct TAG(CLASSQID)::Impl {
     }
 };
 
-TAG(CLASSQID)::TAG(CLSNAME)(const std::string& n, const std::string& lname) : name(n) {
+TAG(Q_NSNAME)TAG(CLSNAME)::TAG(CLSNAME)(const std::string& n, const std::string& lname) : name(n) {
     _impl = std::make_unique<Impl>(*this, lname);
 }
 
-TAG(CLASSQID)::~TAG(CLSNAME)() {
+TAG(Q_NSNAME)TAG(CLSNAME)::~TAG(CLSNAME)() {
 }
 
-void TAG(CLASSQID)::beginStream() {
+void TAG(Q_NSNAME)TAG(CLSNAME)::beginStream() {
     return _impl->beginStream();
 }
 
-void TAG(CLASSQID)::readStream(std::istream& is, const std::string_view& filename) {
+void TAG(Q_NSNAME)TAG(CLSNAME)::readStream(std::istream& is, const std::string_view& filename) {
     return _impl->readStream(is, filename);
 }
 
-void TAG(CLASSQID)::endStream() {
+void TAG(Q_NSNAME)TAG(CLSNAME)::endStream() {
     return _impl->endStream();
 }
 
-void TAG(CLASSQID)::walk(const std::vector<std::string>& walkers, const std::filesystem::path& odir, const std::string_view& filename) {
-    return _impl->walk(walkers, odir, filename);
-}
+///PROTOTYPE_SEGMENT:walkerCallDefns
 
-void TAG(CLASSQID)::walk(const std::vector<std::string>& walkers) {
-    return _impl->walk(walkers, "", "");
-}
-
-void TAG(CLASSQID)::readFile(const std::string& filename) {
+void TAG(Q_NSNAME)TAG(CLSNAME)::readFile(const std::string& filename) {
     std::ifstream is(filename);
     if(!is) {
         throw std::runtime_error("Cannot open file:" + filename);
@@ -730,12 +760,12 @@ void TAG(CLASSQID)::readFile(const std::string& filename) {
     _impl->read(is, filename);
 }
 
-void TAG(CLASSQID)::readString(const std::string& s, const std::string_view& filename) {
+void TAG(Q_NSNAME)TAG(CLSNAME)::readString(const std::string& s, const std::string_view& filename) {
     std::istringstream is(s);
     _impl->read(is, filename);
 }
 
-void TAG(CLASSQID)::printAST(std::ostream& ss, const size_t& lvl, const std::string& indent) const {
+void TAG(Q_NSNAME)TAG(CLSNAME)::printAST(std::ostream& ss, const size_t& lvl, const std::string& indent) const {
     _impl->printAST(ss, lvl, indent);
 }
 
@@ -745,12 +775,12 @@ void TAG(CLASSQID)::printAST(std::ostream& ss, const size_t& lvl, const std::str
 
 ///PROTOTYPE_ENTER:repl
 #if HAS_REPL
-inline bool doREPL(TAG(CLASSQID)& mp, const std::string& input) {
+inline bool doREPL(TAG(Q_NSNAME)TAG(CLSNAME)& ymodule, const std::string& input) {
     if(input == "\\q") {
         return false;
     }
 
-    mp.readString(input, "<cmd>");
+    ymodule.readString(input, "<cmd>");
     return true;
 }
 #endif
@@ -762,12 +792,10 @@ inline int help(const std::string& xname, const std::string& msg) {
     if(msg.size() > 0) {
         std::print("== {} ==\n", msg);
     }
-#if HAS_REPL
     std::print("{} <options>\n", xxname.string());
     std::print("options:\n");
+#if HAS_REPL
     std::print("    -i              : read input interactively from console\n");
-#else
-    std::print("{} -f <filename> -s <string> -l <log>\n", xxname.string());
 #endif
     std::print("    -f <filename>   : read input from file <filename>\n");
     std::print("    -s <string>     : read input from <string> passed on commandline\n");
@@ -780,11 +808,22 @@ inline int help(const std::string& xname, const std::string& msg) {
     return 1;
 }
 
-inline void printASTIf(const size_t& printAstLevel, const TAG(CLASSQID)& mp) {
+inline void doWalk(const size_t& printAstLevel, TAG(Q_NSNAME)TAG(CLSNAME)& ymodule, std::vector<std::string> walkers, const std::filesystem::path& odir, const std::string_view& filename) {
     if(printAstLevel > 0) {
-        mp.printAST(std::cout, printAstLevel, "");
+        ymodule.printAST(std::cout, printAstLevel, "");
         if(printAstLevel == 1) {
             std::cout << std::endl;
+        }
+    }
+    // ymodule.walk(walkers, odir, filename);
+    unused(walkers, odir, filename);
+
+    for(auto& w : walkers) {
+        if(w == "") {
+        }
+        ///PROTOTYPE_SEGMENT:walkerCalls
+        else {
+            throw std::runtime_error("unknown walker: " + w);
         }
     }
 }
@@ -894,10 +933,9 @@ int main(int argc, char* argv[]) {
 
             try {
                 // instance of the module
-                TAG(CLASSQID) mp("main", log);
-                mp.readFile(f);
-                printASTIf(printAstLevel, mp);
-                mp.walk(walkers, outf, f);
+                TAG(Q_NSNAME)TAG(CLSNAME) ymodule("main", log);
+                ymodule.readFile(f);
+                doWalk(printAstLevel, ymodule, walkers, outf, f);
             }catch(const std::exception& ex) {
                 ++errs;
                 std::print("err:{}\n", ex.what());
@@ -913,10 +951,9 @@ int main(int argc, char* argv[]) {
 
             try {
                 // instance of the module
-                TAG(CLASSQID) mp("main", log);
-                mp.readString(f, inn);
-                printASTIf(printAstLevel, mp);
-                mp.walk(walkers);
+                TAG(Q_NSNAME)TAG(CLSNAME) ymodule("main", log);
+                ymodule.readString(f, inn);
+                doWalk(printAstLevel, ymodule, walkers, "", "");
             }catch(const std::exception& ex) {
                 std::print("err:{}\n", ex.what());
                 ++errs;
@@ -928,16 +965,15 @@ int main(int argc, char* argv[]) {
 #if HAS_REPL
     if(repl == true) {
         // instance of the module
-        TAG(CLASSQID) mp("main", log);
+        TAG(Q_NSNAME)TAG(CLSNAME) ymodule("main", log);
 
         // read all files
         for(auto& f : filenames) {
             if(verbose) std::print("compiling file: {}\n", f);
 
             try {
-                mp.readFile(f);
-                printASTIf(printAstLevel, mp);
-                mp.walk(walkers);
+                ymodule.readFile(f);
+                doWalk(printAstLevel, ymodule, walkers, "", "");
             }catch(const std::exception& ex) {
                 std::print("err:{}\n", ex.what());
             }
@@ -949,9 +985,8 @@ int main(int argc, char* argv[]) {
             if(verbose) std::print("compiling string\n", f);
 
             try {
-                mp.readString(f, "<str>");
-                printASTIf(printAstLevel, mp);
-                mp.walk(walkers);
+                ymodule.readString(f, "<str>");
+                doWalk(printAstLevel, ymodule, walkers, "", "");
             }catch(const std::exception& ex) {
                 std::print("err:{}\n", ex.what());
             }
@@ -962,7 +997,7 @@ int main(int argc, char* argv[]) {
             std::cout << ">";
             std::getline(std::cin, input);
             try {
-                if(doREPL(mp, input) == false) {
+                if(doREPL(ymodule, input) == false) {
                     break;
                 }
             }catch(const std::exception& ex) {
