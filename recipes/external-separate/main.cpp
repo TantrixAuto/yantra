@@ -2,6 +2,9 @@
 #include <iostream>
 
 struct CompilerImpl : public CompilerBase {
+
+    inline CompilerImpl(YantraModule& m) : CompilerBase(m) {}
+
     virtual void
     start_1_go(NodeRef<YantraModule_AST::expr>& e) override {
         auto v = eval(e);
@@ -90,7 +93,7 @@ int main(int argc, char* argv[]) {
     }
     YantraModule mod(argv[0]);
     mod.readString(argv[1], "in");
-    CompilerImpl impl;
+    CompilerImpl impl(mod);
     mod.walk_Compiler(impl);
     return 0;
 }

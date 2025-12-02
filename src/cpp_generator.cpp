@@ -471,17 +471,21 @@ struct Generator {
     }
 
     /// @brief generates function sig for walker
-    static inline auto
-    generateWalkerSig(const yg::Walker& w) -> std::string{
+    inline auto
+    generateWalkerSig(const yg::Walker& w) -> std::string {
         std::stringstream ss;
         std::string sep;
         ss << std::format("walk_{}(", w.name);
         if(w.interfaceName.size() > 0) {
             ss << std::format("{}& walker", w.interfaceName);
             sep = ", ";
+        }else if(w.xctor_args.size() > 0) {
+            ss << std::format("{}", w.xctor_args);
+            sep = ", ";
         }
         if(w.outputType == yg::Walker::OutputType::TextFile) {
             ss << sep << "const std::filesystem::path& odir, const std::string_view& filename";
+            sep = ", ";
         }
         ss << ")";
         return ss.str();
@@ -494,6 +498,10 @@ struct Generator {
         std::string sep;
         if(w.interfaceName.size() > 0) {
             ss << std::format("walker");
+            sep = ", ";
+        }else if(w.xctor_args.size() > 0) {
+            auto xparams = extractParams(w.xctor_args);
+            ss << std::format("{}", xparams);
             sep = ", ";
         }
         if(w.outputType == yg::Walker::OutputType::TextFile) {
@@ -521,6 +529,12 @@ struct Generator {
             tw.writeln("{}    return _impl->walk_{}({});", indent, w.name, wcall);
             tw.writeln("{}}}", indent);
             tw.writeln();
+
+            tw.writeln("{}void {}::walk({}& m) {{", indent, w.name, grammar.className);
+            tw.writeln("{}    auto& start = m._impl->ast._root();", indent);
+            tw.writeln("{}    Walker_{}::NodeRef<{}_AST::{}> s(start);", indent, w.name, grammar.className, grammar.start);
+            tw.writeln("{}    go(s);", indent);
+            tw.writeln("{}}}", indent);
         }
     }
 
@@ -533,8 +547,12 @@ struct Generator {
             auto wname = w.name;
             if(w.interfaceName.size() > 0) {
                 wname = w.interfaceName;
+            }else if(w.xctor_args.size() > 0) {
+                auto xparams = extractParams(w.xctor_args);
+                tw.writeln("{}    Walker_{} walker(ymodule, {});", indent, w.name, xparams);
+                wname = std::format("Walker_{}", w.name);
             }else{
-                tw.writeln("{}    Walker_{} walker;", indent, w.name);
+                tw.writeln("{}    Walker_{} walker(ymodule);", indent, w.name);
                 wname = std::format("Walker_{}", w.name);
             }
             if(w.outputType == yg::Walker::OutputType::TextFile) {
@@ -706,6 +724,10 @@ struct Generator {
         tw.writeln("{}        [&]({}const {}::{}& _n) -> {} {{", indent, node_unused, rs.name, r.ruleName, fsig.type);
         tw.writeln("{}            NodeRefPostExec _nrpx;", indent);
 
+        if(opts().enableWalkerLogging == true) {
+            tw.writeln("{}    std::println(log(), \"{}:{}\");", indent, hname, r.str(false));
+        }
+
         // generate node-refs
         for (const auto& n : r.nodes) {
             if(n->name == grammar.end) {
@@ -840,24 +862,42 @@ struct Generator {
         const std::unordered_map<std::string, std::string>& vars,
         const std::string_view& indent
     ) {
+        std::string bname;
         if(grammar.isRootWalker(walker) == true) {
             tw.writeln("{}struct {} {{", indent, wname);
             if(auto twi = TextFileIndenter(tw)) {
                 generateUsingASTNodes(tw, indent);
             }
+            tw.writeln("{}    {}& ymodule;", indent, grammar.className);
+            bname = std::format("ymodule");
+            // tw.writeln("{}    inline {}({}& m) : ymodule(m) {{}}", indent, wname, grammar.className);
         }else{
             assert(walker.base != nullptr);
-            auto bname = std::format("{}", walker.base->name);
+            bname = std::format("{}", walker.base->name);
             tw.writeln("{}struct {} : public {} {{", indent, wname, bname);
         }
-        
+
         if(auto twi = TextFileIndenter(tw)) {
+            if(walker.xctor.hasCode() == true) {
+                tw.writeln("{}inline {}({}& m) : {}(m) {{", indent, wname, grammar.className, bname);
+                if(auto twi = TextFileIndenter(tw)) {
+                    generateCodeBlock(tw, walker.xctor, indent, true, vars);
+                }
+                tw.writeln("{}}}", indent);
+            }else{
+                tw.writeln("{}inline {}({}& m) : {}(m) {{}}", indent, wname, grammar.className, bname);
+            }
+            tw.writeln();
+
             tw.writeln("{}virtual ~{}() {{}}", indent, wname);
             tw.writeln();
 
+            tw.writeln("{}    void walk({}& m);", indent, grammar.className);
             if(grammar.isRootWalker(walker) == true) {
                 generateCodeBlock(tw, walker.xmembers, indent, true, vars);
             }
+
+            // generateCodeBlock(tw, walker.xctor, indent, true, vars);
 
             tw.writeln("{}template<typename T>", indent);
             tw.writeln("{}using NodeRef = {}::NodeRef<T>;", indent, qidNameAST);
@@ -866,7 +906,7 @@ struct Generator {
             tw.writeln();
 
             if((walker.interfaceName.size() > 0) && (opts().amalgamatedFile == true)) {
-                tw.writeln("{}static std::unique_ptr<{}> create();", indent, wname);
+                tw.writeln("{}static std::unique_ptr<{}> create({}& m);", indent, wname, grammar.className);
             }
 
             if(walker.outputType == yg::Walker::OutputType::TextFile) {
@@ -874,6 +914,13 @@ struct Generator {
             }
             tw.writeln("{}template<typename T>", indent);
             tw.writeln("{}void skip(NodeRef<T>& nr);", indent);
+            tw.writeln();
+
+            tw.writeln("{}template<typename T>", indent);
+            tw.writeln("{}auto pos(NodeRef<T>& nr) -> FilePos {{", indent);
+            tw.writeln("{}    return nr.node.anchor.pos;", indent);
+            tw.writeln("{}}}", indent);
+            tw.writeln();
 
             for(const auto& prs : grammar.ruleSets) {
                 auto& rs = *prs;
@@ -999,9 +1046,14 @@ struct Generator {
                 }
             }
 
+            // generate Walker implementation
             if(walker.interfaceName.size() == 0) {
-                // generate Walker implementation
+                std::string xargs;
+                if(walker.xctor_args.size() > 0) {
+                    xargs = std::format(", {}", walker.xctor_args);;
+                }
                 tw.writeln("{}struct Walker_{} : public {} {{", indent, walker.name, wname);
+                tw.writeln("{}    inline Walker_{}({}& m{}) : {}(m) {{}}", indent, walker.name, grammar.className, xargs, wname);
                 if(auto twi = TextFileIndenter(tw)) {
                     generateWriter(tw, walker, indent);
                 }
@@ -1039,14 +1091,14 @@ struct Generator {
 
             tw.writeln("{}else if(w == \"{}\") {{", indent, walker.name);
             if(walker.interfaceName.size() > 0) {
-                tw.writeln("{}    auto pwalker = {}::create();", indent, walker.interfaceName);
+                tw.writeln("{}    auto pwalker = {}::create(ymodule);", indent, walker.interfaceName);
                 tw.writeln("{}    auto& walker = *pwalker;", indent);
-                tw.writeln("{}    mp.walk_{}(walker);", indent, walker.name);
+                tw.writeln("{}    ymodule.walk_{}(walker);", indent, walker.name);
             }else{
                 if(walker.outputType == yg::Walker::OutputType::TextFile) {
-                    tw.writeln("{}    mp.walk_{}(odir, filename);", indent, walker.name);
+                    tw.writeln("{}    ymodule.walk_{}(odir, filename);", indent, walker.name);
                 }else{
-                    tw.writeln("{}    mp.walk_{}();", indent, walker.name);
+                    tw.writeln("{}    ymodule.walk_{}();", indent, walker.name);
                 }
             }
             tw.writeln("{}}}", indent);
@@ -1156,7 +1208,9 @@ struct Generator {
             std::string xsep;
 
             tw.writeln("            case {}:", itemSet.id);
-            tw.writeln(R"(                std::print(log(), "{{}}", "{}\n");)", itemSet.str("", R"(\n)", true));
+            if(opts().enableParserLogging == true) {
+                tw.writeln(R"(                std::print(log(), "{{}}", "{}\n");)", itemSet.str("", R"(\n)", true));
+            }
             tw.writeln("                switch(k.id) {{");
             for (auto& c : itemSet.shifts) {
                 for(const auto& fb : c.first->fallbacks) {
@@ -1173,7 +1227,9 @@ struct Generator {
                     tw.writeln("                    reduce(0, 1, 0, Tolkien::ID::{}, \"{}\");", e->name, e->name);
                     tw.writeln("                    stateStack.push_back(0);");
                 }
-                tw.writeln(R"(                    std::print(log(), "SHIFT {}: t={}\n");)", c.second.next->id, c.first->name);
+                if(opts().enableParserLogging == true) {
+                    tw.writeln(R"(                    std::print(log(), "SHIFT {}: t={}\n");)", c.second.next->id, c.first->name);
+                }
                 tw.writeln("                    shift(k);");
                 tw.writeln("                    stateStack.push_back({});", c.second.next->id);
                 tw.writeln("                    return accepted;");
@@ -1184,7 +1240,9 @@ struct Generator {
                 const auto& c = *(rd.second.next);
                 const auto& r = c.rule;
                 tw.writeln("                case Tolkien::ID::{}: // REDUCE", rd.first->name);
-                tw.writeln(R"(                    std::print(log(), "REDUCE:{}:{{}}/{}\n", "{}");)", rd.first->name, r.nodes.size(), c.str());
+                if(opts().enableParserLogging == true) {
+                    tw.writeln(R"(                    std::print(log(), "REDUCE:{}:{{}}/{}\n", "{}");)", rd.first->name, r.nodes.size(), c.str());
+                }
                 auto len = rd.second.len;
                 while(len < r.nodes.size()) {
                     tw.writeln("                    //shift-epsilon: len={}", len);
@@ -1211,7 +1269,9 @@ struct Generator {
             }
             for (auto& c : itemSet.gotos) {
                 tw.writeln("                case Tolkien::ID::{}: // GOTO", c.first->name);
-                tw.writeln(R"(                    std::print(log(), "GOTO {}:id={}, rule={}\n");)", c.second->id, c.first->id, c.first->name);
+                if(opts().enableParserLogging == true) {
+                    tw.writeln(R"(                    std::print(log(), "GOTO {}:id={}, rule={}\n");)", c.second->id, c.first->id, c.first->name);
+                }
                 tw.writeln("                    stateStack.push_back({});", c.second->id);
                 tw.writeln("                    k = k0;");
                 tw.writeln("                    break;");
@@ -1544,6 +1604,8 @@ struct Generator {
         static std::unordered_set<std::string_view> dontPrintBlocks = {
             "SKIP",
             "IF_HAS_NS",
+            "IF_HAS_LEXER",
+            "IF_LOG_PARSER"
         };
 
         enum class Token : uint8_t {
@@ -1678,7 +1740,9 @@ struct Generator {
 
             switch (token) {
             case Token::EnterBlock: {
-                PRINT("Line::EB:{}, eb={}, lb={}", line, eblockName, lblockName);
+                if(opts().enableGeneratorLogging == true) {
+                    log("Line::EB:{}, eb={}, lb={}, skip={}", line, eblockName, lblockName, skip);
+                }
                 if (dontPrintBlocks.contains(eblockName) == false) {
                     tw.writeln("{}", line);
                 }
@@ -1728,6 +1792,24 @@ struct Generator {
                     break;
                 }
 
+                if (eblockName == "IF_LOG_LEXER") {
+                    if(opts().enableLexerLogging == true) {
+                        skip = false;
+                    }else{
+                        skip = true;
+                    }
+                    break;
+                }
+
+                if (eblockName == "IF_LOG_PARSER") {
+                    if(opts().enableParserLogging == true) {
+                        skip = false;
+                    }else{
+                        skip = true;
+                    }
+                    break;
+                }
+
                 if (eblockName == "throwError") {
                     tBlock.clear();
                     assert(capturing == false);
@@ -1747,7 +1829,9 @@ struct Generator {
                 throw GeneratorError(__LINE__, __FILE__, grammar.pos(), "PROTOTYPE_EBLOCK_ERROR:{}", eblockName);
             }
             case Token::LeaveBlock: {
-                PRINT("Line::LB:{}, eb={}, lb={}", line, eblockName, lblockName);
+                if(opts().enableGeneratorLogging == true) {
+                    log("Line::LB:{}, eb={}, lb={}", line, eblockName, lblockName);
+                }
                 if (dontPrintBlocks.contains(eblockName) == false) {
                     tw.writeln("{}", line);
                 }
@@ -1770,7 +1854,9 @@ struct Generator {
                 break;
             }
             case Token::Segment: {
-                PRINT("Line::SEGMENT:{}", line);
+                if(opts().enableGeneratorLogging == true) {
+                    log("Line::SEGMENT:{}", line);
+                }
                 tw.writeln("{}:BEGIN //{}", line, tw.row);
                 if (segmentName == "pchHeader") {
                     generatePchHeader(tw, indent);
@@ -1823,7 +1909,9 @@ struct Generator {
                 break;
             }
             case Token::Include: {
-                PRINT("Line::INCLUDE:{}", line);
+                if(opts().enableGeneratorLogging == true) {
+                    log("Line::INCLUDE:{}", line);
+                }
                 tw.writeln("{}:BEGIN", line);
                 if (includeName == "utf8Encoding") {
                     if (grammar.unicodeEnabled == true) {
@@ -1868,7 +1956,9 @@ struct Generator {
                 break;
             }
             case Token::Target: {
-                PRINT("Line::TARGET:{}", line);
+                if(opts().enableGeneratorLogging == true) {
+                    log("Line::TARGET:{}", line);
+                }
                 if ((opts().amalgamatedFile == false) && (targetName == "SOURCE")) {
                     auto nsrcName = filebase.string() + ".cpp";
                     tw.open(nsrcName);
@@ -1880,9 +1970,10 @@ struct Generator {
                 break;
             }
             case Token::Line: {
-                PRINT("Init::LINE:{}, eblockName=[{}]", line, eblockName);
+                if(opts().enableGeneratorLogging == true) {
+                    log("Init::LINE:{}, eblockName=[{}], skip={}", line, eblockName, skip);
+                }
                 if (skip == false) {
-                    PRINT("ind:[{}]:[{}]:[{}]", outerIndent, innerIndent, tline);
                     generatePrototypeLine(tw, tline, vars, indent);
                 }else if((eblockName == "astNodeDeclsBlock") || (eblockName == "throwError")) {
                     tBlock += "\n";

@@ -6,6 +6,8 @@
 #include "CompilerBase.hpp"
 
 struct CompilerImpl : public CompilerBase {
+    inline CompilerImpl(YantraModule& m) : CompilerBase(m) {}
+
     virtual void
     start_1_go(NodeRef<YantraModule_AST::expr>& e) override {
         auto v = eval(e);
@@ -87,6 +89,6 @@ struct CompilerImpl : public CompilerBase {
     }
 };
 
-std::unique_ptr<CompilerBase> CompilerBase::create() {
-    return std::make_unique<CompilerImpl>();
+std::unique_ptr<CompilerBase> CompilerBase::create(YantraModule& m) {
+    return std::make_unique<CompilerImpl>(m);
 }

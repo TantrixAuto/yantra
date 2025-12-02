@@ -158,14 +158,18 @@ struct Tracer {
     [[maybe_unused]]
     inline Tracer(const size_t& l, const std::string& n) : lvl{l}, name{n} {
 #if DO_TRACER
-        log("{}:{}: enter", lvl, name);
+        if(opts().enableParserLogging == true) {
+            log("{}:{}: enter", lvl, name);
+        }
 #endif
     }
 
     [[maybe_unused]]
     inline ~Tracer() {
 #if DO_TRACER
-        log("{}:{}: leave", lvl, name);
+        if(opts().enableParserLogging == true) {
+            log("{}:{}: leave", lvl, name);
+        }
 #endif
     }
 };
@@ -1250,8 +1254,9 @@ struct Parser {
     /// this is a wrapper around lexer.peek(), but additionally logs the peeked token for debugging purposes
     inline const Token& peek(const Tracer& tr) {
         auto& t = lexer.peek();
-        unused(tr);
-        log("{:>3}:>parser: lvl={}, s={}, tok={}, text=[{}], pos={}", lexer.stream.pos.str(), lvl, tr.name, Token::sname(t), t.text, t.pos.str());
+        if(opts().enableParserLogging == true) {
+            log("{:>3}:>parser: lvl={}, s={}, tok={}, text=[{}], pos={}", lexer.stream.pos.str(), lvl, tr.name, Token::sname(t), t.text, t.pos.str());
+        }
         return t;
     }
 
@@ -1767,6 +1772,62 @@ struct Parser {
         read_semi(tr);
     }
 
+    /// @brief read additional ctor statements for the specified walker
+    inline void walker_ctor() {
+        Tracer tr{lvl, "walker_ctor"};
+
+        Token t = peek(tr);
+        if(t.id != Token::ID::ID) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+        }
+
+        auto walker = grammar.getWalker(t.text);
+        if(walker == nullptr) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "UNKNOWN_WALKER:{}", t.text);
+        }
+
+        lexer.next();
+        t = peek(tr);
+        if(t.id != Token::ID::CODEBLOCK) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+        }
+
+        walker->xctor.setCode(t.pos, t.text);
+        lexer.next();
+    }
+
+    /// @brief read additional ctor args for the specified walker
+    inline void walker_ctor_args() {
+        Tracer tr{lvl, "walker_ctor_args"};
+
+        Token t = peek(tr);
+        if(t.id != Token::ID::ID) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+        }
+
+        auto walker = grammar.getWalker(t.text);
+        if(walker == nullptr) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "UNKNOWN_WALKER:{}", t.text);
+        }
+
+        lexer.setMode_Type();
+        lexer.next();
+
+        t = peek(tr);
+        if(t.id != Token::ID::TYPE) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+        }
+
+        walker->xctor_args = t.text;
+        lexer.next();
+
+        t = peek(tr);
+        if(t.id != Token::ID::SEMI) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+        }
+        lexer.next();
+    }
+
     /// @brief read additional class members for the specified walker
     inline void walker_members() {
         Tracer tr{lvl, "walker_members"};
@@ -2102,6 +2163,14 @@ struct Parser {
 
         if(t.text == "members") {
             return walker_members();
+        }
+
+        if(t.text == "ctor") {
+            return walker_ctor();
+        }
+
+        if(t.text == "ctor_args") {
+            return walker_ctor_args();
         }
 
         if(t.text == "public") {

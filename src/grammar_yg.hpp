@@ -75,7 +75,13 @@ struct Walker : public NonCopyable {
     /// @brief base walker of the walker
     const Walker* base = nullptr;
 
-    /// @brief addition user-define members in this walker
+    /// @brief additional ctor statements in this walker
+    CodeBlock xctor;
+
+    /// @brief additional ctor args in this walker
+    std::string xctor_args;
+
+    /// @brief additional user-define members in this walker
     CodeBlock xmembers;
 
     /// @brief name of the void type in this walker

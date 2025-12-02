@@ -183,7 +183,6 @@ namespace TAG(Q_NSNAME)TAG2(CLSNAME,_AST) {
         std::string text;
         inline TAG(TOKEN)() {}
         inline TAG(TOKEN)(const FilePos& p, const std::string& t) : pos(p), text(t) {}
-        inline TAG(TOKEN)(const TAG(TOKEN)& src) : pos(src.pos), text(src.text) {}
 
         inline void dump(std::ostream& ss, const size_t& lvl, const std::string& name, const std::string& indent, const size_t& depth) const {
             if(lvl >= 2) {
@@ -194,17 +193,7 @@ namespace TAG(Q_NSNAME)TAG2(CLSNAME,_AST) {
             }
         }
 
-        inline const TAG(TOKEN)* get() const {
-            return this;
-        }
-
         inline TAG(TOKEN)& go(TAG(AST)&) {
-            return *this;
-        }
-
-        inline TAG(TOKEN)& operator=(const TAG(TOKEN)& src) {
-            pos = src.pos;
-            text = src.text;
             return *this;
         }
     };
@@ -484,7 +473,9 @@ struct Parser {
             assert(cvi != nullptr);
             childs.push_back(cvi);
         }
+        ///PROTOTYPE_ENTER:IF_LOG_PARSER
         std::print(log(), "pop:{}\n", ss.str());
+        ///PROTOTYPE_LEAVE:IF_LOG_PARSER
         for (size_t i = 0; i < len; ++i) {
             stateStack.pop_back();
             valueStack.pop_back();
@@ -517,6 +508,7 @@ struct Parser {
         return true;
     }
 
+    ///PROTOTYPE_ENTER:IF_LOG_PARSER
     inline void printParserState() const {
         std::stringstream vss;
         for (auto& i : valueStack) {
@@ -536,6 +528,7 @@ struct Parser {
         printParserState();
         std::print(log(), "Token({}): {}\n", k.pos.str(), k.str());
     }
+    ///PROTOTYPE_LEAVE:IF_LOG_PARSER
 
     template<typename NodeT>
     inline NodeT& create(const ValueItem& vi);
@@ -582,7 +575,10 @@ inline bool Parser::parse(const Tolkien& k0) {
     bool accepted = false;
     Tolkien k = k0;
     while (!accepted) {
+        ///PROTOTYPE_ENTER:IF_LOG_PARSER
         printParserState(k);
+        ///PROTOTYPE_LEAVE:IF_LOG_PARSER
+
         assert(stateStack.size() > 0);
         switch (stateStack.back()) {
             ///PROTOTYPE_SEGMENT:parserTransitions
@@ -592,8 +588,11 @@ inline bool Parser::parse(const Tolkien& k0) {
 } // parse()
 
 inline void Parser::leave() {
+    ///PROTOTYPE_ENTER:IF_LOG_PARSER
     std::print(log(), "parse done\n");
     printParserState();
+    ///PROTOTYPE_LEAVE:IF_LOG_PARSER
+
     if(valueStack.size() != 1) {
         // control flow won't usually reach here
         throw std::runtime_error("parse error");
@@ -651,7 +650,9 @@ struct Lexer {
         token = Tolkien(stream.pos);
         while (!stream.eof()) {
             auto& ch = stream.peek();
+            ///PROTOTYPE_ENTER:IF_LOG_LEXER
             std::print(log(), "{}: Lexer:state={}, ch={}/{}, count={}\n", stream.pos.str(), state, (static_cast<int>(ch) == EOF ? "EOF" : std::to_string(ch)), std::isprint(static_cast<int>(ch)) ? static_cast<char>(ch) : ' ', counts.size());
+            ///PROTOTYPE_LEAVE:IF_LOG_LEXER
             switch (state) {
                 ///PROTOTYPE_SEGMENT:lexerStates
             } // switch(state)
@@ -663,7 +664,7 @@ struct Lexer {
 } // namespace
 
 struct TAG(Q_NSNAME)TAG(CLSNAME)::Impl {
-    TAG(CLSNAME)& module;
+    TAG(CLSNAME)& ymodule;
     TAG(AST) ast;
     Parser parser;
     Lexer lexer;
@@ -682,19 +683,20 @@ struct TAG(Q_NSNAME)TAG(CLSNAME)::Impl {
     };
 
     inline Impl(TAG(CLSNAME)& m, const std::string& lname)
-        : module(m)
-        , ast(module)
+        : ymodule(m)
+        , ast(ymodule)
         , parser(ast)
         , lexer(parser)
     {
-        unused(lname);
-        if(lname == "-") {
-            _log = &std::cout;
-        }else{
-            if(lname.size() > 0) {
-                flog.open(lname);
+        if(_log == nullptr) {
+            if(lname == "-") {
+                _log = &std::cout;
+            }else{
+                if(lname.size() > 0) {
+                    flog.open(lname);
+                }
+                _log = &flog;
             }
-            _log = &flog;
         }
     }
 
@@ -773,12 +775,12 @@ void TAG(Q_NSNAME)TAG(CLSNAME)::printAST(std::ostream& ss, const size_t& lvl, co
 
 ///PROTOTYPE_ENTER:repl
 #if HAS_REPL
-inline bool doREPL(TAG(Q_NSNAME)TAG(CLSNAME)& mp, const std::string& input) {
+inline bool doREPL(TAG(Q_NSNAME)TAG(CLSNAME)& ymodule, const std::string& input) {
     if(input == "\\q") {
         return false;
     }
 
-    mp.readString(input, "<cmd>");
+    ymodule.readString(input, "<cmd>");
     return true;
 }
 #endif
@@ -806,14 +808,14 @@ inline int help(const std::string& xname, const std::string& msg) {
     return 1;
 }
 
-inline void doWalk(const size_t& printAstLevel, TAG(Q_NSNAME)TAG(CLSNAME)& mp, std::vector<std::string> walkers, const std::filesystem::path& odir, const std::string_view& filename) {
+inline void doWalk(const size_t& printAstLevel, TAG(Q_NSNAME)TAG(CLSNAME)& ymodule, std::vector<std::string> walkers, const std::filesystem::path& odir, const std::string_view& filename) {
     if(printAstLevel > 0) {
-        mp.printAST(std::cout, printAstLevel, "");
+        ymodule.printAST(std::cout, printAstLevel, "");
         if(printAstLevel == 1) {
             std::cout << std::endl;
         }
     }
-    // mp.walk(walkers, odir, filename);
+    // ymodule.walk(walkers, odir, filename);
     unused(walkers, odir, filename);
 
     for(auto& w : walkers) {
@@ -931,9 +933,9 @@ int main(int argc, char* argv[]) {
 
             try {
                 // instance of the module
-                TAG(Q_NSNAME)TAG(CLSNAME) mp("main", log);
-                mp.readFile(f);
-                doWalk(printAstLevel, mp, walkers, outf, f);
+                TAG(Q_NSNAME)TAG(CLSNAME) ymodule("main", log);
+                ymodule.readFile(f);
+                doWalk(printAstLevel, ymodule, walkers, outf, f);
             }catch(const std::exception& ex) {
                 ++errs;
                 std::print("err:{}\n", ex.what());
@@ -949,9 +951,9 @@ int main(int argc, char* argv[]) {
 
             try {
                 // instance of the module
-                TAG(Q_NSNAME)TAG(CLSNAME) mp("main", log);
-                mp.readString(f, inn);
-                doWalk(printAstLevel, mp, walkers, "", "");
+                TAG(Q_NSNAME)TAG(CLSNAME) ymodule("main", log);
+                ymodule.readString(f, inn);
+                doWalk(printAstLevel, ymodule, walkers, "", "");
             }catch(const std::exception& ex) {
                 std::print("err:{}\n", ex.what());
                 ++errs;
@@ -963,15 +965,15 @@ int main(int argc, char* argv[]) {
 #if HAS_REPL
     if(repl == true) {
         // instance of the module
-        TAG(Q_NSNAME)TAG(CLSNAME) mp("main", log);
+        TAG(Q_NSNAME)TAG(CLSNAME) ymodule("main", log);
 
         // read all files
         for(auto& f : filenames) {
             if(verbose) std::print("compiling file: {}\n", f);
 
             try {
-                mp.readFile(f);
-                doWalk(printAstLevel, mp, walkers, "", "");
+                ymodule.readFile(f);
+                doWalk(printAstLevel, ymodule, walkers, "", "");
             }catch(const std::exception& ex) {
                 std::print("err:{}\n", ex.what());
             }
@@ -983,8 +985,8 @@ int main(int argc, char* argv[]) {
             if(verbose) std::print("compiling string\n", f);
 
             try {
-                mp.readString(f, "<str>");
-                doWalk(printAstLevel, mp, walkers, "", "");
+                ymodule.readString(f, "<str>");
+                doWalk(printAstLevel, ymodule, walkers, "", "");
             }catch(const std::exception& ex) {
                 std::print("err:{}\n", ex.what());
             }
@@ -995,7 +997,7 @@ int main(int argc, char* argv[]) {
             std::cout << ">";
             std::getline(std::cin, input);
             try {
-                if(doREPL(mp, input) == false) {
+                if(doREPL(ymodule, input) == false) {
                     break;
                 }
             }catch(const std::exception& ex) {
