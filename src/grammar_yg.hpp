@@ -574,9 +574,10 @@ struct Grammar : public NonCopyable { // NOLINT(cppcoreguidelines-special-member
         regexSet->regexes.push_back(&regex);
     }
 
-    inline void addRegexByName(const std::string& name, const yglx::RegexSet::Assoc& assoc) {
+    inline void addSystemRegex(const std::string& name, const yglx::RegexSet::Assoc& assoc) {
         auto regex = std::make_unique<yglx::Regex>();
         regex->regexName = name;
+        regex->usageCount = 1;
         addRegex(regex, assoc);
     }
 

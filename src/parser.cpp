@@ -2606,8 +2606,8 @@ struct Parser {
 
 void parseInput(yg::Grammar& g, Stream& is) {
     // create virtual regex for END and EPSILON
-    g.addRegexByName(g.end, yglx::RegexSet::Assoc::Right);
-    g.addRegexByName(g.empty, yglx::RegexSet::Assoc::Right);
+    g.addSystemRegex(g.end, yglx::RegexSet::Assoc::Right);
+    g.addSystemRegex(g.empty, yglx::RegexSet::Assoc::Right);
 
     g.addWalker(g.defaultWalkerClassName, nullptr);
 
@@ -2745,7 +2745,7 @@ void parseInput(yg::Grammar& g, Stream& is) {
     // check for unused tokens
     if(g.checkUnusedTokens == true) {
         for(auto& regex : g.regexes) {
-            if((regex->unused == false) && (regex->usageCount == 0) && (regex->regexName != g.empty)) {
+            if((regex->unused == false) && (regex->usageCount == 0)) {
                 auto msg = std::format("Unused token:{}", regex->regexName);
                 errors.emplace_back(regex->pos, msg);
             }
