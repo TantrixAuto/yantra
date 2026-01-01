@@ -271,7 +271,6 @@ struct Generator {
         std::string pline = (opts().genLines == false) ? "//" : "";
         unused(indent);
 
-        tw.writeln();
         tw.writeln("{}#line {} \"{}\" //t={},s={}", pline, codeblock.pos.row, codeblock.pos.file, tw.row, sw.row);
         tw.swrite(sw);
         tw.writeln("{}#line {} \"{}\" //t={},s={}", pline, tw.row + 1, tw.file.string(), tw.row, sw.row);
@@ -338,15 +337,14 @@ struct Generator {
         return nativeType;
     }
 
-    /// @brief generates a list of args for a semantic action function for a rule
-    inline void
+    /// @brief generates a list of args for a semantic action function for a rule in a single line
+    inline auto
     getArgs(
-        StringStreamWriter& sw,
         const ygp::Rule& r,
         const yg::Walker::FunctionSig& fsig,
-        const yg::Walker::CodeInfo* ci,
-        const std::string_view& indent
-    ) {
+        const yg::Walker::CodeInfo* ci
+    ) -> std::string {
+        std::stringstream ss;
         std::string sep;
 
         std::string isUnused;
@@ -354,10 +352,9 @@ struct Generator {
             isUnused = "[[maybe_unused]]";
         }
 
-        sw.writeln("{}    {}[[maybe_unused]]const {}::{}& {}", indent, sep, r.ruleSetName(), r.ruleName, r.ruleName);
-        sep = ",";
+        ss << std::format("{}[[maybe_unused]]const {}::{}& {}", sep, r.ruleSetName(), r.ruleName, r.ruleName);
+        sep = ", ";
 
-        StringStreamIndenter swi(sw);
         for(const auto& n : r.nodes) {
             auto varName = n->varName;
             if(varName.size() == 0) {
@@ -371,12 +368,13 @@ struct Generator {
                 nativeTypeNode = std::format("NodeRef<{}>", n->name);
             }
 
-            sw.writeln("{}    {}{}{}& {}", indent, sep, isUnused, nativeTypeNode, varName);
-            sep = ",";
+            ss << std::format("{}{}{}& {}", sep, isUnused, nativeTypeNode, varName);
+            sep = ", ";
         }
         if(fsig.args.size() > 0) {
-            sw.writeln("{}    {}{}", indent, sep, fsig.args);
+            ss << std::format("{}{}", sep, fsig.args);
         }
+        return ss.str();
     }
 
     /// @brief extract argument names into a comma-separated list
@@ -831,17 +829,21 @@ struct Generator {
                     }
                     xfuncs.insert(hname);
 
-                    StringStreamWriter sw;
-                    getArgs(sw, r, fsig, ci, indent);
+                    auto args = getArgs(r, fsig, ci);
 
-                    if(sw.wrote == true) {
-                        tw.writeln("{}virtual {}", indent, fsig.type);
-                        tw.writeln("{}{} (", indent, hname);
-                        tw.swrite(sw);
-                        tw.writeln("{}) override {{", indent);
-                    }else{
-                        tw.writeln("{}virtual {} {}() override {{", indent, fsig.type, hname);
+                    if((opts().genLines == true) && (ci != nullptr) && (ci->codeblock.hasPos == true)) {
+                        // write an extra #line before the function body
+                        // so that 'unused_parameter' errors point to the right location
+                        // in the .y file.
+                        auto row = ci->codeblock.pos.row;
+                        if(row > 2) {
+                            row -= 2;
+                        }
+                        tw.writeln("#line {} \"{}\"", row, ci->codeblock.pos.file);
                     }
+
+                    tw.writeln("{}virtual {}", indent, fsig.type);
+                    tw.writeln("{}{} ({}) override {{", indent, hname, args);
 
                     // generate function body, if any
                     if(ci != nullptr) {
@@ -940,8 +942,7 @@ struct Generator {
                         }
                         auto hname = getFunctionName(r, fsig.func);
     
-                        StringStreamWriter sw;
-                        getArgs(sw, r, fsig, ci, indent);
+                        auto args = getArgs(r, fsig, ci);
 
                         std::string isOverride;
                         if((grammar.isDerivedWalker(walker) == true)) {
@@ -949,14 +950,8 @@ struct Generator {
                                 isOverride = "override ";
                             }
                         }
-                        if(sw.wrote == true) {
-                            tw.writeln("{}virtual {}", indent, fsig.type);
-                            tw.writeln("{}{}(", indent, hname);
-                            tw.swrite(sw);
-                            tw.writeln("{}) {}= 0;", indent, isOverride);
-                        }else{
-                            tw.writeln("{}virtual {} {}() {}= 0;", indent, fsig.type, hname, isOverride);
-                        }
+                        tw.writeln("{}virtual {}", indent, fsig.type);
+                        tw.writeln("{}{}({}) {}= 0;", indent, hname, args, isOverride);
     
                         tw.writeln();
                     }
