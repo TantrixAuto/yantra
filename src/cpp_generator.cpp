@@ -262,18 +262,19 @@ struct Generator {
         const std::unordered_map<std::string, std::string>& vars
     ) {
         StringStreamWriter sw;
-        _expand(sw, codeblock.code, autoIndent, vars, indent);
+        _expand(sw, codeblock.code, autoIndent, vars, tw.indent);
         if (codeblock.hasPos == false) {
             tw.swrite(sw);
             return;
         }
 
         std::string pline = (opts().genLines == false) ? "//" : "";
+        unused(indent);
 
         tw.writeln();
-        tw.writeln("{}{}#line {} \"{}\" //t={},s={}", indent, pline, codeblock.pos.row, codeblock.pos.file, tw.row, sw.row);
+        tw.writeln("{}#line {} \"{}\" //t={},s={}", pline, codeblock.pos.row, codeblock.pos.file, tw.row, sw.row);
         tw.swrite(sw);
-        tw.writeln("{}{}#line {} \"{}\" //t={},s={}", indent, pline, tw.row + 1, tw.file.string(), tw.row, sw.row);
+        tw.writeln("{}#line {} \"{}\" //t={},s={}", pline, tw.row + 1, tw.file.string(), tw.row, sw.row);
     }
 
     /// @brief writes expanded codeblock to output stream if the codeblock is not empty
@@ -353,6 +354,10 @@ struct Generator {
             isUnused = "[[maybe_unused]]";
         }
 
+        sw.writeln("{}    {}[[maybe_unused]]const {}::{}& {}", indent, sep, r.ruleSetName(), r.ruleName, r.ruleName);
+        sep = ",";
+
+        StringStreamIndenter swi(sw);
         for(const auto& n : r.nodes) {
             auto varName = n->varName;
             if(varName.size() == 0) {
@@ -704,10 +709,13 @@ struct Generator {
         // handler function name
         auto hname = getFunctionName(r, fsig.func);
 
+        std::string node_unused = "[[maybe_unused]]";
+
         // generate param list
         std::stringstream params;
-        std::string node_unused = "[[maybe_unused]]";
         std::string sep;
+        params << std::format("{}_n", sep);
+        sep = ", ";
         for (const auto& n : r.nodes) {
             if (n->varName.size() > 0) {
                 params << std::format("{}{}", sep, n->varName);
@@ -794,18 +802,18 @@ struct Generator {
         const yg::Walker& walker,
         TextFileWriter& tw,
         const std::unordered_map<std::string, std::string>& vars,
+        std::unordered_set<std::string>& xfuncs,
         const std::string_view& indent
     ) {
-        if(walker.base != nullptr) {
-            generateWalkerHandlers(*(walker.base), tw, vars, indent);
-        }
+        tw.writeln("{}// handlers for {}", indent, walker.name);
 
-        tw.writeln("{}    // handlers for {}", indent, walker.name);
+        generateCodeBlock(tw, walker.xmembers, indent, true, vars);
+
         for(const auto& prs : grammar.ruleSets) {
             auto& rs = *prs;
             auto funcl = walker.getFunctions(rs);
 
-            TextFileIndenter twi(tw);
+            // TextFileIndenter twi(tw);
             for(auto& pfsig : funcl) {
                 const auto& fsig = *pfsig;
                 for(auto& pr : rs.rules) {
@@ -818,6 +826,10 @@ struct Generator {
                     }
 
                     auto hname = getFunctionName(r, fsig.func);
+                    if(xfuncs.contains(hname) == true) {
+                        continue;
+                    }
+                    xfuncs.insert(hname);
 
                     StringStreamWriter sw;
                     getArgs(sw, r, fsig, ci, indent);
@@ -841,16 +853,8 @@ struct Generator {
                 }
             }
         }
-    }
-
-    inline void generateUsingASTNodes(
-        TextFileWriter& tw,
-        const std::string_view& indent
-    ) const {
-        tw.writeln("{}using {} = {}::{};", indent, grammar.tokenClass, qidNameAST, grammar.tokenClass);
-        for(const auto& prs : grammar.ruleSets) {
-            auto& rs = *prs;
-            tw.writeln("{}using {} = {}::{};", indent, rs.name, qidNameAST, rs.name);
+        if(walker.base != nullptr) {
+            generateWalkerHandlers(*(walker.base), tw, vars, xfuncs, indent);
         }
     }
 
@@ -865,12 +869,17 @@ struct Generator {
         std::string bname;
         if(grammar.isRootWalker(walker) == true) {
             tw.writeln("{}struct {} {{", indent, wname);
+
+            // generate using-decls for AST nodes
             if(auto twi = TextFileIndenter(tw)) {
-                generateUsingASTNodes(tw, indent);
+                tw.writeln("{}using {} = {}::{};", indent, grammar.tokenClass, qidNameAST, grammar.tokenClass);
+                for(const auto& prs : grammar.ruleSets) {
+                    auto& rs = *prs;
+                    tw.writeln("{}using {} = {}::{};", indent, rs.name, qidNameAST, rs.name);
+                }
             }
             tw.writeln("{}    {}& ymodule;", indent, grammar.className);
             bname = std::format("ymodule");
-            // tw.writeln("{}    inline {}({}& m) : ymodule(m) {{}}", indent, wname, grammar.className);
         }else{
             assert(walker.base != nullptr);
             bname = std::format("{}", walker.base->name);
@@ -878,26 +887,18 @@ struct Generator {
         }
 
         if(auto twi = TextFileIndenter(tw)) {
-            if(walker.xctor.hasCode() == true) {
-                tw.writeln("{}inline {}({}& m) : {}(m) {{", indent, wname, grammar.className, bname);
-                if(auto twi = TextFileIndenter(tw)) {
-                    generateCodeBlock(tw, walker.xctor, indent, true, vars);
-                }
-                tw.writeln("{}}}", indent);
-            }else{
-                tw.writeln("{}inline {}({}& m) : {}(m) {{}}", indent, wname, grammar.className, bname);
-            }
+            unused(vars);
+            tw.writeln("{}inline {}({}& m) : {}(m) {{}}", indent, wname, grammar.className, bname);
             tw.writeln();
 
-            tw.writeln("{}virtual ~{}() {{}}", indent, wname);
-            tw.writeln();
-
-            tw.writeln("{}    void walk({}& m);", indent, grammar.className);
             if(grammar.isRootWalker(walker) == true) {
-                generateCodeBlock(tw, walker.xmembers, indent, true, vars);
+                tw.writeln("{}virtual ~{}() {{}}", indent, wname);
+            }else{
+                tw.writeln("{}virtual ~{}() override {{}}", indent, wname);
             }
+            tw.writeln();
 
-            // generateCodeBlock(tw, walker.xctor, indent, true, vars);
+            tw.writeln("{}void walk({}& m);", indent, grammar.className);
 
             tw.writeln("{}template<typename T>", indent);
             tw.writeln("{}using NodeRef = {}::NodeRef<T>;", indent, qidNameAST);
@@ -912,9 +913,12 @@ struct Generator {
             if(walker.outputType == yg::Walker::OutputType::TextFile) {
                 tw.writeln("{}virtual void open(const std::filesystem::path& odir, const std::string_view& filename) = 0;", indent);
             }
-            tw.writeln("{}template<typename T>", indent);
-            tw.writeln("{}void skip(NodeRef<T>& nr);", indent);
-            tw.writeln();
+
+            if(grammar.isRootWalker(walker) == true) {
+                tw.writeln("{}template<typename T>", indent);
+                tw.writeln("{}void skip(NodeRef<T>& nr);", indent);
+                tw.writeln();
+            }
 
             tw.writeln("{}template<typename T>", indent);
             tw.writeln("{}auto pos(NodeRef<T>& nr) -> FilePos {{", indent);
@@ -934,30 +938,45 @@ struct Generator {
                         if((grammar.isDerivedWalker(walker) == true) && (ci == nullptr)) {
                             continue;
                         }
-    
                         auto hname = getFunctionName(r, fsig.func);
     
                         StringStreamWriter sw;
                         getArgs(sw, r, fsig, ci, indent);
-    
+
+                        std::string isOverride;
+                        if((grammar.isDerivedWalker(walker) == true)) {
+                            if(fsig.func == walker.defaultFunctionName) {
+                                isOverride = "override ";
+                            }
+                        }
                         if(sw.wrote == true) {
                             tw.writeln("{}virtual {}", indent, fsig.type);
                             tw.writeln("{}{}(", indent, hname);
                             tw.swrite(sw);
-                            tw.writeln("{}) = 0;", indent);
+                            tw.writeln("{}) {}= 0;", indent, isOverride);
                         }else{
-                            tw.writeln("{}virtual {} {}() = 0;", indent, fsig.type, hname);
+                            tw.writeln("{}virtual {} {}() {}= 0;", indent, fsig.type, hname, isOverride);
                         }
     
                         tw.writeln();
                     }
+                }
+            }
+
+            for(const auto& prs : grammar.ruleSets) {
+                auto& rs = *prs;
+                auto funcl = walker.getFunctions(rs);
     
+                for(auto& pfsig : funcl) {
+                    const auto& fsig = *pfsig;
+                    if((grammar.isDerivedWalker(walker) == true) && (fsig.func == walker.defaultFunctionName)) {
+                        continue;
+                    }
                     std::string args;
                     if(fsig.args.size() > 0) {
                         args = std::format(", {}", fsig.args);
                     }
                     tw.writeln("{}auto {}(NodeRef<{}>& node{}) -> {};", indent, fsig.func, rs.name, args, fsig.type);
-                    tw.writeln();
                 }
             }
         }
@@ -1003,10 +1022,13 @@ struct Generator {
                 generateWalkerInterface(walker, tw, wname, vars, indent);
             }
 
-            tw.writeln("{}template<typename T>", indent);
-            tw.writeln("{}void {}::skip(NodeRef<T>& nr) {{", indent, wname);
-            tw.writeln("{}    nr.called = true;", indent);
-            tw.writeln("{}}}", indent);
+            if(grammar.isRootWalker(walker) == true) {
+                // generate skip implementation
+                tw.writeln("{}template<typename T>", indent);
+                tw.writeln("{}void {}::skip(NodeRef<T>& nr) {{", indent, wname);
+                tw.writeln("{}    nr.called = true;", indent);
+                tw.writeln("{}}}", indent);
+            }
 
             for(const auto& prs : grammar.ruleSets) {
                 auto& rs = *prs;
@@ -1014,6 +1036,10 @@ struct Generator {
 
                 for(auto& pfsig : funcl) {
                     const auto& fsig = *pfsig;
+                    if((grammar.isDerivedWalker(walker) == true) && (fsig.func == walker.defaultFunctionName)) {
+                        continue;
+                    }
+
                     std::string args;
                     if(fsig.args.size() > 0) {
                         args = std::format(", {}", fsig.args);
@@ -1046,6 +1072,7 @@ struct Generator {
                 }
             }
 
+
             // generate Walker implementation
             if(walker.interfaceName.size() == 0) {
                 std::string xargs;
@@ -1053,12 +1080,24 @@ struct Generator {
                     xargs = std::format(", {}", walker.xctor_args);;
                 }
                 tw.writeln("{}struct Walker_{} : public {} {{", indent, walker.name, wname);
-                tw.writeln("{}    inline Walker_{}({}& m{}) : {}(m) {{}}", indent, walker.name, grammar.className, xargs, wname);
+                if(walker.xctor.hasCode() == true) {
+                    tw.writeln("{}    inline Walker_{}({}& m{}) : {}(m) {{", indent, walker.name, grammar.className, xargs, wname);
+                    if(auto twi = TextFileIndenter(tw)) {
+                        generateCodeBlock(tw, walker.xctor, indent, true, vars);
+                    }
+                    tw.writeln("{}}}", indent);
+                }else{
+                    tw.writeln("{}    inline Walker_{}({}& m{}) : {}(m) {{}}", indent, walker.name, grammar.className, xargs, wname);
+                }
                 if(auto twi = TextFileIndenter(tw)) {
                     generateWriter(tw, walker, indent);
                 }
                 tw.writeln();
-                generateWalkerHandlers(walker, tw, vars, indent);
+
+                std::unordered_set<std::string> xfuncs;
+                if(auto twi = TextFileIndenter(tw)) {
+                    generateWalkerHandlers(walker, tw, vars, xfuncs, indent);
+                }
                 tw.writeln("{}}};", indent);
                 tw.writeln();
             }
@@ -1130,8 +1169,8 @@ struct Generator {
     /// @brief generates function declarations to create each AST node
     inline void generateCreateASTNodesDecls(TextFileWriter& tw) {
         for (const auto& rs : grammar.ruleSets) {
-            tw.writeln("template<>");
-            tw.writeln("inline {}::{}& Parser::create<{}::{}>(const ValueItem& vi);", qidNameAST, rs->name, qidNameAST, rs->name);
+            tw.writeln("template<> inline {}::{}&", qidNameAST, rs->name);
+            tw.writeln("Parser::create<{}::{}>(const ValueItem& vi);", qidNameAST, rs->name);
             tw.writeln();
         }
     }
@@ -1140,8 +1179,8 @@ struct Generator {
     /// These functions are called by the Parser on REDUCE actions
     inline void generateCreateASTNodesDefns(TextFileWriter& tw, const std::unordered_map<std::string, std::string>& vars) {
         for (const auto& rs : grammar.ruleSets) {
-            tw.writeln("template<>");
-            tw.writeln("inline {}::{}& Parser::create<{}::{}>(const ValueItem& vi) {{", qidNameAST, rs->name, qidNameAST, rs->name);
+            tw.writeln("template<> inline {}::{}&", qidNameAST, rs->name);
+            tw.writeln("Parser::create<{}::{}>(const ValueItem& vi) {{", qidNameAST, rs->name);
             tw.writeln("    switch(vi.ruleID) {{");
 
             for (auto& r : rs->rules) {

@@ -18,9 +18,18 @@ struct TextWriter {
 
     template <typename ...ArgsT>
     inline void
-    write(const std::format_string<ArgsT...>& msg, ArgsT... args) {
+    iwrite(const std::format_string<ArgsT...>& msg, ArgsT... args) {
         auto rv = std::format(msg, std::forward<ArgsT>(args)...);
         ss << indent << rv;
+        ss.flush();
+        wrote = true;
+    }
+
+    template <typename ...ArgsT>
+    inline void
+    write(const std::format_string<ArgsT...>& msg, ArgsT... args) {
+        auto rv = std::format(msg, std::forward<ArgsT>(args)...);
+        ss << rv;
         ss.flush();
         wrote = true;
     }
@@ -30,6 +39,16 @@ struct TextWriter {
     writeln(const std::format_string<ArgsT...>& msg, ArgsT... args) {
         auto rv = std::format(msg, std::forward<ArgsT>(args)...);
         ss << indent << rv << "\n";
+        ss.flush();
+        ++row;
+        wrote = true;
+    }
+
+    template <typename ...ArgsT>
+    inline void
+    xwriteln(const std::format_string<ArgsT...>& msg, ArgsT... args) {
+        auto rv = std::format(msg, std::forward<ArgsT>(args)...);
+        ss << rv << "\n";
         ss.flush();
         ++row;
         wrote = true;

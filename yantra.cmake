@@ -30,7 +30,14 @@ if(NOT YANTRACC)
 endif()
 
 FUNCTION(ADD_YANTRA)
-  FOREACH(SRC ${ARGV})
+  CMAKE_PARSE_ARGUMENTS("YCC" "SKIP_GENLINES" "" "SRCS" ${ARGN})
+
+  set(GENLINES "")
+  if(YCC_SKIP_GENLINES)
+    set(GENLINES "-r")
+  endif()
+
+  FOREACH(SRC ${YCC_SRCS})
     GET_FILENAME_COMPONENT(FNAME "${SRC}" NAME_WLE)
 
     add_custom_command(
@@ -39,6 +46,7 @@ FUNCTION(ADD_YANTRA)
         -d "${CMAKE_CURRENT_BINARY_DIR}"
         -a
         -f "${SRC}"
+        ${GENLINES}
       COMMENT "Compiling ${SRC}"
       DEPENDS "${SRC}" "${YANTRACC}"
     )

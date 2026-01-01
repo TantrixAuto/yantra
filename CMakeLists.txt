@@ -6,6 +6,6 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/bin")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin")
 
 include(yantra)
-project(yantra LANGUAGES CXX VERSION 0.2.1)
+project(yantra LANGUAGES CXX VERSION 0.4.0)
 
 add_subdirectory(src)

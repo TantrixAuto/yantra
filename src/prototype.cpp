@@ -147,6 +147,7 @@ throw TAG(Q_NSNAME)TAG(CLSNAME)::Error(TAG(ROW), TAG(COL), TAG(SRC), TAG(MSG));
 #if defined(__clang__)
 #pragma clang diagnostic ignored "-Wunused-member-function"
 #pragma clang diagnostic ignored "-Wunused-function"
+#pragma clang diagnostic ignored "-Wc++20-compat"
 #pragma clang diagnostic ignored "-Wtautological-unsigned-zero-compare"
 #elif defined(__GNUG__)
 #pragma GCC diagnostic ignored "-Wsubobject-linkage"
@@ -340,6 +341,26 @@ inline char_t read(std::istream&) {
     return 0;
 }
 ///PROTOTYPE_LEAVE:SKIP
+
+static inline std::vector<std::string> split(const std::string& str, char delimiter) {
+    std::vector<std::string> tokens;
+    size_t start = 0;
+    size_t end = str.find(delimiter);
+    
+    while (end != std::string::npos) {
+        auto token = str.substr(start, end - start);
+        if(token.size() > 0) {
+            tokens.push_back(token);
+        }
+        start = end + 1;
+        end = str.find(delimiter, start);
+    }
+    
+    if(start < str.size()) {
+        tokens.push_back(str.substr(start));
+    }
+    return tokens;
+}
 
 static inline bool contains(const char_t& ch, const char_t& from, const char_t& to, const std::initializer_list<std::pair<char_t, char_t>>& except) {
     if((ch >= from) && (ch <= to)) {
@@ -873,7 +894,11 @@ int main(int argc, char* argv[]) {
                 return help(argv[0], "invalid string");
             }
             auto v = argv[i];
-            walkers.push_back(v);
+            auto wlist = split(v, ',');
+
+            for (auto& w : wlist) {
+                walkers.push_back(w);
+            }
         }else if(a == "-o") {
             ++i;
             if(i >= argc) {

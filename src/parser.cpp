@@ -1719,10 +1719,6 @@ struct Parser {
             throw GeneratorError(__LINE__, __FILE__, t.pos, "UNKNOWN_WALKER:{}", t.text);
         }
 
-        if(grammar.isRootWalker(*walker) == false) {
-            throw GeneratorError(__LINE__, __FILE__, t.pos, "WALKER_NOT_ROOT:{}", t.text);
-        }
-
         lexer.next();
         t = peek(tr);
         if(t.id != Token::ID::ID) {
@@ -2571,9 +2567,13 @@ struct Parser {
         for(auto& r : grammar.rules) {
             if(r->ruleName.size() == 0) {
                 auto rsname = r->ruleSetName();
+
+                // if ruleset name ends with '_', append 'r' to avoid double underscore
                 if(rsname.ends_with('_') == true) {
                     rsname += "r";
                 }
+
+                // set ruleName to <ruleset>_<id>
                 r->ruleName = std::format("{}_{}", rsname, r->id);
             }
         }
