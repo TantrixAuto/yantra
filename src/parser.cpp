@@ -2716,6 +2716,10 @@ void parseInput(yg::Grammar& g, Stream& is) {
                     errors.emplace_back(ci.codeblock.pos, msg);
                 }
             }
+            if(g.isBaseWalker(w) == true) {
+                auto msg = std::format("External walkers cannot be a base walker");
+                errors.emplace_back(FilePos(), msg);
+            }
         }else if(g.checkEmptyCodeblocks == true) {
             // else verify that all codeblocks are defined for declared functions
             for(auto& fsig : w.functionSigs) {
