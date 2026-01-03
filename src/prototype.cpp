@@ -308,9 +308,8 @@ namespace {
     };
     ///PROTOTYPE_LEAVE:SKIP
 
-    template<typename W, typename T>
+    template<typename NR, typename T>
     struct WalkerNodeCommit : public NonCopyable {
-        using NR = W::template NodeRef<T>;
         NR& node;
         inline WalkerNodeCommit(NR& n) : node(n) {}
         inline ~WalkerNodeCommit() {
