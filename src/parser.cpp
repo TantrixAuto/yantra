@@ -1844,6 +1844,10 @@ struct Parser {
             throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
         }
 
+        if(walker->xmembers.hasCode() == true) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "WALKER_MEMBERS_ALREADY_DEFINED");
+        }
+
         walker->xmembers.setCode(t.pos, t.text);
         lexer.next();
     }
@@ -2686,7 +2690,7 @@ void parseInput(yg::Grammar& g, Stream& is) {
             if(identical == true) {
                 std::println("dup:r1={}, r2={}", r1.str(false), r2.str(false));
                 auto msg = std::format("duplicate rule definition: {} and {}", r1.ruleName, r2.ruleName);
-                errors.emplace_back(r1.pos, msg);
+                // errors.emplace_back(r1.pos, msg);
             }
         }
     }
