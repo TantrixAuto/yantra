@@ -817,7 +817,6 @@ struct Generator {
             auto& rs = *prs;
             auto funcl = walker.getFunctions(rs);
 
-            // TextFileIndenter twi(tw);
             for(auto& pfsig : funcl) {
                 const auto& fsig = *pfsig;
                 for(auto& pr : rs.rules) {
@@ -843,14 +842,17 @@ struct Generator {
                         tw.writeln("#line {} \"{}\"", row, ci->codeblock.pos.file);
                     }
 
-                    tw.writeln("{}{}", indent, fsig.type);
-                    tw.writeln("{}{} ({}) {{", indent, hname, args);
+                    std::string isOverride;
+                    if((grammar.isDerivedWalker(walker) == true)) {
+                        if(fsig.func == walker.defaultFunctionName) {
+                            isOverride = "override ";
+                        }
+                    }
+                    tw.writeln("virtual {}{}", indent, fsig.type);
+                    tw.writeln("{}{} ({}) {}{{", indent, hname, args, isOverride);
 
                     // generate function body, if any
-                    if(ci != nullptr) {
-                        TextFileIndenter twi(tw);
-                        generateCodeBlock(tw, ci->codeblock, indent, true, vars);
-                    }else if(walker.interfaceName.size() > 0) {
+                    if(walker.interfaceName.size() > 0) {
                         std::stringstream ss;
                         std::string sep;
                         for(const auto& n : r.nodes) {
@@ -862,6 +864,9 @@ struct Generator {
                             sep = ", ";
                         }
                         tw.writeln("{}    return impl.{}({});", indent, hname, ss.str());
+                    }else if(ci != nullptr) {
+                        TextFileIndenter twi(tw);
+                        generateCodeBlock(tw, ci->codeblock, indent, true, vars);
                     }
 
                     tw.writeln("{}}}", indent);
@@ -1049,6 +1054,10 @@ struct Generator {
                     tw.writeln("{}}}", indent);
                 }else{
                     tw.writeln("{}inline Walker_{}({}& m{}) {}{{}}", indent, walker.name, grammar.className, xargs, cname);
+                }
+
+                if(walker.base == nullptr) {
+                    tw.writeln("{}virtual ~Walker_{}() {{}}", indent, walker.name);
                 }
 
                 // generate writer, if any

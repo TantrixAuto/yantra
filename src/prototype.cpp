@@ -21,6 +21,7 @@
 /// Once the Parser is done, the correct Walker is called to walk the AST and invoke the semantic action blocks.
 
 ///PROTOTYPE_ENTER:SKIP
+#include <exception>
 #include <stdint.h>
 #include <iostream>
 #include <format>
@@ -206,12 +207,18 @@ namespace TAG(Q_NSNAME)TAG2(CLSNAME,_AST) {
     template<typename T>
     struct NodeRef : public NodeRefBase {
         const T& node;
-        inline NodeRef(const T& n) : node(n) {}
+        explicit inline NodeRef(const T& n) : node(n) {}
     };
 
     struct NodeRefPostExec {
         std::vector<std::pair<NodeRefBase*, std::function<void()>>> nodeRefs;
+        int uncaught_exceptions = 0;
+        inline NodeRefPostExec(): uncaught_exceptions(std::uncaught_exceptions()) {}
         inline ~NodeRefPostExec() {
+            if(std::uncaught_exceptions() > uncaught_exceptions) {
+                return;
+            }
+
             for(auto& pnr : nodeRefs) {
                 auto& nr = *(pnr.first);
                 auto& fn = pnr.second;
@@ -220,7 +227,7 @@ namespace TAG(Q_NSNAME)TAG2(CLSNAME,_AST) {
                 }
             }
         }
-        inline void add(NodeRefBase& nr, std::function<void()> fn) {
+        inline void add(NodeRefBase& nr, const std::function<void()>& fn) {
             nodeRefs.emplace_back(&nr, fn);
         }
     };
