@@ -7,6 +7,7 @@ template<typename SS>
 struct TextWriter {
     SS ss;
     std::string indent;
+    std::filesystem::path inFile;
     size_t row = 1;
     bool wrote = false;
 
@@ -67,8 +68,7 @@ struct StringStreamWriter : public TextWriter<std::ostringstream> {
 };
 
 struct TextFileWriter : public TextWriter<std::ofstream> {
-    std::filesystem::path dir;
-    std::filesystem::path file;
+    std::filesystem::path outFile;
 
     inline auto
     buildOutputPath(
@@ -78,7 +78,7 @@ struct TextFileWriter : public TextWriter<std::ofstream> {
     ) -> std::filesystem::path {
         inf = std::filesystem::absolute(inf);
         inf = inf.lexically_normal();
-        dir = inf.parent_path();
+        inFile = inf;
         inf = odir / inf.filename();
         inf.replace_extension(ext);
         return inf;
@@ -97,7 +97,7 @@ struct TextFileWriter : public TextWriter<std::ofstream> {
             throw std::runtime_error("unable to open output file:" + fname.string());
         }
         row = 1;
-        file = fname;
+        outFile = fname;
     }
 
     inline void

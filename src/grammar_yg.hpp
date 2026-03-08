@@ -101,7 +101,7 @@ struct Walker : public NonCopyable {
     std::string interfaceName;
 
     /// @brief instance name for the writer object in the walker, if nahy
-    std::string writerName = "out";
+    std::string writerName = "writer";
 
     /// @brief file extension for files genrated by this walker, if any
     std::string ext;
