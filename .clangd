@@ -1,0 +1,10 @@
+CompileFlags:
+  Add:
+    - -std=c++20
+    - -ferror-limit=0
+  Compiler: clang++
+InlayHints:
+  Enabled: No
+Diagnostics:
+  # Suppress: [unused-includes, unused-variables]
+  Suppress: ['*']

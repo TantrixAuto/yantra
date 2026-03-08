@@ -273,7 +273,7 @@ struct Generator {
 
         tw.writeln("{}#line {} \"{}\" //t={},s={}", pline, codeblock.pos.row, codeblock.pos.file, tw.row, sw.row);
         tw.swrite(sw);
-        tw.writeln("{}#line {} \"{}\" //t={},s={}", pline, tw.row + 1, tw.file.string(), tw.row, sw.row);
+        tw.writeln("{}#line {} \"{}\" //t={},s={}", pline, tw.row + 1, tw.outFile.string(), tw.row, sw.row);
     }
 
     /// @brief writes expanded codeblock to output stream if the codeblock is not empty
