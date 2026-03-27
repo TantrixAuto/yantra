@@ -1921,6 +1921,40 @@ struct Parser {
         lexer.next();
     }
 
+    /// @brief enable log level
+    inline void enable_log() {
+        Tracer tr{lvl, "enable_log"};
+
+        Token t = peek(tr);
+        const auto& co = opts();
+        auto& mo = const_cast<Options&>(co);
+        bool enable = true;
+        while((t = peek(tr)).id != Token::ID::SEMI) {
+            if(t.id == Token::ID::BANG) {
+                enable = false;
+            }else if(t.id == Token::ID::ID) {
+                if(t.text == "parser") {
+                    mo.enableParserLogging = enable;
+                }else if(t.text == "lexer") {
+                    mo.enableLexerLogging = enable;
+                }else if(t.text == "generator") {
+                    mo.enableGeneratorLogging = enable;
+                }else{
+                    throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+                }
+                enable = true;
+            }else{
+                throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+            }
+            lexer.next();
+        }
+
+        if(t.id != Token::ID::SEMI) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+        }
+        lexer.next();
+    }
+
     /// @brief read encoding
     inline void set_encoding() {
         Tracer tr{lvl, "encoding"};
@@ -2124,6 +2158,10 @@ struct Parser {
 
         if(t.text == "encoding") {
             return set_encoding();
+        }
+
+        if(t.text == "enable_log") {
+            return enable_log();
         }
 
         if(t.text == "check_unused_tokens") {

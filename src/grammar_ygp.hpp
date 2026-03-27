@@ -353,7 +353,7 @@ struct ItemSet : public NonCopyable {
 
     /// @brief return string representation of this ItemSet
     /// used for debugging and logging
-    inline auto str(const std::string& indent = "", const std::string& nl = "\n", const bool& full = true) const -> std::string {
+    inline auto str(const std::string& indent = "", const std::string& nl = "\n", const bool& full = false) const -> std::string {
         std::stringstream ss;
         ss << indent << std::format("ItemSet:{}", id);
         for(const auto& c : configs) {
