@@ -1280,7 +1280,7 @@ struct Generator {
 
             tw.writeln("            case {}:", itemSet.id);
             if(opts().enableParserLogging == true) {
-                tw.writeln(R"(                std::print(log(), "{{}}", "{}\n");)", itemSet.str("", R"(\n)", true));
+                tw.writeln(R"(                std::print(log(), "{{}}", "{}\n");)", itemSet.str("", R"(\n)", false));
             }
             tw.writeln("                switch(k.id) {{");
             for (auto& c : itemSet.shifts) {

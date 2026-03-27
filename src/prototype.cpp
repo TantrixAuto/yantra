@@ -160,6 +160,14 @@ namespace {
     ///PROTOTYPE_INCLUDE:nsutil
     ///PROTOTYPE_INCLUDE:textWriter
 
+    struct AtExit {
+        std::function<void()> _f;
+        AtExit(std::function<void()> f) : _f(f) {}
+        ~AtExit() {
+            _f();
+        }
+    };
+
     static std::ostream* _log = nullptr;
 
     inline std::ostream& log() {
@@ -969,7 +977,7 @@ int main(int argc, char* argv[]) {
                 doWalk(printAstLevel, ymodule, walkers, outf, f);
             }catch(const std::exception& ex) {
                 ++errs;
-                std::print("err:{}\n", ex.what());
+                std::print("f1-err:{}\n", ex.what());
             }
         }
 
@@ -986,7 +994,7 @@ int main(int argc, char* argv[]) {
                 ymodule.readString(f, inn);
                 doWalk(printAstLevel, ymodule, walkers, "", "");
             }catch(const std::exception& ex) {
-                std::print("err:{}\n", ex.what());
+                std::print("s1-err:{}\n{}\n", ex.what(), f);
                 ++errs;
             }
         }
@@ -1006,7 +1014,7 @@ int main(int argc, char* argv[]) {
                 ymodule.readFile(f);
                 doWalk(printAstLevel, ymodule, walkers, "", "");
             }catch(const std::exception& ex) {
-                std::print("err:{}\n", ex.what());
+                std::print("f2-err:{}\n", ex.what());
             }
         }
 
@@ -1019,7 +1027,7 @@ int main(int argc, char* argv[]) {
                 ymodule.readString(f, "<str>");
                 doWalk(printAstLevel, ymodule, walkers, "", "");
             }catch(const std::exception& ex) {
-                std::print("err:{}\n", ex.what());
+                std::print("s2-err:{}\n{}\n", ex.what(), f);
             }
         }
 
@@ -1032,7 +1040,7 @@ int main(int argc, char* argv[]) {
                     break;
                 }
             }catch(const std::exception& ex) {
-                std::print("err:{}\n", ex.what());
+                std::print("c1-err:{}\n", ex.what());
             }
         }
     }
