@@ -115,17 +115,17 @@ struct CanonicalItemSet : public NonCopyable {
         reduces[&rx] = std::move(r);
     }
 
-    // /// @brief check if there is a GOTO action for the given RuleSet @arg rs
-    // inline bool hasGoto(const ygp::RuleSet& rs, const ygp::Config& cfg) const {
-    //     if(auto it = gotos.find(&rs); it != gotos.end()) {
-    //         for(auto& c : it->second) {
-    //             if(c == &cfg) {
-    //                 return true;
-    //             }
-    //         }
-    //     }
-    //     return false;
-    // }
+    /// @brief check if there is a GOTO action for the given RuleSet @arg rs
+    inline bool hasGoto(const ygp::RuleSet& rs, const ygp::Config& cfg) const {
+        if(auto it = gotos.find(&rs); it != gotos.end()) {
+            for(auto& c : it->second) {
+                if(c == &cfg) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
 
     /// @brief move GOTOs from another Config to here
     inline const std::vector<const ygp::Config*>&
@@ -133,6 +133,7 @@ struct CanonicalItemSet : public NonCopyable {
         const ygp::RuleSet& rs,
         std::vector<const ygp::Config*>& nexts
     ) {
+        unused(&CanonicalItemSet::hasGoto);
         auto& g = gotos[&rs];
         g = std::move(nexts);
         return g;
