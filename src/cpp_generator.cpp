@@ -1010,7 +1010,7 @@ struct Generator {
             // generate Walker implementation
             std::string xargs;
             if(walker.xctor_args.size() > 0) {
-                xargs = std::format(", {}", walker.xctor_args);;
+                xargs = std::format(", {}", walker.xctor_args);
             }
 
             std::string bname;

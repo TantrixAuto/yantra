@@ -7,7 +7,7 @@
 #include "cpp_generator.hpp"
 #include "tx_table.hpp"
 #include "grammar_printer.hpp"
-#include "config.hpp"
+#include "yconfig.hpp"
 #include "options.hpp"
 
 static bool verbose = false;
