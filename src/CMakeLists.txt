@@ -32,7 +32,7 @@ STRINGIFY(
     "filepos.hpp"
 )
 
-configure_file(config.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/config.hpp @ONLY)
+configure_file(config.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/yconfig.hpp @ONLY)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 add_executable(ycc

@@ -42,13 +42,13 @@ FUNCTION(ADD_YANTRA)
 
     add_custom_command(
       OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${FNAME}.cpp"
-      COMMAND "${YANTRACC}"
+      COMMAND $<TARGET_FILE:ycc>
         -d "${CMAKE_CURRENT_BINARY_DIR}"
         -a
         -f "${SRC}"
         ${GENLINES}
       COMMENT "Compiling ${SRC}"
-      DEPENDS "${SRC}" "${YANTRACC}"
+      DEPENDS "${SRC}" ycc
     )
   ENDFOREACH()
 ENDFUNCTION()

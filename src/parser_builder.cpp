@@ -52,13 +52,13 @@ struct CanonicalItemSet : public NonCopyable {
         return nullptr;
     }
 
-    /// @brief add a SHIFT action for the given token @arg rx, from current Config to @arg next Config
-    inline void addShift(const yglx::RegexSet& rx, const ygp::Config& next) {
-        if(hasShift(rx) == nullptr) {
-            shifts[&rx] = Shift();
-        }
-        shifts[&rx].next.push_back(&next);
-    }
+    // /// @brief add a SHIFT action for the given token @arg rx, from current Config to @arg next Config
+    // inline void addShift(const yglx::RegexSet& rx, const ygp::Config& next) {
+    //     if(hasShift(rx) == nullptr) {
+    //         shifts[&rx] = Shift();
+    //     }
+    //     shifts[&rx].next.push_back(&next);
+    // }
 
     /// @brief add a SHIFT action for the given token @arg rx, from current Config to @arg next Config
     /// along with @arg epsilon tranitions
@@ -115,17 +115,17 @@ struct CanonicalItemSet : public NonCopyable {
         reduces[&rx] = std::move(r);
     }
 
-    /// @brief check if there is a GOTO action for the given RuleSet @arg rs
-    inline bool hasGoto(const ygp::RuleSet& rs, const ygp::Config& cfg) const {
-        if(auto it = gotos.find(&rs); it != gotos.end()) {
-            for(auto& c : it->second) {
-                if(c == &cfg) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
+    // /// @brief check if there is a GOTO action for the given RuleSet @arg rs
+    // inline bool hasGoto(const ygp::RuleSet& rs, const ygp::Config& cfg) const {
+    //     if(auto it = gotos.find(&rs); it != gotos.end()) {
+    //         for(auto& c : it->second) {
+    //             if(c == &cfg) {
+    //                 return true;
+    //             }
+    //         }
+    //     }
+    //     return false;
+    // }
 
     /// @brief move GOTOs from another Config to here
     inline const std::vector<const ygp::Config*>&
