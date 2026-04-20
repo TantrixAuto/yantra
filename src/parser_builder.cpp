@@ -572,11 +572,11 @@ struct ParserStateMachineBuilder {
                 log("  reduce: rx={}, next_sz={}", rx.name, cfgs.next.size());
                 if(cfgs.next.size() != 1) {
                     // throw GeneratorError(__LINE__, __FILE__, config.rule->pos, "REDUCE_SHIFT_CONFLICT:ON:{}{}", rx->name, ss.str());
-                    std::println("R-R conflict: is={}, rx={}, next_sz={}", is.id, rx.name, cfgs.next.size());
+                    log("R-R conflict: is={}, rx={}, next_sz={}", is.id, rx.name, cfgs.next.size());
                     for(auto& pcfg : cfgs.next) {
                         auto& config = *pcfg;
                         auto p = resolveConflict(config, rx, "");
-                        std::println("    {}:reduce-cfg: {}, p={}", config.rule.pos.str(), config.str(false), p);
+                        log("    {}:reduce-cfg: {}, p={}", config.rule.pos.str(), config.str(false), p);
                     }
                 }
 
