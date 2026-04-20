@@ -2726,7 +2726,9 @@ void parseInput(yg::Grammar& g, Stream& is) {
                 }
             }
             if(identical == true) {
-                std::println("dup:r1={}, r2={}", r1.str(false), r2.str(false));
+                std::println("duplicate rule definitions:");
+                std::println("-r1: {}: {}", r1.pos.str(), r1.str(false));
+                std::println("-r2: {}: {}", r2.pos.str(), r2.str(false));
                 auto msg = std::format("duplicate rule definition: {} and {}", r1.ruleName, r2.ruleName);
                 // errors.emplace_back(r1.pos, msg);
             }
