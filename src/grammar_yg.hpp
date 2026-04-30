@@ -281,6 +281,7 @@ struct Grammar : public NonCopyable { // NOLINT(cppcoreguidelines-special-member
     std::string empty = "_tEMPTY";
     std::string tokenType = "std::string";
     std::string listType = "std::vector";
+    bool genLines = true;
     bool hasREPL = true;
 
     CodeBlock prologue;
