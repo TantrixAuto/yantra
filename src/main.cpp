@@ -119,6 +119,7 @@ inline void processInputEx(
     Stream stream(is, filename);
 
     yg::Grammar g;
+    g.genLines = opts().genLines;
 
     if(charset == "utf8") {
         g.unicodeEnabled = true;

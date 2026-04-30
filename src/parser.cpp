@@ -2232,6 +2232,10 @@ struct Parser {
             return set_string(grammar.start, t);
         }
 
+        if(t.text == "gen_lines") {
+            return set_bool(grammar.genLines, t);
+        }
+
         if(t.text == "left") {
             return set_precedence(yglx::RegexSet::Assoc::Left, t);
         }

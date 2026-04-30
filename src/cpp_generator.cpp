@@ -253,14 +253,14 @@ struct Generator {
     }
 
     /// @brief optionally appends a #line to an expanded codeblock
-    static inline void
+    inline void
     generateCodeBlock(
         TextFileWriter& tw,
         const CodeBlock& codeblock,
         const std::string_view& indent,
         const bool& autoIndent,
         const std::unordered_map<std::string, std::string>& vars
-    ) {
+    ) const {
         StringStreamWriter sw;
         _expand(sw, codeblock.code, autoIndent, vars, tw.indent);
         if (codeblock.hasPos == false) {
@@ -268,7 +268,7 @@ struct Generator {
             return;
         }
 
-        std::string pline = (opts().genLines == false) ? "//" : "";
+        std::string pline = (grammar.genLines == false) ? "//" : "";
         unused(indent);
 
         tw.writeln("{}#line {} \"{}\" //t={},s={}", pline, codeblock.pos.row, codeblock.pos.file, tw.row, sw.row);
@@ -831,7 +831,7 @@ struct Generator {
                     auto hname = getFunctionName(r, fsig.func);
                     auto args = getArgs(r, fsig, ci, true);
 
-                    if((opts().genLines == true) && (ci != nullptr) && (ci->codeblock.hasPos == true)) {
+                    if((grammar.genLines == true) && (ci != nullptr) && (ci->codeblock.hasPos == true)) {
                         // write an extra #line before the function body
                         // so that 'unused_parameter' errors point to the right location
                         // in the .y file.
@@ -1310,6 +1310,12 @@ struct Generator {
             for (auto& rd : itemSet.reduces) {
                 const auto& c = *(rd.second.next);
                 const auto& r = c.rule;
+                for(const auto& fb : rd.first->fallbacks) {
+                    if ((itemSet.hasShift(*fb) != nullptr) || (itemSet.hasReduce(*fb) != nullptr)) {
+                        continue;
+                    }
+                    tw.writeln("                case Tolkien::ID::{}: // SHIFT(fallback)", fb->name);
+                }
                 tw.writeln("                case Tolkien::ID::{}: // REDUCE", rd.first->name);
                 if(opts().enableParserLogging == true) {
                     tw.writeln(R"(                    std::print(log(), "REDUCE:{}:{{}}/{}\n", "{}");)", rd.first->name, r.nodes.size(), c.str());
