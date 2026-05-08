@@ -412,7 +412,7 @@ struct Transition : public NonCopyable {
     auto isSubsetOf(const Transition& rhs) const -> bool;
 
     /// @brief return this transition in string format
-    inline auto str(const bool& md = false) const  -> std::string {
+    inline std::string str(const bool& md = false) const {
         if(t.valueless_by_exception()) {
             return "??";
         }
@@ -425,7 +425,7 @@ struct Transition : public NonCopyable {
             st = std::format("{}!", st);
         }
         if(!md) {
-            return std::format("{}->{}->{}", zid(from), st, zid(next));
+            st = std::format("{}->{}->{}", zid(from), st, zid(next));
         }
         return st;
     }

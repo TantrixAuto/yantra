@@ -1106,6 +1106,7 @@ struct Generator {
                         if(true) {
                             tw.writeln("{}        [&](const _astEmpty&) -> {} {{", indent, fsig.type);
                             tw.writeln("{}            throw std::runtime_error(\"internal_error\"); //should never reach here", indent);
+                            tw.writeln("{}            __builtin_unreachable();", indent);
                             tw.writeln("{}        }},", indent);
                             tw.writeln();
                         }
