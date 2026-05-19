@@ -52,7 +52,7 @@ struct CanonicalItemSet : public NonCopyable {
         return nullptr;
     }
 
-    // /// @brief add a SHIFT action for the given token @arg rx, from current Config to @arg next Config
+    /// @brief add a SHIFT action for the given token @arg rx, from current Config to @arg next Config
     // inline void addShift(const yglx::RegexSet& rx, const ygp::Config& next) {
     //     if(hasShift(rx) == nullptr) {
     //         shifts[&rx] = Shift();
