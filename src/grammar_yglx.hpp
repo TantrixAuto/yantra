@@ -101,8 +101,7 @@ struct Sequence{
     const FilePos pos;
     std::unique_ptr<const Atom> lhs;
     std::unique_ptr<const Atom> rhs;
-    inline Sequence(const FilePos& p, std::unique_ptr<const Atom> l, std::unique_ptr<const Atom> r)
-        : pos(p), lhs{std::move(l)}, rhs{std::move(r)} {}
+    inline Sequence(const FilePos& p, std::unique_ptr<const Atom> l, std::unique_ptr<const Atom> r);
 
     static inline auto str([[maybe_unused]] const bool& md = false) -> std::string {
         return std::format("&");
@@ -115,8 +114,7 @@ struct Disjunct{
     const FilePos pos;
     std::unique_ptr<const Atom> lhs;
     std::unique_ptr<const Atom> rhs;
-    inline Disjunct(const FilePos& p, std::unique_ptr<const Atom> l, std::unique_ptr<const Atom> r)
-        : pos(p), lhs{std::move(l)}, rhs{std::move(r)} {}
+    inline Disjunct(const FilePos& p, std::unique_ptr<const Atom> l, std::unique_ptr<const Atom> r);
 
     static inline auto str([[maybe_unused]] const bool& md = false) -> std::string {
         return std::format("|");
@@ -129,8 +127,7 @@ struct Group{
     const FilePos pos;
     bool capture = true;
     std::unique_ptr<const Atom> atom;
-    inline Group(const FilePos& p, const bool& c, std::unique_ptr<const Atom>&& a)
-        : pos(p), capture{c}, atom{std::move(a)} {}
+    inline Group(const FilePos& p, const bool& c, std::unique_ptr<const Atom>&& a);
 
     static inline auto str([[maybe_unused]] const bool& md = false) -> std::string {
         return std::format("()");
@@ -145,8 +142,7 @@ struct Closure{
     std::unique_ptr<const Atom> atom;
     size_t min = 0;
     size_t max = 0;
-    inline Closure(const yg::Grammar& g, const FilePos& p, std::unique_ptr<const Atom> n, const size_t& mn, const size_t& mx)
-        : grammar(g), pos(p), atom{std::move(n)}, min{mn}, max{mx} {}
+    inline Closure(const yg::Grammar& g, const FilePos& p, std::unique_ptr<const Atom> n, const size_t& mn, const size_t& mx);
 
     auto str(const bool& md = false) const -> std::string;
 };
@@ -170,6 +166,18 @@ struct Atom : public NonCopyable {
         return std::visit([](const auto& a) -> const FilePos& {return a.pos;}, atom);
     }
 };
+
+inline Sequence::Sequence(const FilePos& p, std::unique_ptr<const Atom> l, std::unique_ptr<const Atom> r)
+: pos(p), lhs{std::move(l)}, rhs{std::move(r)} {}
+
+inline Disjunct::Disjunct(const FilePos& p, std::unique_ptr<const Atom> l, std::unique_ptr<const Atom> r)
+: pos(p), lhs{std::move(l)}, rhs{std::move(r)} {}
+
+inline Group::Group(const FilePos& p, const bool& c, std::unique_ptr<const Atom>&& a)
+: pos(p), capture{c}, atom{std::move(a)} {}
+
+inline Closure::Closure(const yg::Grammar& g, const FilePos& p, std::unique_ptr<const Atom> n, const size_t& mn, const size_t& mx)
+: grammar(g), pos(p), atom{std::move(n)}, min{mn}, max{mx} {}
 
 /// @brief compare(Wildcard, LargeEscClass) function
 /// a Wildcard is always less than a LargeEscClass
