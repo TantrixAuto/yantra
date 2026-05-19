@@ -414,7 +414,7 @@ struct Transition : public NonCopyable {
     /// @brief return this transition in string format
     inline std::string str(const bool& md = false) const {
         if(t.valueless_by_exception()) {
-            return "??";
+            return std::string("??");
         }
 
         auto st = std::visit([&md](const auto& xt) -> std::string {
