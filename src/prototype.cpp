@@ -25,9 +25,9 @@
 #include <stdint.h>
 #include <iostream>
 #include <format>
+#include <print>
 #include "filepos.hpp"
 #include "nsutil.hpp"
-#include "print.hpp"
 
 #define TAG(X) X
 
@@ -154,8 +154,6 @@ throw TAG(Q_NSNAME)TAG(CLSNAME)::Error(TAG(ROW), TAG(COL), TAG(SRC), TAG(MSG));
 #elif defined(__GNUG__)
 #pragma GCC diagnostic ignored "-Wsubobject-linkage"
 #endif
-
-///PROTOTYPE_INCLUDE:print
 
 namespace {
     ///PROTOTYPE_INCLUDE:nsutil
@@ -826,21 +824,21 @@ inline bool doREPL(TAG(Q_NSNAME)TAG(CLSNAME)& ymodule, const std::string& input)
 inline int help(const std::string& xname, const std::string& msg) {
     auto xxname = std::filesystem::path(xname).filename();
     if(msg.size() > 0) {
-        std::print("== {} ==\n", msg);
+        std::println("== {} ==", msg);
     }
-    std::print("{} <options>\n", xxname.string());
-    std::print("options:\n");
+    std::println("{} <options>", xxname.string());
+    std::println("options:");
 #if HAS_REPL
-    std::print("    -i              : read input interactively from console\n");
+    std::println("    -i              : read input interactively from console");
 #endif
-    std::print("    -f <filename>   : read input from file <filename>\n");
-    std::print("    -s <string>     : read input from <string> passed on commandline\n");
-    std::print("    -l <log>        : generate debug log to <log> (use - for console)\n");
-    std::print("    -t | -t1        : print AST to log\n");
-    std::print("    -t2             : print AST to log with rules expanded\n");
-    std::print("    -v              : print verbose messages to console\n");
-    std::print("    -w <walker>     : use walker\n");
-    std::print("    -o <filename>   : write output to file <filename>\n");
+    std::println("    -f <filename>   : read input from file <filename>");
+    std::println("    -s <string>     : read input from <string> passed on commandline");
+    std::println("    -l <log>        : generate debug log to <log> (use - for console)");
+    std::println("    -t | -t1        : print AST to log");
+    std::println("    -t2             : print AST to log with rules expanded");
+    std::println("    -v              : print verbose messages to console");
+    std::println("    -w <walker>     : use walker");
+    std::println("    -o <filename>   : write output to file <filename>");
     return 1;
 }
 

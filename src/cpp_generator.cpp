@@ -2003,8 +2003,6 @@ struct Generator {
                     includeCodeBlock(cb_stream, tw, vars, tnames, filebase, srcName, indent);
                 }else if (includeName == "textWriter") {
                     includeCodeBlock(cb_text_writer, tw, vars, tnames, filebase, srcName, indent);
-                }else if (includeName == "print") {
-                    includeCodeBlock(cb_print, tw, vars, tnames, filebase, srcName, indent);
                 }else if (includeName == "nsutil") {
                     includeCodeBlock(cb_nsutil, tw, vars, tnames, filebase, srcName, indent);
                 }else if (includeName == "filepos") {
