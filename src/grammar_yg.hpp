@@ -37,6 +37,9 @@ struct Walker : public NonCopyable {
         /// @brief this walker generates a text file
         TextFile,
 
+        /// @brief this walker generates a text string
+        TextString,
+
         /// @brief this walker generates a binary file
         BinaryFile,
     };
@@ -125,6 +128,12 @@ struct Walker : public NonCopyable {
     /// @brief set output mode to text file, for this walker
     inline void setOutputTextFile(const std::string& e) {
         outputType = OutputType::TextFile;
+        ext = e;
+    }
+
+    /// @brief set output mode to text string, for this walker
+    inline void setOutputTextString(const std::string& e) {
+        outputType = OutputType::TextString;
         ext = e;
     }
 

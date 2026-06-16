@@ -493,6 +493,9 @@ struct Generator {
         if(w.outputType == yg::Walker::OutputType::TextFile) {
             ss << sep << "const std::filesystem::path& odir, const std::string_view& filename";
             sep = ", ";
+        }else if(w.outputType == yg::Walker::OutputType::TextString) {
+            ss << sep << "std::ostringstream& oss";
+            sep = ", ";
         }
         ss << ")";
         return ss.str();
@@ -514,6 +517,8 @@ struct Generator {
         }
         if(w.outputType == yg::Walker::OutputType::TextFile) {
             ss << sep << "odir, filename";
+        }else if(w.outputType == yg::Walker::OutputType::TextString) {
+            ss << sep << "oss";
         }
         return ss.str();
     }
@@ -558,6 +563,10 @@ struct Generator {
             }
             if(w.xctor_args.size() > 0) {
                 xparams << ", " << extractParams(w.xctor_args);
+            }
+            if(w.outputType == yg::Walker::OutputType::TextFile) {
+            }else if(w.outputType == yg::Walker::OutputType::TextString) {
+                xparams << ", oss";
             }
             tw.writeln("{}    Walker_{} walker(ymodule{});", indent, w.name, xparams.str());
 
@@ -759,7 +768,8 @@ struct Generator {
 
             if (n->varName.size() > 0) {
                 if(n->isRule() == true) {
-                    tw.writeln("{}            NodeRef<{}> {}(_n.{}); /*var-4x*/", indent, n->name, n->varName, n->varName);
+                    // tw.writeln("{}            NodeRef<{}> {}(_n.{}); /*var-4x*/", indent, n->name, n->varName, n->varName);
+                    tw.writeln("{}            NodeRef<{}>& {} = _nrpx.addNode(_n.{}); /*var-4x*/", indent, n->name, n->varName, n->varName);
                     if(autowalk == true) {
                         tw.writeln("{}            _nrpx.add({}, [&](){{return {}({});}}); /*var-4x*/", indent, n->varName, fsig.func, n->varName);
                     }
@@ -768,8 +778,9 @@ struct Generator {
                 }
             }else{
                 if(autowalk == true) {
-                    tw.writeln("{}            NodeRef<{}> {}(_n.{}); /*var-4z*/", indent, n->name, n->idxName, n->idxName);
-                    tw.writeln("{}            _nrpx.add({}, [&](){{return {}({});}}); /*var-4x*/", indent, n->idxName, fsig.func, n->idxName);
+                    // tw.writeln("{}            NodeRef<{}> {}(_n.{}); /*var-4z*/", indent, n->name, n->idxName, n->idxName);
+                    tw.writeln("{}            NodeRef<{}>& {} = _nrpx.addNode(_n.{}); /*var-4z*/", indent, n->name, n->idxName, n->idxName);
+                    tw.writeln("{}            _nrpx.add({}, [&](){{return {}({});}}); /*var-4y*/", indent, n->idxName, fsig.func, n->idxName);
                 }
             }
         }
@@ -791,14 +802,17 @@ struct Generator {
         const yg::Walker& walker,
         const std::string_view& indent
     ) {
+        tw.writeln("{}//GEN_FILE", indent);
         if(walker.outputType == yg::Walker::OutputType::TextFile) {
-            tw.writeln("{}//GEN_FILE", indent);
             tw.writeln("{}TextFileWriter {};", indent, walker.writerName);
             tw.writeln();
 
             tw.writeln("{}void open(const std::filesystem::path& odir, const std::string_view& filename) {{", indent);
             tw.writeln("{}    {}.open(odir, filename, \"{}\");", indent, walker.writerName, walker.ext);
             tw.writeln("{}}}", indent);
+        }else if(walker.outputType == yg::Walker::OutputType::TextString) {
+            tw.writeln("{}StringStreamRefWriter {};", indent, walker.writerName);
+            tw.writeln();
         }
     }
 
@@ -1045,6 +1059,11 @@ struct Generator {
                     xargs += std::format(", {}& i ", walker.interfaceName);
                 }
 
+                if(walker.outputType == yg::Walker::OutputType::TextFile) {
+                }else if(walker.outputType == yg::Walker::OutputType::TextString) {
+                    cname += std::format(", writer(oss) ");
+                    xargs += std::format(", std::ostringstream& oss ");
+                }
                 // generate constructor
                 if(walker.xctor.hasCode() == true) {
                     tw.writeln("{}inline Walker_{}({}& m{}) {}{{", indent, walker.name, grammar.className, xargs, cname);
