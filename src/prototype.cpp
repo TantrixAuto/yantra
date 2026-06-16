@@ -209,6 +209,7 @@ namespace TAG(Q_NSNAME)TAG2(CLSNAME,_AST) {
     ///PROTOTYPE_SEGMENT:astNodeDecls
     struct NodeRefBase {
         bool called = false;
+        virtual ~NodeRefBase() {}
     };
 
     template<typename T>
@@ -218,6 +219,7 @@ namespace TAG(Q_NSNAME)TAG2(CLSNAME,_AST) {
     };
 
     struct NodeRefPostExec {
+        std::vector<std::unique_ptr<NodeRefBase>> nodes;
         std::vector<std::pair<NodeRefBase*, std::function<void()>>> nodeRefs;
         int uncaught_exceptions = 0;
         inline NodeRefPostExec(): uncaught_exceptions(std::uncaught_exceptions()) {}
@@ -234,6 +236,16 @@ namespace TAG(Q_NSNAME)TAG2(CLSNAME,_AST) {
                 }
             }
         }
+
+        template<typename T>
+        inline NodeRef<T>&
+        addNode(T& t) {
+            auto p = std::make_unique<NodeRef<T>>(t);
+            NodeRef<T>& n = *p;
+            nodes.emplace_back(std::move(p));
+            return n;
+        }
+
         inline void add(NodeRefBase& nr, const std::function<void()>& fn) {
             nodeRefs.emplace_back(&nr, fn);
         }
