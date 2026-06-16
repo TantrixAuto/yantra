@@ -1684,13 +1684,13 @@ struct Parser {
         }
 
         lexer.next();
-        t = peek(tr);
-        if(t.id != Token::ID::ID) {
-            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
+        Token t1 = peek(tr);
+        if(t1.id != Token::ID::ID) {
+            throw GeneratorError(__LINE__, __FILE__, t1.pos, "INVALID_INPUT");
         }
 
-        if(t.text != "text_file") {
-            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_OUTPUT_TYPE:[{}]", t.text);
+        if((t1.text != "text_file") && (t1.text != "text_string")) {
+            throw GeneratorError(__LINE__, __FILE__, t1.pos, "INVALID_OUTPUT_TYPE:[{}]", t1.text);
         }
 
         lexer.next();
@@ -1699,7 +1699,13 @@ struct Parser {
             throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
         }
 
-        walker->setOutputTextFile(t.text);
+        if(t1.text == "text_file") {
+            walker->setOutputTextFile(t.text);
+        }else if(t1.text == "text_string") {
+            walker->setOutputTextString(t.text);
+        }else{
+            assert(false);
+        }
         lexer.next();
         read_semi(tr);
     }

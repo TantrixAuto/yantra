@@ -30,7 +30,13 @@ if(NOT YANTRACC)
 endif()
 
 FUNCTION(ADD_YANTRA)
-  CMAKE_PARSE_ARGUMENTS("YCC" "SKIP_GENLINES" "" "SRCS" ${ARGN})
+  message("RAW ARGN: ${ARGN}")
+  CMAKE_PARSE_ARGUMENTS("YCC" "SKIP_GENLINES;AMALGAMATED" "" "SRCS" ${ARGN})
+
+  set(AMALGAMATED "")
+  if(YCC_AMALGAMATED)
+    set(AMALGAMATED "-a")
+  endif()
 
   set(GENLINES "")
   if(YCC_SKIP_GENLINES)
@@ -44,7 +50,7 @@ FUNCTION(ADD_YANTRA)
       OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${FNAME}.cpp"
       COMMAND $<TARGET_FILE:ycc>
         -d "${CMAKE_CURRENT_BINARY_DIR}"
-        -a
+        ${AMALGAMATED}
         -f "${SRC}"
         ${GENLINES}
       COMMENT "Compiling ${SRC}"
