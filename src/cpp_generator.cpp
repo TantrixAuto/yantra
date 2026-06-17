@@ -471,8 +471,10 @@ struct Generator {
 
     /// @brief generates additional class members for the parser, if any are specified in the .y file
     inline void generateClassMembers(TextFileWriter& tw, const std::string_view& indent) {
-        for (const auto& m : grammar.classMembers) {
-            tw.writeln("{}{};", indent, m);
+        unused(indent);
+        if(grammar.classMembers.contains("cpp")) {
+            const auto& m = grammar.classMembers.at("cpp");
+            tw.writeln("{}", m.code);
         }
     }
 

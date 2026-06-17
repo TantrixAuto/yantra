@@ -277,7 +277,7 @@ struct Walker : public NonCopyable {
 struct Grammar : public NonCopyable { // NOLINT(cppcoreguidelines-special-member-functions)
     std::string ns;
     std::string className = "YantraModule";
-    std::vector<std::string> classMembers;
+    std::unordered_map<std::string, CodeBlock> classMembers;
 
     std::string defaultWalkerClassName = "Walker";
     Walker* defaultWalkerClass = nullptr;
