@@ -1574,23 +1574,30 @@ struct Parser {
     }
 
     /// @brief read module class member and set it in the grammar
-    inline void class_member() {
-        Tracer tr{lvl, "class_member"};
-
-        lexer.setMode_Type();
-        lexer.next();
+    inline void class_members() {
+        Tracer tr{lvl, "class_members"};
 
         Token t = peek(tr);
-        if(t.id != Token::ID::TYPE) {
+        if(t.id != Token::ID::ID) {
             throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
         }
 
-        grammar.classMembers.push_back(t.text);
+        if(t.text != "cpp") {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_LANGUAGE:[{}]", t.text);
+        }
+        auto& xmembers = grammar.classMembers[t.text];
+
         lexer.next();
         t = peek(tr);
-        if(t.id != Token::ID::SEMI) {
+        if(t.id != Token::ID::CODEBLOCK) {
             throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
         }
+
+        if(xmembers.hasCode() == true) {
+            throw GeneratorError(__LINE__, __FILE__, t.pos, "PARSER_MEMBERS_ALREADY_DEFINED");
+        }
+
+        xmembers.setCode(t.pos, t.text);
         lexer.next();
     }
 
@@ -2149,10 +2156,6 @@ struct Parser {
             return add_header(grammar.srcHeaders, t);
         }
 
-        if(t.text == "class_member") {
-            return class_member();
-        }
-
         lexer.next();
         if(t.text == "namespace") {
             return set_string(grammar.ns, t);
@@ -2205,6 +2208,10 @@ struct Parser {
             return walker_interface();
         }
 
+        if(t.text == "class_members") {
+            return class_members();
+        }
+
         if(t.text == "members") {
             return walker_members();
         }
@@ -2215,11 +2222,6 @@ struct Parser {
 
         if(t.text == "ctor_args") {
             return walker_ctor_args();
-        }
-
-        if(t.text == "public") {
-            //TODO: code that goes into Module class
-            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
         }
 
         if(t.text == "prologue") {
@@ -2711,39 +2713,6 @@ void parseInput(yg::Grammar& g, Stream& is) {
 
     std::vector<std::pair<FilePos, std::string>> errors;
 
-    for(auto& pr1 : g.rules) {
-        auto& r1 = *pr1;
-        assert(r1.nodes.size() > 0);
-        auto& n0 = *(r1.nodes.at(0));
-        if((r1.nodes.size() == 1) && (n0.isRegex() == true) && (n0.name == g.empty)) {
-            continue;
-        }
-        for(auto& pr2 : g.rules) {
-            if(pr2.get() == pr1.get()) {
-                continue;
-            }
-            auto& r2 = *pr2;
-            if(r1.nodes.size() != r2.nodes.size()) {
-                continue;
-            }
-            bool identical = true;
-            for(size_t i = 0; i < r1.nodes.size(); ++i) {
-                auto& n1 = r1.nodes[i];
-                auto& n2 = r2.nodes[i];
-                if(n1->name != n2->name) {
-                    identical = false;
-                    break;
-                }
-            }
-            if(identical == true) {
-                std::println("duplicate rule definitions:");
-                std::println("-r1: {}: {}", r1.pos.str(), r1.str(false));
-                std::println("-r2: {}: {}", r2.pos.str(), r2.str(false));
-                auto msg = std::format("duplicate rule definition: {} and {}", r1.ruleName, r2.ruleName);
-                // errors.emplace_back(r1.pos, msg);
-            }
-        }
-    }
 
     for(auto& pw : g.walkers) {
         auto& w = *pw;
