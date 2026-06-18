@@ -136,6 +136,7 @@ inline void dummy() {
 
 ///PROTOTYPE_TARGET:SOURCE
 
+///PROTOTYPE_SEGMENT:pchHeader
 ///PROTOTYPE_SEGMENT:srcHeaders
 
 ///PROTOTYPE_ENTER:throwError
