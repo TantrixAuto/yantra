@@ -445,7 +445,9 @@ struct Generator {
 
     /// @brief generates code to include PCH
     inline void generatePchHeader(TextFileWriter& tw, const std::string_view& indent) {
-        tw.writeln("{}#include \"{}\"", indent, grammar.pchHeader);
+        if(grammar.pchHeader.size() > 0) {
+            tw.writeln("{}#include \"{}\"", indent, grammar.pchHeader);
+        }
     }
 
     /// @brief generates code to include header files in the parser's header file

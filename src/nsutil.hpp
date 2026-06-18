@@ -2,12 +2,16 @@
 #pragma once
 ///PROTOTYPE_LEAVE:SKIP
 
+#ifndef UNUSED_DECLARED
 template<typename... T>
 [[maybe_unused]]
 inline void unused(const T&...) {} // NOLINT(hicpp-named-parameter,readability-named-parameter)
+#endif
 
+#ifndef OVERLOAD_DECLARED
 template<class... Ts>
 struct overload : Ts... { using Ts::operator()...; };
+#endif
 
 struct NonCopyable{
     inline ~NonCopyable() = default;
