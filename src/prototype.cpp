@@ -68,6 +68,7 @@ constexpr const char* MSG = "";
 namespace TAG(NSNAME) {
 ///PROTOTYPE_LEAVE:IF_HAS_NS
 struct TAG(CLSNAME) {
+    ///PROTOTYPE_ENTER:errorClass
     struct Error : public std::runtime_error {
         template <typename ...ArgsT>
         static inline auto
@@ -100,6 +101,7 @@ struct TAG(CLSNAME) {
             : std::runtime_error{fmt(r, c, f, m)}, row{r}, col{c}, file{f}, msg{m}
         {}
     };
+    ///PROTOTYPE_LEAVE:errorClass
 
     struct Impl;
     std::unique_ptr<Impl> _impl;

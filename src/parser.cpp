@@ -2233,6 +2233,7 @@ struct Parser {
         }
 
         if(t.text == "error") {
+            grammar.hasErrorBlock = true;
             return set_codeblock(grammar.throwError, t);
         }
 

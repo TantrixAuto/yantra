@@ -296,6 +296,7 @@ struct Grammar : public NonCopyable { // NOLINT(cppcoreguidelines-special-member
     CodeBlock prologue;
     CodeBlock epilogue;
     CodeBlock throwError;
+    bool hasErrorBlock = false;
     bool checkUnusedTokens = true;
     bool checkEmptyCodeblocks = true;
     bool errorUnusedTokens = true;
