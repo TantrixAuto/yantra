@@ -1848,30 +1848,20 @@ struct Generator {
                     tw.writeln("{}", line);
                 }
                 if (eblockName == "stdHeaders") {
-                    if (grammar.stdHeadersEnabled == true) {
-                        skip = false;
-                    }else{
-                        skip = true;
-                    }
+                    skip = (grammar.stdHeadersEnabled == false);
                     break;
                 }
 
                 if (eblockName == "repl") {
                     if (opts().amalgamatedFile == true) {
                         tw.writeln("#define HAS_REPL {}", (grammar.hasREPL == true)?1:0);
-                        skip = false;
-                    }else{
-                        skip = true;
                     }
+                    skip = (opts().amalgamatedFile == false);
                     break;
                 }
 
                 if (eblockName == "fmain") {
-                    if (opts().amalgamatedFile == true) {
-                        skip = false;
-                    }else{
-                        skip = true;
-                    }
+                    skip = (opts().amalgamatedFile == false);
                     break;
                 }
 
@@ -1885,29 +1875,17 @@ struct Generator {
                 }
 
                 if (eblockName == "IF_HAS_NS") {
-                    if(grammar.ns.size() > 0) {
-                        skip = false;
-                    }else{
-                        skip = true;
-                    }
+                    skip = (grammar.ns.size() == 0);
                     break;
                 }
 
                 if (eblockName == "IF_LOG_LEXER") {
-                    if(opts().enableLexerLogging == true) {
-                        skip = false;
-                    }else{
-                        skip = true;
-                    }
+                    skip = (opts().enableLexerLogging == false);
                     break;
                 }
 
                 if (eblockName == "IF_LOG_PARSER") {
-                    if(opts().enableParserLogging == true) {
-                        skip = false;
-                    }else{
-                        skip = true;
-                    }
+                    skip = (opts().enableParserLogging == false);
                     break;
                 }
 
@@ -1916,6 +1894,11 @@ struct Generator {
                     assert(capturing == false);
                     capturing = true;
                     skip = true;
+                    break;
+                }
+
+                if (eblockName == "errorClass") {
+                    skip = (grammar.hasErrorBlock == true);
                     break;
                 }
 
@@ -1944,6 +1927,9 @@ struct Generator {
                         throwError.setCode(tBlock);
                     }
                     capturing = false;
+                    break;
+                }
+                if (eblockName == "errorClass") {
                     break;
                 }
                 if (eblockName == "astNodeDeclsBlock") {
