@@ -238,10 +238,11 @@ struct ParserStateMachineBuilder {
     inline bool
     hasRuleInConfigList(
         const std::vector<const ygp::Config*>& configs,
-        const ygp::Rule& r
+        const ygp::Rule& r,
+        const size_t& cpos
     ) {
         for(auto& c : configs) {
-            if(&(c->rule) == &r) {
+            if((&(c->rule) == &r) && (c->cpos == cpos)) {
                 return true;
             }
         }
@@ -261,7 +262,7 @@ struct ParserStateMachineBuilder {
         while(nexts.size() > 0) {
             std::vector<const ygp::Config*> firsts;
             for(auto& c : nexts) {
-                if(hasRuleInConfigList(configs, c->rule)) {
+                if(hasRuleInConfigList(configs, c->rule, c->cpos) == true) {
                     continue;
                 }
                 configs.push_back(c);
@@ -873,7 +874,7 @@ struct ParserStateMachineBuilder {
         std::vector<const ygp::Config*> configs;
         for(auto& rule : grammar.rules) {
             if(rule->ruleSetName() == grammar.start) {
-                if(!hasRuleInConfigList(configs, *rule)) {
+                if(hasRuleInConfigList(configs, *rule, 0) == false) {
                     auto& ccfg = grammar.createConfig(*rule, 0);
                     configs.push_back(&ccfg);
                 }
