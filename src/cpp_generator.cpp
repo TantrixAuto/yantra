@@ -1379,7 +1379,7 @@ struct Generator {
                 breaked = true;
             }
             tw.writeln("                default:");
-            auto msg = std::format(R"("SYNTAX_ERROR:received:" + k.str() + ", expected:{}")", xss.str());
+            auto msg = std::format(R"("SYNTAX_ERROR", {{{{"received", k.str()}}, {{"expected", "{}" }}}})", xss.str());
             generateError(tw, "k.pos.row", "k.pos.col", "k.pos.file", msg, "                    ", vars);
             tw.writeln("                }} // switch(k.id)");
             if(breaked == true) {

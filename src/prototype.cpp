@@ -70,36 +70,44 @@ namespace TAG(NSNAME) {
 struct TAG(CLSNAME) {
     ///PROTOTYPE_ENTER:errorClass
     struct Error : public std::runtime_error {
-        template <typename ...ArgsT>
-        static inline auto
-        fmtT(const std::format_string<ArgsT...>& msg, ArgsT... args) -> std::string {
-            auto xmsg = std::format(msg, std::forward<ArgsT>(args)...);
-            return xmsg;
-        }
-        static inline auto
-        fmt(const size_t& r, const size_t& c, const std::string_view& f, const std::string& m) -> std::string {
-            auto ymsg = std::format("{}({:03d},{:03d}):{}", f, r, c, m);
-            return ymsg;
-        }
-        template <typename ...ArgsT>
-        static inline auto
-        fmt(const size_t& r, const size_t& c, const std::string_view& f, const std::format_string<ArgsT...>& msg, ArgsT... args) -> std::string {
-            auto xmsg = fmtT(msg, args...);
-            auto ymsg = fmt(r, c, f, xmsg);
-            return ymsg;
-        }
     public:
-        const size_t row = 0;
+        using InitVal = std::variant<std::string, int, double, bool>;
+        using ArgsList = std::vector<std::pair<std::string, InitVal>>;
+
+    private:
+        static inline std::string
+        filename(const std::string& f) {
+            std::filesystem::path p{f};
+            return p.filename().string();
+        }
+
+        static inline auto errorToString(const size_t& l, const size_t& c, const std::string& f, const std::string& m, const ArgsList& a) -> std::string {
+            std::string ret;
+            std::string sep;
+            for (const auto& p : a) {
+                std::visit([&ret, &p, &sep](const auto& v) -> void {
+                    ret += std::format("{}{{{}: {}}}", sep, p.first, v);
+                }, p.second);
+                sep = ", ";
+            }
+            auto ymsg = std::format("?{}({:03d},{:03d}):{}{{{}}}", f, l, c, m, ret);
+            return ymsg;
+        }
+
+    public:
+        const size_t line = 0;
         const size_t col = 0;
         const std::string file;
+        const std::string ffile;
         const std::string msg;
-        template <typename ...ArgsT>
-        inline Error(const size_t& r, const size_t& c, const std::string_view& f, const std::format_string<ArgsT...>& m, ArgsT... args)
-            : std::runtime_error{fmt(r, c, f, m, args...)}, row{r}, col{c}, file{f}, msg{fmtT(m, args...)}
-        {}
-        inline Error(const size_t& r, const size_t& c, const std::string_view& f, const std::string& m)
-            : std::runtime_error{fmt(r, c, f, m)}, row{r}, col{c}, file{f}, msg{m}
-        {}
+        std::vector<std::pair<std::string, InitVal>> args;
+
+        inline std::string loc() const {
+            return std::format("{}({:03d})", ffile, line);
+        }
+
+        inline Error(const size_t& l, const size_t& c, const std::string& f, const std::string& m, const ArgsList& a = {})
+        : std::runtime_error(errorToString(l, c, f, m, a)), line(l), col(c), file(filename(f)), ffile(f), msg(m), args(a) {}
     };
     ///PROTOTYPE_LEAVE:errorClass
 
