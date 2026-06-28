@@ -42,7 +42,6 @@ constexpr unsigned long MAX_REPEAT_COUNT = 100;
 constexpr unsigned long ROW = 1;
 constexpr unsigned long COL = 1;
 constexpr const char* SRC = "";
-constexpr const char* MSG = "";
 
 ///PROTOTYPE_LEAVE:SKIP
 
@@ -140,6 +139,8 @@ struct TAG(CLSNAME) {
 ///PROTOTYPE_LEAVE:IF_HAS_NS
 
 ///PROTOTYPE_ENTER:SKIP
+constexpr std::vector<std::pair<std::string, TAG(Q_NSNAME)TAG(CLSNAME)::Error::InitVal>> MSG = {};
+
 [[noreturn]]
 inline void dummy() {
 ///PROTOTYPE_LEAVE:SKIP
@@ -150,7 +151,7 @@ inline void dummy() {
 ///PROTOTYPE_SEGMENT:srcHeaders
 
 ///PROTOTYPE_ENTER:throwError
-throw TAG(Q_NSNAME)TAG(CLSNAME)::Error(TAG(ROW), TAG(COL), TAG(SRC), TAG(MSG));
+throw TAG(Q_NSNAME)TAG(CLSNAME)::Error(TAG(ROW), TAG(COL), TAG(SRC), "TAG(CODE)", TAG(MSG));
 ///PROTOTYPE_LEAVE:throwError
 
 ///PROTOTYPE_ENTER:SKIP
