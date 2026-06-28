@@ -302,17 +302,18 @@ struct Generator {
         const std::string& line,
         const std::string& col,
         const std::string& file,
+        const std::string& code,
         const std::string& msg,
         const std::string_view& indent,
-        const std::unordered_map<std::string, std::string>& vars
+        std::unordered_map<std::string, std::string> vars
     ) const {
-        auto xvars = vars;
-        xvars["ROW"] = line;
-        xvars["COL"] = col;
-        xvars["SRC"] = file;
-        xvars["MSG"] = msg;
+        vars["ROW"] = line;
+        vars["COL"] = col;
+        vars["SRC"] = file;
+        vars["CODE"] = code;
+        vars["MSG"] = msg;
         StringStreamWriter sw;
-        _expand(sw, throwError.code, true, xvars, indent);
+        _expand(sw, throwError.code, true, vars, indent);
         tw.swriteln(sw);
     }
 
@@ -1285,7 +1286,8 @@ struct Generator {
                 tw.writeln("    }} // case");
             }
             tw.writeln("    }} // switch");
-            generateError(tw, "vi.token.pos.row", "vi.token.pos.col", "vi.token.pos.file", "std::format(\"ASTGEN_ERROR:{}\", vi.ruleID)", "    ", vars);
+            auto msg = std::format(R"({{ {{"ruleID", std::format("{{}}", vi.ruleID)}} }})");
+            generateError(tw, "vi.token.pos.row", "vi.token.pos.col", "vi.token.pos.file", "ASTGEN_ERROR", msg, "    ", vars);
             tw.writeln("}}");
             tw.writeln();
         }
@@ -1379,8 +1381,8 @@ struct Generator {
                 breaked = true;
             }
             tw.writeln("                default:");
-            auto msg = std::format(R"("SYNTAX_ERROR", {{{{"received", k.str()}}, {{"expected", "{}" }}}})", xss.str());
-            generateError(tw, "k.pos.row", "k.pos.col", "k.pos.file", msg, "                    ", vars);
+            auto msg = std::format(R"({{{{"received", k.str()}}, {{"expected", "{}" }}}})", xss.str());
+            generateError(tw, "k.pos.row", "k.pos.col", "k.pos.file", "SYNTAX_ERROR", msg, "                    ", vars);
             tw.writeln("                }} // switch(k.id)");
             if(breaked == true) {
                 tw.writeln("                break;");
@@ -1497,7 +1499,7 @@ struct Generator {
     /// @brief generate Lexer states
     inline void generateLexerStates(TextFileWriter& tw, const std::unordered_map<std::string, std::string>& vars) {
         tw.writeln("            case 0:");
-        generateError(tw, "stream.pos.row", "stream.pos.col", "stream.pos.file", "\"LEXER_INTERNAL_ERROR\"", "                ", vars);
+        generateError(tw, "stream.pos.row", "stream.pos.col", "stream.pos.file", "LEXER_INTERNAL_ERROR", "{{}}", "                ", vars);
 
         for (const auto& ps : grammar.states) {
             auto& state = *ps;
@@ -1678,7 +1680,8 @@ struct Generator {
                 tw.writeln("                state = {};", tset.leaveClosure.first->next->id);
                 tw.writeln("                continue; //leaveClosure");
             }else{
-                generateError(tw, "stream.pos.row", "stream.pos.col", "stream.pos.file", "std::format(\"TOKEN_ERROR:{}\", token.text)", "                ", vars);
+                auto msg = std::format(R"({{ {{"token", std::format("{{}}", token.text)}} }})");
+                generateError(tw, "stream.pos.row", "stream.pos.col", "stream.pos.file", "TOKEN_ERROR", msg, "                ", vars);
             }
         }
     }
