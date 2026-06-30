@@ -726,7 +726,7 @@ struct TAG(Q_NSNAME)TAG(CLSNAME)::Impl {
     TAG(AST) ast;
     Parser parser;
     Lexer lexer;
-    std::ofstream flog;
+    inline static std::ofstream flog;
     bool walking = false;
 
     struct WalkingGuard {
