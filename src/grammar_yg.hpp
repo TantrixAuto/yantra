@@ -754,30 +754,23 @@ struct Grammar : public NonCopyable { // NOLINT(cppcoreguidelines-special-member
     }
 
     inline auto hasItemSet(const std::vector<const ygp::Config*>& cfgs) const -> ygp::ItemSet* {
+        // put the incoming configs into a set
+        std::unordered_set<const ygp::Config*> cfgSet(cfgs.begin(), cfgs.end());
+
+        // for each existing itemset
         for(const auto& is : itemSets) {
+            // compare size
             if(is->configs.size() != cfgs.size()) {
                 continue;
             }
 
-            auto iit = is->configs.begin();
-            auto iite = is->configs.end();
-            auto cit = cfgs.begin();
-            auto cite = cfgs.end();
+            // check if any config in this existing itemset matches any in the incoming itemset
             bool mismatch = false;
-            while((iit != iite) && (cit != cite)) {
-                const auto& icfg = *(*iit);
-                const auto& ccfg = *(*cit);
-
-                if(&(icfg.rule) != &(ccfg.rule)) {
+            for(const auto& icfg : is->configs) {
+                if(cfgSet.contains(icfg) == false) {
                     mismatch = true;
                     break;
                 }
-                if(icfg.cpos != ccfg.cpos) {
-                    mismatch = true;
-                    break;
-                }
-                ++iit;
-                ++cit;
             }
             if(mismatch) {
                 continue;
