@@ -24,7 +24,6 @@ struct TextWriter {
     iwrite(const std::format_string<ArgsT...>& msg, ArgsT... args) {
         auto rv = std::format(msg, std::forward<ArgsT>(args)...);
         ss << indent << rv;
-        ss.flush();
         wrote = true;
     }
 
@@ -33,7 +32,6 @@ struct TextWriter {
     write(const std::format_string<ArgsT...>& msg, ArgsT... args) {
         auto rv = std::format(msg, std::forward<ArgsT>(args)...);
         ss << rv;
-        ss.flush();
         wrote = true;
     }
 
@@ -42,7 +40,6 @@ struct TextWriter {
     writeln(const std::format_string<ArgsT...>& msg, ArgsT... args) {
         auto rv = std::format(msg, std::forward<ArgsT>(args)...);
         ss << indent << rv << "\n";
-        ss.flush();
         ++row;
         wrote = true;
     }
@@ -52,7 +49,6 @@ struct TextWriter {
     xwriteln(const std::format_string<ArgsT...>& msg, ArgsT... args) {
         auto rv = std::format(msg, std::forward<ArgsT>(args)...);
         ss << rv << "\n";
-        ss.flush();
         ++row;
         wrote = true;
     }
@@ -60,7 +56,6 @@ struct TextWriter {
     inline void
     writeln() {
         ss << "\n";
-        ss.flush();
         ++row;
         wrote = true;
     }
