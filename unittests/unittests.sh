@@ -36,12 +36,12 @@ done
 if [[ -n "$MSYSTEM" ]]; then
   MSYS2_ARG_CONV_EXCL=* # set this using export on command line
   CC="cl.exe"
-  FLAGS="/std:c++20 /EHsc /nologo /Fo/tmp/ /Fe/tmp/out.exe"
+  FLAGS="/std:c++23 /EHsc /nologo /Fo/tmp/ /Fe/tmp/out.exe"
   OUT="/tmp/out.exe"
 else
   CC="clang++"
-  FLAGS="-std=c++20 -o /tmp/a.out"
-  FLAGS="$FLAGS -Wall -Werror -Weverything -Wno-padded -Wno-c++98-compat-pedantic -Wno-c++20-compat -Wno-exit-time-destructors -Wno-global-constructors -Wno-weak-vtables -Wno-switch-default -Wno-switch-enum -Wno-header-hygiene -Wno-poison-system-directories"
+  FLAGS="-std=c++23 -o /tmp/a.out"
+  FLAGS="$FLAGS -Wall -Werror -Weverything -Wno-padded -Wno-c++98-compat-pedantic -Wno-c++20-compat -Wno-exit-time-destructors -Wno-global-constructors -Wno-weak-vtables -Wno-switch-default -Wno-switch-enum -Wno-header-hygiene -Wno-poison-system-directories -Wno-unsafe-buffer-usage-in-libc-call"
   if [ -f "/tmp/testpch.hpp.pch" ]; then
     FLAGS="$FLAGS -include-pch /tmp/testpch.hpp.pch"
   fi
@@ -56,7 +56,7 @@ fi
 if [[ ! -n "$MSYSTEM" ]]; then
   if [ ! -f "/tmp/testpch.hpp.pch" ]; then
     if [ -f testpch.hpp ]; then
-      ${CC} -c -std=c++20 testpch.hpp -o /tmp/testpch.hpp.pch
+      ${CC} -c -std=c++23 testpch.hpp -o /tmp/testpch.hpp.pch
     fi
   fi
 fi
@@ -1207,7 +1207,7 @@ expr := NUM(N)
 %}
 
 SEMI := ";";
-STAR := "\*";
+STAR :=> "\*";
 PLUS :=> "\+";
 
 EQ := "=";

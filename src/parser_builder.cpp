@@ -362,17 +362,17 @@ struct ParserStateMachineBuilder {
             cis.reduces.erase(&rx);
         }
 
+        auto& ncfg = grammar.createConfig(config.rule, cpos + 1);
         bool hasExisting = false;
         if(cis.hasShift(rx)) {
             for(auto& xcfg : cis.shifts[&rx].next) {
-                 if(&(xcfg->rule) == &(config.rule)) {
+                 if(xcfg == &ncfg) {
                     hasExisting = true;
                     break;
                 }
             }
         }
         if(hasExisting == false) {
-            auto& ncfg = grammar.createConfig(config.rule, cpos + 1);
             cis.addShift(rx, ncfg, epsilons);
         }
     }
