@@ -517,8 +517,10 @@ struct Parser {
     }
 
     inline Tolkien _reduce(const size_t& len, const size_t& anchor, std::vector<ValueItem*>& childs) {
-        assert(valueStack.size() >= len);
-        assert(stateStack.size() >= len);
+        if((valueStack.size() < len) || (stateStack.size() < len)) {
+            // control flow won't usually reach here
+            throw std::runtime_error("parse error: reduce stack underflow");
+        }
         auto ite = valueStack.end();
         auto it = ite - static_cast<long>(len);
         Tolkien anchorToken;

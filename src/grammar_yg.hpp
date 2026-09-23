@@ -729,7 +729,9 @@ struct Grammar : public NonCopyable { // NOLINT(cppcoreguidelines-special-member
     }
 
     inline auto createConfig(const ygp::Rule& r, const size_t& p) -> ygp::Config& {
-        assert(p <= r.nodes.size());
+        if(p > r.nodes.size()) {
+            throw GeneratorError(__LINE__, __FILE__, r.pos, "INVALID_CONFIG_POSITION:{}>{}", p, r.nodes.size());
+        }
         for(auto& c : configs) {
             if((&(c->rule) == &r) && (c->cpos == p)) {
                 return *c;
