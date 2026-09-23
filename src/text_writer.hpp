@@ -93,7 +93,7 @@ struct TextFileWriter : public TextWriter<std::ofstream> {
     inline void
     _open(const std::filesystem::path& fname) {
         if(fname.empty()) {
-            return;
+            throw std::runtime_error("unable to open output file: empty filename");
         }
         if(ofs.is_open() == true) {
             ofs.close();
