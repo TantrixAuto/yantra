@@ -6,7 +6,7 @@ namespace {
 /// @brief represents a set of configs
 /// This is an intermediate data structure used during the
 /// construction of ItemSets in the LALR state machine
-/// TODO: This class is almost identical to ItemSet, chek if opssible to merge.
+/// TODO: This class is almost identical to ItemSet, check if possible to merge.
 struct CanonicalItemSet : public NonCopyable {
     /// @brief represents all SHIFT actions from this config set
     struct Shift {
@@ -53,14 +53,6 @@ struct CanonicalItemSet : public NonCopyable {
     }
 
     /// @brief add a SHIFT action for the given token @arg rx, from current Config to @arg next Config
-    // inline void addShift(const yglx::RegexSet& rx, const ygp::Config& next) {
-    //     if(hasShift(rx) == nullptr) {
-    //         shifts[&rx] = Shift();
-    //     }
-    //     shifts[&rx].next.push_back(&next);
-    // }
-
-    /// @brief add a SHIFT action for the given token @arg rx, from current Config to @arg next Config
     /// along with @arg epsilon tranitions
     inline void addShift(const yglx::RegexSet& rx, const ygp::Config& next, const std::vector<const ygp::RuleSet*>& epsilons) {
         if(hasShift(rx) == nullptr) {
@@ -78,7 +70,6 @@ struct CanonicalItemSet : public NonCopyable {
         std::vector<const ygp::Config*>& nexts,
         const std::vector<const ygp::RuleSet*>& epsilons
     ) {
-        unused(epsilons);
         if(hasShift(rx) == nullptr) {
             shifts[&rx] = Shift();
             shifts[&rx].epsilons = epsilons;
@@ -116,6 +107,7 @@ struct CanonicalItemSet : public NonCopyable {
     }
 
     /// @brief check if there is a GOTO action for the given RuleSet @arg rs
+    [[maybe_unused]]
     inline bool hasGoto(const ygp::RuleSet& rs, const ygp::Config& cfg) const {
         if(auto it = gotos.find(&rs); it != gotos.end()) {
             for(auto& c : it->second) {
@@ -133,7 +125,6 @@ struct CanonicalItemSet : public NonCopyable {
         const ygp::RuleSet& rs,
         std::vector<const ygp::Config*>& nexts
     ) {
-        unused(&CanonicalItemSet::hasGoto);
         auto& g = gotos[&rs];
         g = std::move(nexts);
         return g;
@@ -560,7 +551,6 @@ struct ParserStateMachineBuilder {
                 auto& cfgs = c.second;
                 log("  shift: rx={}, next_sz={}", rx->name, cfgs.next.size());
                 assert(cfgs.next.size() > 0);
-                // assert(cfgs.next.size() == 1);
                 auto& config = *(cfgs.next.at(0));
                 auto& nextNode = config.rule.getNode(0);
                 auto& cis = grammar.getItemSet(config.rule.pos, cfgs.next);
@@ -574,7 +564,6 @@ struct ParserStateMachineBuilder {
                 auto& cfgs = c.second;
                 log("  reduce: rx={}, next_sz={}", rx.name, cfgs.next.size());
                 if(cfgs.next.size() != 1) {
-                    // throw GeneratorError(__LINE__, __FILE__, config.rule->pos, "REDUCE_SHIFT_CONFLICT:ON:{}{}", rx->name, ss.str());
                     log("R-R conflict: is={}, rx={}, next_sz={}", is.id, rx.name, cfgs.next.size());
                     for(auto& pcfg : cfgs.next) {
                         auto& config = *pcfg;
@@ -583,7 +572,6 @@ struct ParserStateMachineBuilder {
                     }
                 }
 
-                // assert(cfgs.next.size() == 1);
                 auto& config = *(cfgs.next.at(0));
                 if(is.hasShift(rx) != nullptr) {
                     auto p = resolveConflict(config, rx, "");
