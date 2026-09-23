@@ -732,6 +732,18 @@ struct ParserStateMachineBuilder {
             }
         }
 
+        // Precompute name -> (rule, idx) positions once before the fixed-point loop
+        std::unordered_map<std::string, std::vector<std::pair<const ygp::Rule*, size_t>>> occurrences;
+        for(auto& r2 : grammar.rules) {
+            if(r2->nodes.size() == 0) {
+                continue;
+            }
+            for(size_t idx = 0; idx < r2->nodes.size() - 1; ++idx) {
+                auto& n1 = r2->getNode(idx);
+                occurrences[n1.name].emplace_back(r2.get(), idx);
+            }
+        }
+
         size_t changes = 0;
         do {
             changes = 0;
@@ -741,17 +753,8 @@ struct ParserStateMachineBuilder {
                 size_t k = rule.nodes.size();
                 assert(k > 0);
 
-                for(auto& r2 : grammar.rules) {
-                    // if this is true, size() -1 below will underflow
-                    if(r2->nodes.size() == 0) {
-                        continue;
-                    }
-                    for(size_t idx = 0; idx < r2->nodes.size() - 1; ++idx) {
-                        auto& n1 = r2->getNode(idx);
-                        if(n1.name != rule.ruleSetName()) {
-                            continue;
-                        }
-
+                if(auto it = occurrences.find(rule.ruleSetName()); it != occurrences.end()) {
+                    for(auto& [r2, idx] : it->second) {
                         auto& n2 = r2->getNode(idx + 1);
                         if(n2.isRule() == true) {
                             // RULE 2: follow(a) contains first(b), if 'b' is immediately after 'a' in any of the rules
