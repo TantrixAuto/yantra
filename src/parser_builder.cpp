@@ -256,15 +256,17 @@ struct ParserStateMachineBuilder {
     expandConfigs(const std::vector<const ygp::Config*>& initConfig) {
         // create all sub-configs
         std::vector<const ygp::Config*> configs;
+        std::unordered_set<const ygp::Config*> seen;
 
         auto nexts = initConfig;
 
         while(nexts.size() > 0) {
             std::vector<const ygp::Config*> firsts;
             for(auto& c : nexts) {
-                if(hasRuleInConfigList(configs, c->rule, c->cpos) == true) {
+                if(seen.contains(c) == true) {
                     continue;
                 }
+                seen.insert(c);
                 configs.push_back(c);
 
                 if(c->cpos >= c->rule.nodes.size()) {
