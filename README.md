@@ -1,5 +1,9 @@
 # Yantra Parser Generator
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![Version](https://img.shields.io/badge/version-0.4.0-blue.svg)
+![C++](https://img.shields.io/badge/C%2B%2B-23-blue.svg)
+
 ![Yantra Logo](docs/icon.png)
 
 Yantra is a powerful compiler compiler and LALR(1) parser generator written in C++, with the following core features:
@@ -13,6 +17,30 @@ Yantra is a powerful compiler compiler and LALR(1) parser generator written in C
 - An optional amalgamated mode, where the entire parser is generated as a single cpp file, along with a full-featured main() function.
 
 The name ***Yantra*** is Sanskrit for ***machine***, as in ***state machine*** in this context.
+
+## Quick Start
+
+Yantra has no dependencies beyond the C++ standard library, so building it is a plain CMake build:
+
+```bash
+git clone git@github.com:TantrixAuto/yantra.git
+cd yantra
+mkdir build && cd build
+cmake ..
+cmake --build .
+```
+
+This produces the `ycc` executable in `bin/`. Generate a parser from a grammar passed directly on the command line:
+
+```bash
+bin/ycc -c ascii -s 'start := stmts; stmts := stmts stmt; stmts := stmt; stmt := ID; ID := "[A-Za-z]+"; WS := "\s"!;' -a -n hello
+```
+
+This writes `hello.cpp` (an amalgamated, self-contained parser with its own `main()`) and `hello.log`. See the [Build Instructions](docs/050_build.md) and [Tutorial](tutorial/) below for compiling and running the generated parser, and for a real walk-through of the grammar syntax.
+
+## License
+
+Yantra is licensed under the [MIT License](LICENSE).
 
 ## Essential Reading
 The following are a set of key links to get familiar with Yantra.
