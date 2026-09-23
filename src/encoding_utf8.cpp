@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <cstddef>
 #include <iostream>
+#include <algorithm>
 #include "encodings.hpp"
 ///PROTOTYPE_LEAVE:SKIP
 
@@ -18,7 +19,23 @@ struct UnicodeSubset {
     char_t to;
 };
 
-const UnicodeSubset letters[] = {
+constexpr bool isSortedNonOverlapping(const UnicodeSubset* lst, size_t len) {
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
+#endif
+    for (size_t i = 1; i < len; ++i) {
+        if (lst[i].from <= lst[i - 1].to) {
+            return false;
+        }
+    }
+    return true;
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
+}
+
+constexpr UnicodeSubset letters[] = {
     {0x00041,0x0005A},{0x00061,0x0007A},{0x000AA,0x000AA},{0x000B5,0x000B5},{0x000BA,0x000BA},{0x000C0,0x000D6},{0x000D8,0x000DE},
     {0x000DF,0x000F6},{0x000F8,0x000FF},{0x00100,0x00100},{0x00101,0x00101},{0x00102,0x00102},{0x00103,0x00103},{0x00104,0x00104},
     {0x00105,0x00105},{0x00106,0x00106},{0x00107,0x00107},{0x00108,0x00108},{0x00109,0x00109},{0x0010A,0x0010A},{0x0010B,0x0010B},
@@ -256,8 +273,9 @@ const UnicodeSubset letters[] = {
     {0x1DF0A,0x1DF0A},{0x1DF0B,0x1DF2A},{0x1E030,0x1E06D},{0x1E100,0x1E12C},{0x1E137,0x1E13D},{0x1E14E,0x1E14E},{0x1E290,0x1E2AD},
     {0x1E2C0,0x1E2EB},{0x1E4D0,0x1E4EA},{0x1E4EB,0x1E4EB},{0x1E5D0,0x1E5ED},{0x1E5F0,0x1E5F0},{0x1E7E0,0x1E8C4},{0x1E900,0x1E921},
 };
+static_assert(isSortedNonOverlapping(letters, sizeof(letters) / sizeof(UnicodeSubset)));
 
-const UnicodeSubset  digits[] = {
+constexpr UnicodeSubset digits[] = {
     {0x00030,0x00039},{0x000B2,0x000B3},{0x000B9,0x000B9},{0x000BC,0x000BE},{0x00660,0x00669},{0x006F0,0x006F9},{0x007C0,0x007C9},
     {0x00966,0x0096F},{0x009E6,0x009EF},{0x009F4,0x009F9},{0x00A66,0x00A6F},{0x00AE6,0x00AEF},{0x00B66,0x00B6F},{0x00B72,0x00B77},
     {0x00BE6,0x00BEF},{0x00BF0,0x00BF2},{0x00C66,0x00C6F},{0x00C78,0x00C7E},{0x00CE6,0x00CEF},{0x00D58,0x00D5E},{0x00D66,0x00D6F},
@@ -280,32 +298,34 @@ const UnicodeSubset  digits[] = {
     {0x1CCF0,0x1CCF9},{0x1D2C0,0x1D2F3},{0x1D360,0x1D378},{0x1D7CE,0x1D7FF},{0x1E140,0x1E149},{0x1E2F0,0x1E2F9},{0x1E4F0,0x1E4F9},
     {0x1E5F1,0x1E5FA},{0x1E8C7,0x1E8CF},{0x1E950,0x1E959},{0x1EC71,0x1ECAB},{0x1ECAD,0x1ECAF},{0x1ECB1,0x1ED2D},{0x1ED2F,0x1ED3D},
 };
+static_assert(isSortedNonOverlapping(digits, sizeof(digits) / sizeof(UnicodeSubset)));
 
-const UnicodeSubset whitespace[] = {
+constexpr UnicodeSubset whitespace[] = {
     {0x00020,0x00020},{0x000A0,0x000A0},{0x01680,0x01680},{0x02000,0x0200A},{0x0202F,0x0202F},{0x0205F,0x0205F},{0x03000,0x03000},
 };
+static_assert(isSortedNonOverlapping(whitespace, sizeof(whitespace) / sizeof(UnicodeSubset)));
 
-const UnicodeSubset newline[] = {
+constexpr UnicodeSubset newline[] = {
     {0x0000A,0x0000A},{0x0000D,0x0000D},
 };
+static_assert(isSortedNonOverlapping(newline, sizeof(newline) / sizeof(UnicodeSubset)));
 
 inline bool check(const UnicodeSubset* lst, const size_t& len, const char_t& ch) {
-    for (size_t i = 0; i < len; ++i) {
-
 #if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
 #endif
-        auto& wss = lst[i];
+    auto it = std::upper_bound(lst, lst + len, ch, [](const char_t& v, const UnicodeSubset& r) {
+        return v < r.from;
+    });
+    if (it == lst) {
+        return false;
+    }
+    --it;
+    return ch <= it->to;
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif
-
-        if ((ch >= wss.from) && (ch <= wss.to)) {
-            return true;
-        }
-    }
-    return false;
 }
 
 inline bool isSpace(const char_t& ch) {

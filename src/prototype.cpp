@@ -54,6 +54,7 @@ constexpr const char* SRC = "";
 #include <vector>
 #include <variant>
 #include <ranges>
+#include <algorithm>
 #include <format>
 #include <print>
 #include <filesystem>
