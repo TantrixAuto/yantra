@@ -742,6 +742,10 @@ struct ParserStateMachineBuilder {
                 assert(k > 0);
 
                 for(auto& r2 : grammar.rules) {
+                    // if this is true, size() -1 below will underflow
+                    if(r2->nodes.size() == 0) {
+                        continue;
+                    }
                     for(size_t idx = 0; idx < r2->nodes.size() - 1; ++idx) {
                         auto& n1 = r2->getNode(idx);
                         if(n1.name != rule.ruleSetName()) {
