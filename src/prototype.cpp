@@ -817,6 +817,7 @@ void TAG(Q_NSNAME)TAG(CLSNAME)::endStream() {
 void TAG(Q_NSNAME)TAG(CLSNAME)::readFile(const std::string& filename) {
     std::ifstream is(filename);
     if(!is) {
+        // cannot use Error here
         throw std::runtime_error("Cannot open file:" + filename);
     }
     _impl->read(is, filename);
