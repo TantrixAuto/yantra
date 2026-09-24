@@ -1,5 +1,5 @@
 calc: calc.cpp
-	clang++ --std=c++20  -o $@ $<
+	clang++ --std=c++23  -o $@ $<
 
 calc.cpp: calc.yantra
 	ycc -f $< -a

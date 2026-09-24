@@ -89,7 +89,7 @@ To compile the generated parser, run the following based on your operating syste
 
 ```bash
 # Linux/Mac
-clang++ --std=c++20  -o calc calc.cpp
+clang++ --std=c++23  -o calc calc.cpp
 
 # Windows
 cl calc.cpp
@@ -122,7 +122,7 @@ For the rest of this tutorial, we will repeatedly perform these steps, viz.: mod
 
 ```
 calc: calc.cpp
-	clang++ --std=c++20  -o $@ $<
+	clang++ --std=c++23  -o $@ $<
 
 calc.cpp: calc.yantra
 	ycc -f $< -a

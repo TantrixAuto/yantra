@@ -203,7 +203,7 @@ The following is the list of pragmas supported by Yantra
 | std_header          | `%std_header no;` | No | Grammar | All necessary standard headers are included in the generated source file by default. <br/>Use this to disable, if for example, standard headers are included via the PCH header file, or any other header files |
 | hdr_header          | `%hdr_header <fstream>;`<br/>`%hdr_header "config.hpp";` | Yes | Grammar | Header files to be added to the generated header file |
 | src_header          | `%src_header <assert.h>;` | Yes | Grammar | Header files to be added to the generated source file |
-| class_member        | `%class_member int value = 0;` | Yes | Grammar | Additional members to be added to the Parser class |
+| class_members       | `%class_members cpp %{ int value = 0; %}` | Yes | Grammar | Additional members to be added to the Parser class |
 | encoding            | `%encoding utf8;` | No | Grammar | The character encoding for the parser input.<br/>Currently supports `utf8` by default, or `ascii`  |
 | check_unused_tokens | `%check_unused_tokens no;` | No | Grammar | Yantra gives an error if any tokens are not used in the rules.<br/>Enabled by default, use this pragma to disable |
 | auto_resolve        | `%auto_resolve no;` | No | Grammar | Yantra attempts to automatically resolve SHIFT-REDUCE conflicts.<br/>Enabled by default, use this pragma to disable |
@@ -216,7 +216,7 @@ The following is the list of pragmas supported by Yantra
 | error               | `%error %{ ... %}` | No | Grammar | Set codeblock for handling errors |
 | start               | `%start entry_rule;` | No | Grammar| Set name of initial rule. Default value `start` |
 | function            | `%function stmt_rule CppWalker::str() -> std::string;` | Yes | Rule | Define additional functions associated with a rule set<br/>See [Functions](020_concepts.md#functions) in concepts for more details |
-| left                | `%left PLUS STAR;` | Yes | Lexer | Specify left association for given list of tokens |
+| left                | `%left PLUS MINUS;` | Yes | Lexer | Specify left association for given list of tokens |
 | right               | `%right ASSIGN_EQ;` | Yes | Lexer | Specify right association for given list of tokens |
 | token               | `%token SEMI VAR;` | Yes | Lexer | Specify no association for given list of tokens |
 | fallback            | `%fallback ID VAR WHILE;` | Yes | Lexer | Specify fallabck for given list of tokens. If VAR is not a valid token in any rule, try it as an ID token |

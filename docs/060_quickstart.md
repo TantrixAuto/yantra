@@ -11,7 +11,7 @@ Tokens
 The most common grammar related pragmas include
 - %class: for specifying the class name of the generated Parser, default YantraModule
 - %namespace: for specifying the namespace of the Parser class, default none
-- %class_member: additional class members to be added to the Parser class
+- %class_members: additional class members to be added to the Parser class
 and so on.
 
 Walker-related pragmas include:

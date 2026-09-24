@@ -19,9 +19,9 @@ We can do this by specifying a `-a` option, like this:
 ycc -f mygrammar.y -a
 ```
 
-In addition, it also generates the following files:
-- a .log file that contains a log of the processing operations, and
-- a .md file, that contains the parsed grammar and state tables for debugging
+Every `ycc` invocation (with or without `-a`) also generates a .log file that contains a log of the processing operations.
+
+Separately, passing `-g <gfilename>` generates a .md file containing the parsed grammar and state tables for debugging. This is not automatic -- it only happens when `-g` is explicitly given.
 
 ## Approach
 Yantra redefines how we see parser generators.

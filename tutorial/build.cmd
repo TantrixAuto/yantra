@@ -12,8 +12,8 @@ goto :eof
 
 :calc
 
-echo Generating calc.cpp from calc.y...
-ycc -f calc.y -a
+echo Generating calc.cpp from calc.yantra...
+ycc -f calc.yantra -a
 if errorlevel 1 (
     echo ERROR: ycc generation failed. Is 'ycc' in your system PATH?
     exit /b 1
