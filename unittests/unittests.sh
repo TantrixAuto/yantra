@@ -1771,6 +1771,42 @@ run_failing_test -s 'var value;'
 run_failing_test -s 'var while;'
 
 #############################
+# regression test for _findSmallestSuperset (lexer_builder.cpp): when a
+# literal token is a subset of more than one broader closure pattern of
+# DIFFERENT specificity that both match the same input length, the lexer
+# must merge it into the narrowest (most specific) one, not just whichever
+# one happens to be declared/discovered first. Here "ffa" is simultaneously
+# a valid HEXDIGIT ([0-9a-fA-F]+) and a valid ID ([a-z]+) match, tied in
+# length -- must resolve to HEXDIGIT (22 possible characters), the tighter
+# of the two, not ID (26 possible characters). Before this fix, this
+# resolved to whichever candidate _findSmallestSuperset happened to reach
+# first during traversal (ID, in this grammar) instead of the smallest one.
+grammar='
+%class Test;
+start := stmts;
+stmts := stmts stmt;
+stmts := stmt;
+stmt := FF SEMI;
+stmt := DIGIT SEMI;
+stmt := HEXDIGIT SEMI;
+stmt := ID SEMI;
+
+FF := "ff";
+DIGIT := "[0-9]+";
+HEXDIGIT := "[0-9a-fA-F]+";
+ID := "[a-z]+";
+SEMI := ";";
+WS := "\s"!;
+'
+
+compile_grammar "$grammar" 0
+run_passing_test -s 'ff;' -t '0:start_1(1:stmts_2(2:stmt_1(3:FF(ff) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'ffa;' -t '0:start_1(1:stmts_2(2:stmt_3(3:HEXDIGIT(ffa) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'abc;' -t '0:start_1(1:stmts_2(2:stmt_4(3:ID(abc) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s '123;' -t '0:start_1(1:stmts_2(2:stmt_2(3:DIGIT(123) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'ff; ffa; abc; 123;' -t '0:start_1(1:stmts_1(2:stmts_1(3:stmts_1(4:stmts_2(5:stmt_1(6:FF(ff) 6:SEMI(;))) 4:stmt_3(5:HEXDIGIT(ffa) 5:SEMI(;))) 3:stmt_4(4:ID(abc) 4:SEMI(;))) 2:stmt_2(3:DIGIT(123) 3:SEMI(;))) 1:_tEND())'
+
+#############################
 echo All tests done
 echo PASSED $passcount
 echo FAILED $failcount

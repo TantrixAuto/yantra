@@ -248,14 +248,59 @@ struct Optimizer {
         return false;
     }
 
-    //TODO: find smallest superset
-    // right now this function returns the first valid superset
+    static inline auto atomSize(const yglx::WildCard&) -> uint64_t {
+        return std::numeric_limits<uint64_t>::max();
+    }
+
+    static inline auto atomSize(const yglx::LargeEscClass&) -> uint64_t {
+        return std::numeric_limits<uint64_t>::max() - 1;
+    }
+
+    static inline auto atomSize(const yglx::RangeClass& r) -> uint64_t {
+        return (r.ch2 >= r.ch1) ? (r.ch2 - r.ch1 + 1) : 0;
+    }
+
+    static inline auto atomSize(const yglx::Class& c) -> uint64_t {
+        if(c.negate == true) {
+            return std::numeric_limits<uint64_t>::max() - 2;
+        }
+        uint64_t total = 0;
+        for(auto& a : c.atoms) {
+            total += std::visit([](const auto& x) -> uint64_t { return atomSize(x); }, a);
+        }
+        return total;
+    }
+
+    static inline auto transitionSize(const yglx::Transition& tx) -> uint64_t {
+        return std::visit([](const auto& t) -> uint64_t {
+            using T = std::decay_t<decltype(t)>;
+            if constexpr(std::is_same_v<T, yglx::PrimitiveTransition>) {
+                return std::visit([](const auto& a) -> uint64_t { return atomSize(a); }, t.atom.atom);
+            }else if constexpr(std::is_same_v<T, yglx::ClassTransition>) {
+                return atomSize(t.atom);
+            }else{
+                //ClosureTransition/SlideTransition aren't character
+                //classes and shouldn't realistically show up as a
+                //superset candidate here. Give them the largest
+                //possible size so a real character-matching candidate
+                //always wins the comparison if one exists.
+                return std::numeric_limits<uint64_t>::max();
+            }
+        }, tx.t);
+    }
+
+    // find the smallest (tightest) valid superset of subTx in superState,
+    // not just the first one found -- e.g. if subTx is 'v' and superState
+    // has both a [a-z] transition and a tighter [a-v] transition, prefer
+    // the latter.
     static inline auto
     _findSmallestSuperset(
         const yglx::Transition* subTx,
         const yglx::State* superState,
         const bool& isClosure
     ) -> const yglx::Transition* {
+        const yglx::Transition* best = nullptr;
+        uint64_t bestSize = std::numeric_limits<uint64_t>::max();
         for(const auto& superTx : superState->transitions) {
             if(isClosure == true) {
                 if(superTx->next->closure == nullptr) {
@@ -271,11 +316,17 @@ struct Optimizer {
                 continue;
             }
 
-            if(subTx->isSubsetOf(*superTx) == true) {
-                return superTx;
+            if(subTx->isSubsetOf(*superTx) == false) {
+                continue;
+            }
+
+            auto sz = transitionSize(*superTx);
+            if((best == nullptr) || (sz < bestSize)) {
+                best = superTx;
+                bestSize = sz;
             }
         }
-        return nullptr;
+        return best;
     }
 
     static inline auto
