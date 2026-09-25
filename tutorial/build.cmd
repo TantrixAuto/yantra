@@ -21,7 +21,7 @@ if errorlevel 1 (
 
 
 echo Compiling 'calc.cpp' to 'calc.exe'...
-cl calc.cpp
+cl /std:c++23 /EHsc /nologo calc.cpp
 if errorlevel 1 (
     echo.
     echo ERROR: C++ Compilation failed.

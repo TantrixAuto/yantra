@@ -92,7 +92,7 @@ To compile the generated parser, run the following based on your operating syste
 clang++ --std=c++23  -o calc calc.cpp
 
 # Windows
-cl calc.cpp
+cl /std:c++23 /EHsc /nologo calc.cpp
 ```
 
 To test the generated parser executable, run the following:
@@ -160,7 +160,7 @@ if errorlevel 1 (
 
 
 echo Compiling 'calc.cpp' to 'calc.exe'...
-cl calc.cpp
+cl /std:c++23 /EHsc /nologo calc.cpp
 if errorlevel 1 (
     echo.
     echo ERROR: C++ Compilation failed.
