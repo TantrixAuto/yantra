@@ -48,19 +48,19 @@ The following 4 recipes are all the combinations of the above.
 |----------------------|-------------|
 | [inline-amalgamated](inline-amalgamated/)      | This is the most basic usage. It produces a single .cpp file combining the main() and all the actions.|
 | > Generate           | `./bin/ycc -f ../../recipes/inline-amalgamated/grammar.y -a`|
-| > Build              | `clang++ -g -Wall --std=c++20 grammar.cpp`|
+| > Build              | `clang++ -g -Wall --std=c++23 grammar.cpp`|
 | > Run                | `./a.out -s "2 * 3 + 1"`|
 | [external-amalgamated](external-amalgamated/)  | This produces a .cpp file containing the main(), and all the actions are in a separate .cpp file.|
 | > Generate           | `./bin/ycc -f ../../recipes/external-amalgamated/grammar.y -a`|
-| > Build              | `clang++ -g -Wall --std=c++20 -I . grammar.cpp ../../recipes/external-amalgamated/compiler_impl.cpp`|
+| > Build              | `clang++ -g -Wall --std=c++23 -I . grammar.cpp ../../recipes/external-amalgamated/compiler_impl.cpp`|
 | > Run                | `./a.out -s "2 + 1 * 3"`|
 | [inline-separate](inline-separate/)           | This produces a .cpp file containing all the actions, and main() is in a separate .cpp file.|
 | > Generate           | `./bin/ycc -f ../../recipes/inline-separate/grammar.y`|
-| > Build              | `clang++ -g -Wall --std=c++20 -I . grammar.cpp ../../recipes/inline-separate/main.cpp`|
+| > Build              | `clang++ -g -Wall --std=c++23 -I . grammar.cpp ../../recipes/inline-separate/main.cpp`|
 | > Run                | `./a.out "2 + 1 * 3"`|
 | [external-separate](external-separate/)        | This produces a .cpp file containing only the parser, while all the actions and main() is in a separate .cpp file.|
 | > Generate           | `./bin/ycc -f ../../recipes/external-separate/grammar.y`|
-| > Build              | `clang++ -g -Wall --std=c++20 -I . grammar.cpp ../../recipes/external-separate/main.cpp`|
+| > Build              | `clang++ -g -Wall --std=c++23 -I . grammar.cpp ../../recipes/external-separate/main.cpp`|
 | > Run                | `./a.out "2 + 1 * 3"`|
 
 ## Multiple walkers
@@ -71,7 +71,7 @@ It implements two walkers, `CppWalker` and `JavaWalker`.
 |----------------------|-------------|
 | [multiple-walkers](multiple-walkers/)      | This is minimal example of using multiplle walkers againsta single grammar. It produces a single .cpp file combining the main() and all the walkers.|
 | > Generate                            | `./bin/ycc -f ../../recipes/multiple-walkers/grammar.y -a`|
-| > Build                               | `clang++ -g -Wall --std=c++20 grammar.cpp`|
+| > Build                               | `clang++ -g -Wall --std=c++23 grammar.cpp`|
 | > Run with default walker(CppWalker)  | `./a.out -s "a = a::b;"`|
 | > Run with CppWalker                  | `./a.out -s "a = a::b;" -w CppWalker`|
 | > Run with JavaWalker                 | `./a.out -s "a = a::b;" -w JavaWalker`|
