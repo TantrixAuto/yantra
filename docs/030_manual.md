@@ -198,26 +198,26 @@ The following is the list of pragmas supported by Yantra
 | Name                | Syntax | Repeatable | Scope | Description |
 |---------------------|--------|-------------|------|-------------|
 | class               | `%class MyModule;` | No | Grammar | Defines the name of the class representing this Parser |
-| namespace           | `%namespace ast::MyGrammar;` | No | Grammar | Defines the namespace for the Parser class |
+| namespace           | `%namespace MyGrammar;` | No | Grammar | Defines the namespace for the Parser class. Only a single identifier is accepted -- not a scoped `::` path |
 | pch_header          | `%pch_header "pch.hpp";` | No | Grammar | The precompiled header, if any, for the cpp file |
-| std_header          | `%std_header no;` | No | Grammar | All necessary standard headers are included in the generated source file by default. <br/>Use this to disable, if for example, standard headers are included via the PCH header file, or any other header files |
+| std_header          | `%std_header off;` | No | Grammar | All necessary standard headers are included in the generated source file by default. <br/>Use this to disable, if for example, standard headers are included via the PCH header file, or any other header files |
 | hdr_header          | `%hdr_header <fstream>;`<br/>`%hdr_header "config.hpp";` | Yes | Grammar | Header files to be added to the generated header file |
 | src_header          | `%src_header <assert.h>;` | Yes | Grammar | Header files to be added to the generated source file |
 | class_members       | `%class_members cpp %{ int value = 0; %}` | Yes | Grammar | Additional members to be added to the Parser class |
 | encoding            | `%encoding utf8;` | No | Grammar | The character encoding for the parser input.<br/>Currently supports `utf8` by default, or `ascii`  |
-| check_unused_tokens | `%check_unused_tokens no;` | No | Grammar | Yantra gives an error if any tokens are not used in the rules.<br/>Enabled by default, use this pragma to disable |
-| auto_resolve        | `%auto_resolve no;` | No | Grammar | Yantra attempts to automatically resolve SHIFT-REDUCE conflicts.<br/>Enabled by default, use this pragma to disable |
-| warn_resolve        | `%warn_resolve no;` | No | Grammar | If auto_resolve is enabled, Yantra gives a warning when conflicts are resolved.<br/>Enabled by default, use this pragma to disable |
+| check_unused_tokens | `%check_unused_tokens off;` | No | Grammar | Yantra gives an error if any tokens are not used in the rules.<br/>Enabled by default, use this pragma to disable |
+| auto_resolve        | `%auto_resolve off;` | No | Grammar | Yantra attempts to automatically resolve SHIFT-REDUCE conflicts.<br/>Enabled by default, use this pragma to disable |
+| warn_resolve        | `%warn_resolve off;` | No | Grammar | If auto_resolve is enabled, Yantra gives a warning when conflicts are resolved.<br/>Enabled by default, use this pragma to disable |
 | walkers             | `%walkers CppWalker JavaWalker;` | No | Grammar | Specify list of walkers used in this Parser.<br/>See [Walkers](020_concepts.md#walkers) in concepts for more details |
 | default_walker      | `%default_walker JavaWalker;` | No | Grammar | Set the default walker to use with unnamed semantic actions |
 | walker_output       | `%walker_output CppWalker text_file cpp;` | Yes | Walker | Set the output type for the specified walker.<br/>Can be `text_file` or `binary_file`, followed by the extension for the generated file<br/>See [Walker Output](020_concepts.md#walker-output) in concepts for more details |
-| walker_traversal    | `%walker_traversal CppWalker top-down;` | Yes | Walker | Set the traversal type for the specified walker.<br/>Can be `top-down` or `manual`<br/>See [Walker Traversal](020_concepts.md#walker-traversal) in concepts for more details |
-| members             | `%members CppWalker int i = 0;` | Yes | Walker | Set additional class members for the specified walker |
+| walker_traversal    | `%walker_traversal CppWalker top_down;` | Yes | Walker | Set the traversal type for the specified walker.<br/>Can be `top_down` or `manual`<br/>See [Walker Traversal](020_concepts.md#walker-traversal) in concepts for more details |
+| members             | `%members CppWalker %{ int i = 0; %}` | Yes | Walker | Set additional class members for the specified walker |
 | error               | `%error %{ ... %}` | No | Grammar | Set codeblock for handling errors |
 | start               | `%start entry_rule;` | No | Grammar| Set name of initial rule. Default value `start` |
 | function            | `%function stmt_rule CppWalker::str() -> std::string;` | Yes | Rule | Define additional functions associated with a rule set<br/>See [Functions](020_concepts.md#functions) in concepts for more details |
 | left                | `%left PLUS MINUS;` | Yes | Lexer | Specify left association for given list of tokens |
 | right               | `%right ASSIGN_EQ;` | Yes | Lexer | Specify right association for given list of tokens |
 | token               | `%token SEMI VAR;` | Yes | Lexer | Specify no association for given list of tokens |
-| fallback            | `%fallback ID VAR WHILE;` | Yes | Lexer | Specify fallabck for given list of tokens. If VAR is not a valid token in any rule, try it as an ID token |
+| fallback            | `%fallback ID VAR;` | Yes | Lexer | Specify fallback for given list of tokens. If VAR is not a valid token in any rule, try it as an ID token. Currently only 2 tokens per `%fallback` line are safe to use -- 3 or more crashes `ycc` (see CODE_REVIEW.md) |
 | lexer_mode          | `%lexer_mode ML_COMMENT;` | Yes | Lexer | Start a new Lexer mode<br/>See [Lexer Modes](020_concepts.md#lexer-modes) in concepts for more details |

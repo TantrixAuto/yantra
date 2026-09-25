@@ -307,14 +307,16 @@ Observe the output:
 ```
 Adding:
 Number: 42
+Adding:
 Subtracting:
 Number: 55
-Adding:
 Number: 5
 Number: 10
 ```
 
-This seems to suggest that the parser hit the first `PLUS` and recogized that this was an `addexpr`, with the `NUMBER` 42 as its left expression. It then proceeded to evaluate the part after the `PLUS` as a `numexpr`, encountered the `MINUS`, and recognised that past as a `subexpr`, and so on. The net result is that the rightmost part of the whole expression gets evaluated first: `5+10`, then `55 - result`, then `42 + result`. This is the default behaviour, but it is also wrong. Fortunately, we can change it.
+This seems to suggest that the parser hit the first `PLUS` and recognized that this was an `addexpr`, with the `NUMBER` 42 as its left expression. The part after that `PLUS` is itself another `addexpr`, whose left expression is a `subexpr` (`55 - 5`) and whose right expression is `10`. So the net result is `42 + ((55 - 5) + 10)`.
+
+Without `%left`/`%right`, there is no rule for which of two competing operators should be evaluated first -- the actual grouping you get depends on incidental details like the order `PLUS` and `MINUS` happen to be declared in the grammar file, not on anything resembling left-to-right or right-to-left evaluation. This is the default behaviour, and it's not something you should rely on. Fortunately, we can fix it.
 
 We can specify that if a particular TOKEN is used in a rule, evaluation should be left-to-right instead, which means that any rule on the left of the token should be fully evaluated before any rule to its right (which is the order in which calculations happen in the real world). We do this through a pragma called `%left`, for both `PLUS` and `MINUS`. Please note: this pragma should appear anywhere _before_ the tokens that it lists appear in the grammar file.
 

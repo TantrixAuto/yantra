@@ -25,46 +25,5 @@ cmake --build .
 bin/ycc --help
 ```
 
-### 5. generate a sample parser
-```
-bin/ycc -f ../samples/basic.y -a
-```
-
-### 6. observe that two files were generated:
-```
-basic.cpp
-basic.log
-```
-
-### 7. build the generated parser
-```
-clang++ --std=c++20 basic.cpp
-```
-
-### 8. run the parser
-```
-./a.out --help
-```
-
-### 9. Run the parser, for C++ generation
-```
-./a.out -s "z = a::b::C;" -w CppWalker
-```
-
-Observe the following output
-```
-z = a::b::C
-```
-
-### 10. Run the parser, for Java generation
-```
-./a.out -s "z = a::b::C;" -w JavaWalker
-```
-
-Observe the following output
-```
-z = a.b.C
-```
-
 ## Finally
-Read the [Quickstart](060_quickstart.md) document for a gentle introduction to the content of the basic.y file.
+Follow the [Tutorial](../tutorial/) for a hands-on, step-by-step walkthrough of generating, building and running a parser with `ycc` -- it's the maintained, working equivalent of the sample-parser walkthrough that used to live here. Read the [Quickstart](060_quickstart.md) document first for a gentle introduction to the structure of a grammar file.
