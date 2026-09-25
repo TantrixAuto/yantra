@@ -30,13 +30,62 @@ cmake ..
 cmake --build .
 ```
 
-This produces the `ycc` executable in `bin/`. Generate a parser from a grammar passed directly on the command line:
+This produces the `ycc` executable in `bin/`. Save a grammar file, `hello.y`:
 
-```bash
-bin/ycc -c ascii -s 'start := stmts; stmts := stmts stmt; stmts := stmt; stmt := ID; ID := "[A-Za-z]+"; WS := "\s"!;' -a -n hello
+```
+start := stmts;
+stmts := stmts stmt;
+stmts := stmt;
+stmt := ID;
+
+ID := "[A-Za-z]+";
+WS := "\s"!;
 ```
 
-This writes `hello.cpp` (an amalgamated, self-contained parser with its own `main()`) and `hello.log`. See the [Build Instructions](docs/050_build.md) and [Tutorial](tutorial/) below for compiling and running the generated parser, and for a real walk-through of the grammar syntax.
+Then generate a parser from it:
+
+```bash
+bin/ycc -c ascii -f hello.y -a
+```
+
+This writes `hello.cpp` (an amalgamated, self-contained parser with its own `main()`) and `hello.log`. Compile it with any C++23 compiler:
+
+```bash
+# clang
+clang++ --std=c++23 -o hello hello.cpp
+
+# gcc
+g++ --std=c++23 -o hello hello.cpp
+
+# MSVC (cl.exe, from a Developer Command Prompt)
+cl /std:c++23 /EHsc /nologo hello.cpp
+```
+
+The grammar above recognizes one or more whitespace-separated alphabetic words. `-s <string>` feeds that string directly to the parser as input (as opposed to `-f <filename>`, which reads from a file, or `-i`, which reads interactively from the console):
+
+```bash
+# succeeds silently
+$ ./hello -s "hello world"
+$ echo $?
+0
+```
+
+```bash
+# -t1 prints the parsed AST
+$ ./hello -s "hello world" -t1
+0:start_1(1:stmts_1(2:stmts_2(3:stmt_1(4:ID(hello))) 2:stmt_1(3:ID(world))) 1:_tEND())
+```
+
+```bash
+# fails: ID only matches letters, "123" isn't valid input for this grammar
+$ ./hello -s "hello 123"
+s1-err:?a1.in(001,007):TOKEN_ERROR{{token: }}
+hello 123
+$ echo $?
+1
+```
+
+See the [Build Instructions](docs/050_build.md) and [Tutorial](tutorial/) below for a real walk-through of the grammar syntax.
 
 ## License
 
