@@ -124,6 +124,14 @@ Number: 3
 
 See the [Build Instructions](docs/050_build.md) and [Tutorial](tutorial/) below for a real walk-through of the grammar syntax.
 
+## How is this different?
+
+- **vs. Bison / Yacc / Lemon** (the classic LALR(1) family -- Lemon, from SQLite, is Yantra's direct stated inspiration): these run semantic actions *during* parsing, as each rule reduces, bottom-up. Yantra always builds the full AST first, then walks it top-down in a separate pass, so a parent rule's action can run before its children are visited, and a single grammar can define more than one walker (e.g. one that emits C++, another that emits Java, from the same parse). Getting either of those out of the Bison family means hand-building your own AST and walker on top.
+- **vs. ANTLR**: ANTLR's visitor pattern is genuinely similar in spirit -- it also lets you walk a fully-built parse tree after parsing completes. The real differences are narrower: Yantra targets C++ only (ANTLR generates for many languages), ships its own integrated lexer with mode-stack support instead of a separate lexer generator, and uses classic LALR(1) table-driven parsing rather than ANTLR's adaptive LL(*) algorithm. ANTLR is far more mature and widely used; Yantra is a much smaller, newer, single-maintainer project.
+- **vs. tree-sitter**: a different problem entirely -- tree-sitter is built for incremental, error-tolerant parsing embedded in editors and IDEs (what GitHub, Neovim, etc. use it for), not for generating a compiler/codegen backend. Yantra doesn't do incremental reparsing and isn't trying to.
+
+See [Known Limitations](KNOWN_LIMITATIONS.md) for an honest list of what Yantra doesn't do yet.
+
 ## License
 
 Yantra is licensed under the [MIT License](LICENSE).
@@ -151,3 +159,7 @@ See https://github.com/TantrixAuto/lingo for standalone sample project that uses
 This is a language server extension created by [Raj Chaudhuri](https://github.com/rajch) that provides syntax highlighting for Yantra files in vscode, qtcreator, and any other IDE that supports the Language Server Protocol.
 
 https://github.com/rajware/yantra-language-server
+
+## Author
+
+Renji Panicker ([@renjipanicker](https://github.com/renjipanicker))
