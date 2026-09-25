@@ -132,10 +132,6 @@ See the [Build Instructions](docs/050_build.md) and [Tutorial](tutorial/) below 
 
 See [Known Limitations](KNOWN_LIMITATIONS.md) for an honest list of what Yantra doesn't do yet.
 
-## License
-
-Yantra is licensed under the [MIT License](LICENSE).
-
 ## Essential Reading
 The following are a set of key links to get familiar with Yantra.
 
@@ -159,6 +155,10 @@ See https://github.com/TantrixAuto/lingo for standalone sample project that uses
 This is a language server extension created by [Raj Chaudhuri](https://github.com/rajch) that provides syntax highlighting for Yantra files in vscode, qtcreator, and any other IDE that supports the Language Server Protocol.
 
 https://github.com/rajware/yantra-language-server
+
+## License
+
+Yantra is licensed under the [MIT License](LICENSE).
 
 ## Author
 
