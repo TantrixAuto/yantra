@@ -1104,7 +1104,8 @@ struct Parser {
     Lexer& lexer;
 
     /// @brief List of explicitly specified rule precedences
-    std::unordered_map<std::string, std::string> rulePrecedence;
+    /// keyed by the specific Rule they were declared on.
+    std::unordered_map<const ygp::Rule*, std::string> rulePrecedence;
 
     /// @brief List of fallbacks for a token
     std::unordered_map<std::string, Fallback> fallbacks;
@@ -2405,10 +2406,7 @@ struct Parser {
             if(isRegexName(t.text) == false) {
                 throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_TOKEN_REF");
             }
-            if(rulePrecedence.contains(rule->ruleSetName())) {
-                throw GeneratorError(__LINE__, __FILE__, t.pos, "DUPLICATE_RULE_PRECEDENCE");
-            }
-            rulePrecedence[rule->ruleSetName()] = t.text;
+            rulePrecedence[rule.get()] = t.text;
 
             lexer.next();
             t = peek(tr);
@@ -2649,7 +2647,7 @@ struct Parser {
 
         // set precedence for each rule
         for(auto& r : grammar.rules) {
-            if(auto it = rulePrecedence.find(r->ruleSetName()); it != rulePrecedence.end()) {
+            if(auto it = rulePrecedence.find(r.get()); it != rulePrecedence.end()) {
                 auto& rx = grammar.getRegexSetByName(r->pos, it->second);
                 r->precedence = &rx;
             }
