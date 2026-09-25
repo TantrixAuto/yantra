@@ -1661,6 +1661,116 @@ WS := "\s"!;
 '
 
 #############################
+# regression tests for the keyword-overlap lexer crash: two or more literal
+# keyword tokens that are subsets of a broader token pattern (e.g. VAR,
+# WHILE, IF, FOR all subsets of ID := "[a-z]+") used to crash ycc while
+# generating the lexer state machine (assert in
+# Generator::TransitionSet::Visitor::operator()(const ClosureTransition&)).
+# See CODE_REVIEW.md and unittests/keyword_overlap_crash_repro.sh.
+grammar='
+%class Test;
+
+start := stmts;
+stmts := stmts stmt;
+stmts := stmt;
+
+stmt := VAR ID SEMI;
+stmt := WHILE ID SEMI;
+stmt := IF ID SEMI;
+stmt := FOR ID SEMI;
+
+VAR := "var";
+WHILE := "while";
+IF := "if";
+FOR := "for";
+ID := "[a-z]+";
+SEMI := ";";
+WS := "\s"!;
+'
+
+compile_grammar "$grammar" 0
+# each keyword recognized as itself when standalone
+run_passing_test -s 'var x;' -t '0:start_1(1:stmts_2(2:stmt_1(3:VAR(var) 3:ID(x) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'while x;' -t '0:start_1(1:stmts_2(2:stmt_2(3:WHILE(while) 3:ID(x) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'if x;' -t '0:start_1(1:stmts_2(2:stmt_3(3:IF(if) 3:ID(x) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'for x;' -t '0:start_1(1:stmts_2(2:stmt_4(3:FOR(for) 3:ID(x) 3:SEMI(;))) 1:_tEND())'
+# a keyword that's a strict prefix of a longer identifier must lex as ID,
+# not as the keyword followed by leftover letters -- this is exactly the
+# longest-match disambiguation the crash was in the middle of computing
+run_passing_test -s 'var vara;' -t '0:start_1(1:stmts_2(2:stmt_1(3:VAR(var) 3:ID(vara) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'var whilex;' -t '0:start_1(1:stmts_2(2:stmt_1(3:VAR(var) 3:ID(whilex) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'var ifelse;' -t '0:start_1(1:stmts_2(2:stmt_1(3:VAR(var) 3:ID(ifelse) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'var forever;' -t '0:start_1(1:stmts_2(2:stmt_1(3:VAR(var) 3:ID(forever) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'var variable;' -t '0:start_1(1:stmts_2(2:stmt_1(3:VAR(var) 3:ID(variable) 3:SEMI(;))) 1:_tEND())'
+# all four overlapping keywords together in one input
+run_passing_test -s 'var x; while y; if z; for w;' -t '0:start_1(1:stmts_1(2:stmts_1(3:stmts_1(4:stmts_2(5:stmt_1(6:VAR(var) 6:ID(x) 6:SEMI(;))) 4:stmt_2(5:WHILE(while) 5:ID(y) 5:SEMI(;))) 3:stmt_3(4:IF(if) 4:ID(z) 4:SEMI(;))) 2:stmt_4(3:FOR(for) 3:ID(w) 3:SEMI(;))) 1:_tEND())'
+# the reverse direction: a keyword appearing where ID is expected must be
+# rejected as that keyword, not silently accepted as an identifier
+run_failing_test -s 'var while;'
+run_failing_test -s 'var if;'
+run_failing_test -s 'var for;'
+run_failing_test -s '1var;'
+run_failing_test -s 'var 123;'
+run_failing_test -s 'var ;'
+
+#############################
+# same keyword-overlap crash, but also with a keyword that's a strict
+# prefix of ANOTHER keyword (VAL is a prefix of VALUE), not just a prefix
+# of the generic ID pattern -- this merges VAL's and VALUE's own automatons
+# into each other as well as into ID's.
+#
+# NOTE: VAR/VAL/VALUE alone (i.e. every keyword starting with the same
+# first letter 'v') does NOT reproduce the original crash -- confirmed by
+# testing that exact grammar against the pre-fix binary directly, it
+# generates cleanly. The root-state duplication half of the bug (see
+# CODE_REVIEW.md) only fires when 2+ keywords have *different* first
+# characters, since that's what made setSuperStates' own top-level loop
+# call into the shared root state more than once; a group of keywords that
+# all share one first letter gets discovered through a single recursive
+# descent, not repeated independent entries, so that specific half of the
+# bug never triggers no matter how deep the shared prefix goes. WHILE is
+# included below (a different first letter, 'w') specifically to keep this
+# block a genuine regression guard -- confirmed it does crash the pre-fix
+# binary with WHILE present.
+grammar='
+%class Test;
+start := stmts;
+stmts := stmts stmt;
+stmts := stmt;
+
+stmt := VAR ID SEMI;
+stmt := VAL ID SEMI;
+stmt := VALUE ID SEMI;
+stmt := WHILE ID SEMI;
+stmt := ID SEMI;
+
+VAR := "var";
+VAL := "val";
+VALUE := "value";
+WHILE := "while";
+ID := "[a-z]+";
+SEMI := ";";
+WS := "\s"!;
+'
+
+compile_grammar "$grammar" 0
+run_passing_test -s 'var x;' -t '0:start_1(1:stmts_2(2:stmt_1(3:VAR(var) 3:ID(x) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'val x;' -t '0:start_1(1:stmts_2(2:stmt_2(3:VAL(val) 3:ID(x) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'value x;' -t '0:start_1(1:stmts_2(2:stmt_3(3:VALUE(value) 3:ID(x) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'while x;' -t '0:start_1(1:stmts_2(2:stmt_4(3:WHILE(while) 3:ID(x) 3:SEMI(;))) 1:_tEND())'
+# every point along the shared "va"/"val" prefix chain where the word could
+# end up as a plain identifier instead of one of the three v-keywords
+run_passing_test -s 'v;' -t '0:start_1(1:stmts_2(2:stmt_5(3:ID(v) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'va;' -t '0:start_1(1:stmts_2(2:stmt_5(3:ID(va) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'valu;' -t '0:start_1(1:stmts_2(2:stmt_5(3:ID(valu) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'vala;' -t '0:start_1(1:stmts_2(2:stmt_5(3:ID(vala) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'values;' -t '0:start_1(1:stmts_2(2:stmt_5(3:ID(values) 3:SEMI(;))) 1:_tEND())'
+run_passing_test -s 'var x; val y; value z; while w; valu;' -t '0:start_1(1:stmts_1(2:stmts_1(3:stmts_1(4:stmts_1(5:stmts_2(6:stmt_1(7:VAR(var) 7:ID(x) 7:SEMI(;))) 5:stmt_2(6:VAL(val) 6:ID(y) 6:SEMI(;))) 4:stmt_3(5:VALUE(value) 5:ID(z) 5:SEMI(;))) 3:stmt_4(4:WHILE(while) 4:ID(w) 4:SEMI(;))) 2:stmt_5(3:ID(valu) 3:SEMI(;))) 1:_tEND())'
+run_failing_test -s 'var val;'
+run_failing_test -s 'var value;'
+run_failing_test -s 'var while;'
+
+#############################
 echo All tests done
 echo PASSED $passcount
 echo FAILED $failcount
