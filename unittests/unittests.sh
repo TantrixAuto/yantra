@@ -1499,6 +1499,52 @@ WS := "\s+"!;
 compile_grammar "$grammar" 0
 run_passing_test -s '1 + 2' -t '0:start_1(1:expr_1(2:expr_5(3:NUMBER(1)) 2:PLUS(+) 2:expr_5(3:NUMBER(2))) 1:_tEND())'
 run_passing_test -s '1 - 23' -t '0:start_1(1:expr_2(2:expr_5(3:NUMBER(1)) 2:MINUS(-) 2:expr_5(3:NUMBER(23))) 1:_tEND())'
+run_passing_test -s '1 + 2 * 3' -t '0:start_1(1:expr_1(2:expr_5(3:NUMBER(1)) 2:PLUS(+) 2:expr_3(3:expr_5(4:NUMBER(2)) 3:STAR(*) 3:expr_5(4:NUMBER(3)))) 1:_tEND())'
+run_passing_test -s '2 * 3 + 1' -t '0:start_1(1:expr_1(2:expr_3(3:expr_5(4:NUMBER(2)) 3:STAR(*) 3:expr_5(4:NUMBER(3))) 2:PLUS(+) 2:expr_5(3:NUMBER(1))) 1:_tEND())'
+run_passing_test -s '1 - 2 * 3' -t '0:start_1(1:expr_2(2:expr_5(3:NUMBER(1)) 2:MINUS(-) 2:expr_3(3:expr_5(4:NUMBER(2)) 3:STAR(*) 3:expr_5(4:NUMBER(3)))) 1:_tEND())'
+run_passing_test -s '10 / 2 - 3' -t '0:start_1(1:expr_2(2:expr_4(3:expr_5(4:NUMBER(10)) 3:SLASH(/) 3:expr_5(4:NUMBER(2))) 2:MINUS(-) 2:expr_5(3:NUMBER(3))) 1:_tEND())'
+run_passing_test -s '2 + 3 * 4 - 5' -t '0:start_1(1:expr_2(2:expr_1(3:expr_5(4:NUMBER(2)) 3:PLUS(+) 3:expr_3(4:expr_5(5:NUMBER(3)) 4:STAR(*) 4:expr_5(5:NUMBER(4)))) 2:MINUS(-) 2:expr_5(3:NUMBER(5))) 1:_tEND())'
+run_passing_test -s '10 - 3 - 2' -t '0:start_1(1:expr_2(2:expr_2(3:expr_5(4:NUMBER(10)) 3:MINUS(-) 3:expr_5(4:NUMBER(3))) 2:MINUS(-) 2:expr_5(3:NUMBER(2))) 1:_tEND())'
+run_failing_test -s '1 +'
+run_failing_test -s '+ 1'
+run_failing_test -s '1 + + 2'
+
+#############################
+# regression tests for the explicit [TOKEN] rule-precedence override:
+# - a [TOKEN] annotation on one alternative must actually change real parse
+#   behavior, not just an internal debug value (this syntax used to crash
+#   ycc outright -- see CODE_REVIEW.md)
+# - it must apply to that one alternative only, not to every alternative
+#   sharing its ruleset name (it used to silently overwrite ALL of them)
+grammar='
+%class Calculator;
+%left ZERO;
+%left PLUS;
+%left STAR;
+
+start := expr;
+
+expr := expr PLUS expr;
+expr := expr STAR expr [ZERO];
+expr := NUMBER;
+expr := ZERO;
+
+NUMBER := "\d+";
+PLUS := "\+";
+STAR := "\*";
+ZERO := "z";
+WS := "\s+"!;
+'
+
+compile_grammar "$grammar" 0
+# STAR's rule is forced down to ZERO's (lowest) precedence, so at "2 * 3 + 1"
+# it loses to the PLUS shift instead of reducing -- deliberately wrong
+# bracketing (2 * (3 + 1)) that only happens if the annotation actually took
+# effect.
+run_passing_test -s '2 * 3 + 1' -t '0:start_1(1:expr_2(2:expr_3(3:NUMBER(2)) 2:STAR(*) 2:expr_1(3:expr_3(4:NUMBER(3)) 3:PLUS(+) 3:expr_3(4:NUMBER(1)))) 1:_tEND())'
+# the PLUS rule (a sibling of the annotated STAR rule, same ruleset "expr")
+# must keep its own real precedence, unaffected by STAR's annotation.
+run_passing_test -s '1 + 2 * 3' -t '0:start_1(1:expr_1(2:expr_3(3:NUMBER(1)) 2:PLUS(+) 2:expr_2(3:expr_3(4:NUMBER(2)) 3:STAR(*) 3:expr_3(4:NUMBER(3)))) 1:_tEND())'
 
 #############################
 # this infinite loop

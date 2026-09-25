@@ -291,6 +291,12 @@ struct ParserStateMachineBuilder {
             return 'R';
         }
 
+        // for a rule with no terminal in its RHS: default to SHIFT
+        // matches yacc/bison
+        if(r.precedence == nullptr) {
+            return 'S';
+        }
+
         if(r.precedence->precedence > rx.precedence) {
             return 'R';
         }
@@ -347,8 +353,10 @@ struct ParserStateMachineBuilder {
         }
 
         auto& rx = grammar.getRegexSet(nextNode);
-        if(cis.hasReduce(rx) != nullptr) {
-            char p = resolveConflict(config, rx, indent);
+        if(auto* reduce = cis.hasReduce(rx); reduce != nullptr) {
+            assert(reduce->next.size() > 0);
+            auto& reduceConfig = *(reduce->next.at(0));
+            char p = resolveConflict(reduceConfig, rx, indent);
             if(p == 'R') {
                 return;
             }
@@ -854,13 +862,8 @@ struct ParserStateMachineBuilder {
                 continue;
             }
             auto& anchor = r->getNode(r->anchor);
-            if(anchor.isRegex()) {
+            if(anchor.isRegex() && (anchor.name != grammar.empty)) {
                 auto& rx = grammar.getRegexSet(anchor);
-                r->precedence = &rx;
-            }else if(anchor.isRule()) {
-                auto& rs = grammar.getRuleSetByName(anchor.pos, anchor.name);
-                assert(rs.firsts.size() > 0);
-                auto& rx = grammar.getRegexSetByName(anchor.pos, rs.firsts.at(0)->name);
                 r->precedence = &rx;
             }
         }
