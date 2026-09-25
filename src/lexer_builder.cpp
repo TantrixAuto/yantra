@@ -339,7 +339,11 @@ struct Optimizer {
             }
 
             createEnterTransition(checkClosureTx, enterClosureTx, subTx->next, &nextClosureState, initialCount);
-            cloneTransition(leaveClosureTx, subTx->next, leaveClosureTx.next);
+            // guard against a duplicate leave-closure transition, same as
+            // the guarded clone below
+            if(subTx->next->getClosureTransition(yglx::ClosureTransition::Type::Leave) == nullptr) {
+                cloneTransition(leaveClosureTx, subTx->next, leaveClosureTx.next);
+            }
 
             if(isVisited(subTx->next) == true) {
                 continue;
@@ -377,7 +381,11 @@ struct Optimizer {
                         const auto& checkClosureTx = stx->next->checkClosureTx();
                         const auto& leaveClosureTx = stx->next->leaveClosureTx();
                         createEnterTransition(checkClosureTx, enterClosureTx, subTx->next, stx->next->closureState, initialCount);
-                        cloneTransition(leaveClosureTx, subTx->next, leaveClosureTx.next);
+                        // same duplicate-leave-transition guard as
+                        // setSuperStateClosure
+                        if(subTx->next->getClosureTransition(yglx::ClosureTransition::Type::Leave) == nullptr) {
+                            cloneTransition(leaveClosureTx, subTx->next, leaveClosureTx.next);
+                        }
                     }
                     setSuperStateClosure(stx, subTx->next, initialCount, indent);
                     continue;

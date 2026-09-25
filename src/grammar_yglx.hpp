@@ -732,10 +732,12 @@ inline auto Transition::get<ClosureTransition>() -> const ClosureTransition* {
 }
 
 inline auto State::getClosureTransition(const ClosureTransition::Type& type) -> const ClosureTransition* {
-    for(auto& tx : transitions) {
-        if(const auto* t = tx->get<ClosureTransition>()) {
-            if(t->type == type) {
-                return t;
+    for(auto* list : {&transitions, &superTransitions, &shadowTransitions}) {
+        for(auto& tx : *list) {
+            if(const auto* t = tx->get<ClosureTransition>()) {
+                if(t->type == type) {
+                    return t;
+                }
             }
         }
     }
