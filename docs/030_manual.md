@@ -198,7 +198,7 @@ The following is the list of pragmas supported by Yantra
 | Name                | Syntax | Repeatable | Scope | Description |
 |---------------------|--------|-------------|------|-------------|
 | class               | `%class MyModule;` | No | Grammar | Defines the name of the class representing this Parser |
-| namespace           | `%namespace MyGrammar;` | No | Grammar | Defines the namespace for the Parser class. Only a single identifier is accepted -- not a scoped `::` path |
+| namespace           | `%namespace MyGrammar;` | No | Grammar | Defines the namespace for the Parser class. Only a single identifier is accepted, not a scoped `::` path |
 | pch_header          | `%pch_header "pch.hpp";` | No | Grammar | The precompiled header, if any, for the cpp file |
 | std_header          | `%std_header off;` | No | Grammar | All necessary standard headers are included in the generated source file by default. <br/>Use this to disable, if for example, standard headers are included via the PCH header file, or any other header files |
 | hdr_header          | `%hdr_header <fstream>;`<br/>`%hdr_header "config.hpp";` | Yes | Grammar | Header files to be added to the generated header file |
@@ -219,5 +219,5 @@ The following is the list of pragmas supported by Yantra
 | left                | `%left PLUS MINUS;` | Yes | Lexer | Specify left association for given list of tokens |
 | right               | `%right ASSIGN_EQ;` | Yes | Lexer | Specify right association for given list of tokens |
 | token               | `%token SEMI VAR;` | Yes | Lexer | Specify no association for given list of tokens |
-| fallback            | `%fallback ID VAR;` | Yes | Lexer | Specify fallback for given list of tokens. If VAR is not a valid token in any rule, try it as an ID token. Currently only 2 tokens per `%fallback` line are safe to use -- 3 or more crashes `ycc` (see CODE_REVIEW.md) |
+| fallback            | `%fallback ID VAR;` | Yes | Lexer | Specify fallback for given list of tokens. If VAR is not a valid token in any rule, try it as an ID token |
 | lexer_mode          | `%lexer_mode ML_COMMENT;` | Yes | Lexer | Start a new Lexer mode<br/>See [Lexer Modes](020_concepts.md#lexer-modes) in concepts for more details |

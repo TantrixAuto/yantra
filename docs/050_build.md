@@ -26,4 +26,4 @@ bin/ycc --help
 ```
 
 ## Finally
-Follow the [Tutorial](../tutorial/) for a hands-on, step-by-step walkthrough of generating, building and running a parser with `ycc` -- it's the maintained, working equivalent of the sample-parser walkthrough that used to live here. Read the [Quickstart](060_quickstart.md) document first for a gentle introduction to the structure of a grammar file.
+Follow the [Tutorial](../tutorial/) for a hands-on, step-by-step walkthrough of generating, building and running a parser with `ycc`. It's the maintained, working equivalent of the sample-parser walkthrough that used to live here. Read the [Quickstart](060_quickstart.md) document first for a gentle introduction to the structure of a grammar file.

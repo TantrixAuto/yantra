@@ -72,16 +72,16 @@ flowchart TD
 
 The first tree is the correct one, since the STAR operator has a higher precedence over PLUS.
 
-For a grammar shaped like this -- an ambiguous rule for each operator that recurses directly back into itself, e.g. `expr := expr PLUS expr;` and `expr := expr STAR expr;` -- the shift/reduce conflict that decides this tree is resolved by comparing the precedence of the rule that would **reduce** (here, the PLUS rule, since `2 + 4` is what's sitting on the stack) against the precedence of the lookahead token that could instead be **shift**ed (here, STAR). Declare the operators with `%left`/`%right`, in ascending order of precedence:
+Consider a grammar shaped like this: an ambiguous rule for each operator that recurses directly back into itself, e.g. `expr := expr PLUS expr;` and `expr := expr STAR expr;`. A shift/reduce conflict decides this tree. It's resolved by comparing the precedence of the rule that would **reduce** (here, the PLUS rule, since `2 + 4` is what's sitting on the stack) against the precedence of the lookahead token that could instead be **shift**ed (here, STAR). Declare the operators with `%left`/`%right`, in ascending order of precedence:
 ```
 %left PLUS;
 %left STAR;
 PLUS := "\+";
 STAR := "\*";
 ```
-Each pragma line gets a higher precedence value than the last, so STAR (declared second) outranks PLUS here. On lookahead STAR, the PLUS-reduce's precedence (lower) loses to STAR's (higher), so the parser shifts and builds `2 * 4` before reducing the `+` -- giving the correct, first tree above.
+Each pragma line gets a higher precedence value than the last, so STAR (declared second) outranks PLUS here. On lookahead STAR, the PLUS-reduce's precedence (lower) loses to STAR's (higher), so the parser shifts and builds `2 * 4` before reducing the `+`. This gives the correct, first tree above.
 
-With no pragma at all, a rule has no declared precedence, and the conflict defaults to shift -- same as yacc/bison's default shift/reduce resolution -- which for this grammar also produces the correct tree, but only because a shift happens to be the right call here; don't rely on that as a substitute for declaring precedence when it matters.
+With no pragma at all, a rule has no declared precedence, and the conflict defaults to shift, same as yacc/bison's default shift/reduce resolution. For this grammar, that also produces the correct tree, but only because a shift happens to be the right call here. Don't rely on that as a substitute for declaring precedence when it matters.
 
 An alternative to this pragma-based style is to use a separate rule (a "subrule") per precedence level, and have the lower-precedence rule use the higher one as its operand, instead of every operator sharing one ambiguous rule. This avoids reasoning about numeric precedence values entirely, and is the better choice once you have more than a couple of levels. See the [Tutorial](../tutorial/)'s "Stage 3: Operator Precedence" for a complete, working example.
 
@@ -96,14 +96,14 @@ MINUS := "-";
 This line makes MINUS associate the same way as PLUS.
 
 ## Rule precedence
-By default, a rule takes on the precedence of the first real *terminal* (token) in its own production -- nonterminal (rule) references are skipped when looking for it.
+By default, a rule takes on the precedence of the first real *terminal* (token) in its own production. Nonterminal (rule) references are skipped when looking for it.
 
 ```
 expr := expr PLUS expr;
 ```
 Here, precedence of this rule will be the same as that of PLUS.
 
-If a rule's production has no terminal at all -- every node is a nonterminal reference, or the production is empty (`expr := ;`) -- the rule has **no** precedence. It never borrows one from whatever nonterminal it references; a conflict involving such a rule simply defaults to shift, same as the no-pragma-declared case above.
+If a rule's production has no terminal at all, whether because every node is a nonterminal reference or because the production is empty (`expr := ;`), the rule has **no** precedence. It never borrows one from whatever nonterminal it references. A conflict involving such a rule simply defaults to shift, same as the no-pragma-declared case above.
 
 # Association
 In some cases the lexer sees two tokens with the same precedence. e.g:

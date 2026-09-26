@@ -16,7 +16,7 @@ whether it fits your use case.
 ## Grammar language
 
 - **`%namespace` only accepts a single identifier**, not a scoped `::`
-  path -- `%namespace MyGrammar;` works, `%namespace ast::MyGrammar;`
+  path. `%namespace MyGrammar;` works, `%namespace ast::MyGrammar;`
   does not.
 - **Precedence pragmas (`%left`/`%right`/`%token`) apply per token, not
   per rule alternative.** For a grammar with more than a couple of
