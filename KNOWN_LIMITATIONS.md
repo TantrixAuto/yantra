@@ -10,20 +10,30 @@ whether it fits your use case.
 - **Not built for incremental or error-tolerant parsing.** There's no
   incremental reparse and no error-recovery/resynchronization: a syntax
   or lexer error stops parsing at that point rather than attempting to
-  continue and report further errors. If you need a parser embedded in
-  an editor or IDE, look at tree-sitter instead.
+  continue and report further errors.
 
 ## Grammar language
 
 - **`%namespace` only accepts a single identifier**, not a scoped `::`
   path. `%namespace MyGrammar;` works, `%namespace ast::MyGrammar;`
   does not.
-- **Precedence pragmas (`%left`/`%right`/`%token`) apply per token, not
-  per rule alternative.** For a grammar with more than a couple of
-  precedence levels, a separate rule per level (a "subrule") is the
-  more reliable way to express precedence than a single ambiguous rule
-  plus pragmas. See [Concepts: Precedence](docs/020_concepts.md#precedence)
-  for the full explanation and a worked example.
+
+## Precedence
+
+Precedence lives on tokens, the same model Yacc, Bison, and Lemon use.
+A rule borrows its precedence from a token in one of two ways:
+
+- **Automatically**, via its anchor (the rule's last terminal), same
+  convention Yacc/Bison/Lemon use.
+- **Explicitly**, via an override: `[TOKEN]` in Yantra, `%prec` in
+  Bison, also `[TOKEN]` in Lemon.
+
+None of these tools let a rule have independent precedence, so this
+isn't a Yantra-specific gap.
+
+For more than a couple of precedence levels, subrules are more
+maintainable than pragmas and overrides. See
+[Concepts: Precedence](docs/020_concepts.md#precedence).
 
 ## Reporting an issue
 
