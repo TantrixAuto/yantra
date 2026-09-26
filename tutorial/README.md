@@ -24,7 +24,7 @@ By the end of this tutorial, you'll have a working parser that can parse and eva
 The following steps describe the basic Yantra workflow:
 
 1. You create a _grammar file_ using a text editor.
-2. You use *ycc* to "compile" the grammar file. This produces C++ source code for a set of classes that can parse your grammar. The source code is organized using header and implementation files, as is standard in C++. You can then include the generated source code in your own program, typically by writing a `main()` function that invokes the generated classes. You can also opt for an _amalgamated_ output, which produces all source code in one single file, and includes a default `main()` function that provides command-line options for receiving input, and invokes the parser as appropriate.
+2. You use *ycc* to "compile" the grammar file. This produces C++ source code for a set of classes that can parse your grammar. The source code is organized using header and implementation files, as is standard in C++. You can then include the generated source code in your own program, typically by writing a `main()` function that invokes the generated classes. You can also opt for an _amalgamated_ output, which produces all source code in one single file. This includes a default `main()` function that provides command-line options for receiving input, and invokes the parser as appropriate.
 3. You use a C++ compiler to compile the generated source code (along with your own code if you did not select the amalgamated output option). You run the resulting executable, and test it using input formatted according to your grammar.
 
 In this tutorial, we will use the amalgamated option in step 2.
@@ -116,7 +116,7 @@ The first one should succeed, because all whitespace is ignored as per our gramm
 
 ### Make the most of it
 
-For the rest of this tutorial, we will repeatedly perform these steps, viz.: modify the grammer, invoke **ycc** to generate C++ source code for the parser,  compile the code, and involve the resulting *calc* binary (*calc.exe* on Windows) for testing. To automate this process, we will create a _Makefile_ for Linux/Mac/UNIXlikes, and a batch file for Windows if you are not using WSL. Here they are:
+For the rest of this tutorial, we will repeatedly perform these steps, viz.: modify the grammar, invoke **ycc** to generate C++ source code for the parser, compile the code, and involve the resulting *calc* binary (*calc.exe* on Windows) for testing. To automate this process, we will create a _Makefile_ for Linux/Mac/UNIXlikes, and a batch file for Windows if you are not using WSL. Here they are:
 
 #### Makefile (for UNIXlikes)
 
@@ -215,9 +215,9 @@ and notice that the parsed number is printed to the output. How does this work?
 
 #### Mr. Semantic, Really Fantastic
 
-If you look at the modified `numpexpr` rule, you will notice two new elements. First, the new symbol in brackets after the token name: `(NUM)`. This is a _variable_. Second, the C++ code block immediately after the rule definition, enclosed in %{ and %} (note the absence of a semicolon after the rule definition). This is called a _semantic action_.
+If you look at the modified `numexpr` rule, you will notice two new elements. First, the new symbol in brackets after the token name: `(NUM)`. This is a _variable_. Second, the C++ code block immediately after the rule definition, enclosed in %{ and %} (note the absence of a semicolon after the rule definition). This is called a _semantic action_.
 
-A semantic action is a function that is executed as soon as the generated parser parses a rule. Elements of the rule, such as other rules or tokens, are passed to the function as variables. You can choose which parts of the rule your function is interested in, and declare a variable for that element by putting a variable name in parenthesis immediately after it. Yantra requires that variables declared for tokens have names in all caps, and variables declared for rules have names beginning with a lower-case letter - same rules as the element names themselves.
+A semantic action is a function that is executed as soon as the generated parser parses a rule. Elements of the rule, such as other rules or tokens, are passed to the function as variables. You can choose which parts of the rule your function is interested in, and declare a variable for that element by putting a variable name in parenthesis immediately after it. Yantra requires that variables declared for tokens have names in all caps, and variables declared for rules have names beginning with a lower-case letter. These are the same rules as for the element names themselves.
 
 The variables contain objects, different ones for rules and tokens. In this example, you can see that a token variable has a member called `.text`, which contains the actual token scanned from input.
 
@@ -227,7 +227,7 @@ Yantra adds the function to the generated code, where it is invoked when that pa
 
 The way it all works is this: any Yantra-generated parser reads the input and transforms it into a data structure called Abstract Syntax Tree (AST). Yantra can also generate one or more ***Walker*** classes, which traverse the parsed AST from top down, and call any defined functions (semantic actions) as a particular rule is parsed in the input. The semantic actions that we define in a grammar thus become members of Walker classes.
 
-It is possible to define multiple Walkers in a grammar, for example one to generate amd64 assembly and another one for arm64. These would then need to be formally named, and you would be able to attach one semantic action per Walker to each rule. If, like now, we simply attach a single semantic action per rule, and do not name the Walker explicitly, Yantra generates a default one (called Walker_Walker).
+It is possible to define multiple Walkers in a grammar, for example one to generate amd64 assembly and another one for arm64. These would then need to be formally named. You would then be able to attach one semantic action per Walker to each rule. If, like now, we simply attach a single semantic action per rule, and do not name the Walker explicitly, Yantra generates a default one (called Walker_Walker).
 
 ### Exit Stage 1
 
@@ -292,7 +292,7 @@ Note the two new tokens, `PLUS` and `MINUS`. They are regular expressions to mat
 
 Note also the two new rules: `addexpr` and `subexpr`. For example, `addexpr` states that a `numexpr` can be followed by a `PLUS` and then another `numexpr`, and that's valid grammar. This means that leading or trailing `PLUS` symbols will cause a syntax error. But what makes it really interesting is that we did not say `NUMBER PLUS NUMBER`. 
 
-To understand why, especially note that the `numexpr` rule is now defined three times! In a Yantra grammar, this is how you indicate alternatives for a rule. Here, we are saying that a numeric expression can be an `addexpr`, a `subexpr` or a `NUMBER`; all three cases are valid grammar. Now, this recursively means that the expression on the left (or right) of a `PLUS` can itself be and `addexpr` or a `subexpr`. So, a long string of addition or subtraction operations, like "42 + 55 - 5 + 10" is valid. 
+To understand why, especially note that the `numexpr` rule is now defined three times! In a Yantra grammar, this is how you indicate alternatives for a rule. Here, we are saying that a numeric expression can be an `addexpr`, a `subexpr` or a `NUMBER`. All three cases are valid grammar. Now, this recursively means that the expression on the left (or right) of a `PLUS` can itself be an `addexpr` or a `subexpr`. So, a long string of addition or subtraction operations, like "42 + 55 - 5 + 10" is valid. 
 
 ### Left Right Left
 
@@ -316,9 +316,9 @@ Number: 10
 
 This seems to suggest that the parser hit the first `PLUS` and recognized that this was an `addexpr`, with the `NUMBER` 42 as its left expression. The part after that `PLUS` is itself another `addexpr`, whose left expression is a `subexpr` (`55 - 5`) and whose right expression is `10`. So the net result is `42 + ((55 - 5) + 10)`.
 
-Without `%left`/`%right`, there is no rule for which of two competing operators should be evaluated first -- the actual grouping you get depends on incidental details like the order `PLUS` and `MINUS` happen to be declared in the grammar file, not on anything resembling left-to-right or right-to-left evaluation. This is the default behaviour, and it's not something you should rely on. Fortunately, we can fix it.
+Without `%left`/`%right`, there is no rule for which of two competing operators should be evaluated first. The actual grouping you get depends on incidental details like the order `PLUS` and `MINUS` happen to be declared in the grammar file, not on anything resembling left-to-right or right-to-left evaluation. This is the default behaviour, and it's not something you should rely on. Fortunately, we can fix it.
 
-We can specify that if a particular TOKEN is used in a rule, evaluation should be left-to-right instead, which means that any rule on the left of the token should be fully evaluated before any rule to its right (which is the order in which calculations happen in the real world). We do this through a pragma called `%left`, for both `PLUS` and `MINUS`. Please note: this pragma should appear anywhere _before_ the tokens that it lists appear in the grammar file.
+We can specify that if a particular TOKEN is used in a rule, evaluation should be left-to-right instead. This means that any rule on the left of the token should be fully evaluated before any rule to its right (which is the order in which calculations happen in the real world). We do this through a pragma called `%left`, for both `PLUS` and `MINUS`. Please note: this pragma should appear anywhere _before_ the tokens that it lists appear in the grammar file.
 
 So, change our grammar file as follows:
 
@@ -473,7 +473,7 @@ Adding:
 
 ### Exit Stage 2
 
-At this point, we have enhanced our a grammar to recognize addition and subtraction. We have created a named walker, and set it as a default. We have added semantic actions to that walker that print meaningful messages as relevant rules in our grammar are parsed. And we have added members to that walker that provide support functionality for the semantic actions.
+At this point, we have enhanced our grammar to recognize addition and subtraction. We have created a named walker, and set it as a default. We have added semantic actions to that walker that print meaningful messages as relevant rules in our grammar are parsed. And we have added members to that walker that provide support functionality for the semantic actions.
 
 ## Stage 3: Operator Precedence
 
@@ -537,7 +537,7 @@ WS     := "\s+"!;
 // Not shown here, but unchanged from the previous exercise
 ```
 
-Notice how each rule is defined in terms of another rule. Like numexpr is defined using addorsubexpr, addorsubexpr is defined using mulordivexpr, and mulordivexpr is deined in terms of valexp. This means, for example, that to properly evaluate an addorsubexpr, a mulordivexpr will need to be evaluated first. As a result, multiplication and division will happen before addition and subtraction. This is how you create precedence among rules: by defining a lower-precedence rule (like addorsubexpr) in terms of a higher precedence rule (like mulordivexpr).
+Notice how each rule is defined in terms of another rule. Like numexpr is defined using addorsubexpr, addorsubexpr is defined using mulordivexpr, and mulordivexpr is defined in terms of valexpr. This means, for example, that to properly evaluate an addorsubexpr, a mulordivexpr will need to be evaluated first. As a result, multiplication and division will happen before addition and subtraction. This is how you create precedence among rules: by defining a lower-precedence rule (like addorsubexpr) in terms of a higher precedence rule (like mulordivexpr).
 
 Also notice how each 'level' is defined using _itself_ and the next level, like `addorsubexpr := addorsubexpr PLUS mulordivexpr` and `mulordivexpr MUL valexpr`. The _itself_ part ensures that the expression can be repeated, like `1 + 2 + 3 + 4 / 2`.
 
@@ -561,7 +561,7 @@ This shows that the `10 / 5` happens first, then the `3 * 1`, then the result of
 
 But what if you wanted, for example, the `5 - 3` to happen first? In arithmetic, as well as most programming or scripting languages, this is managed using parenthesis (()). How do we ensure that parenthesis have precedence before any other case?
 
-As we saw, precedence is achieved by defining a lower-precedence rule in terms of a higher-precedence rule. So `addorsubexpr` is defined usings `mulordivexpr`, and `mulordivexpr` is defined using `valexpr`. The highest precedence is `valexpr`, which is currently defined as just a `NUMBER`. If we also define `valexpr` as an expression with parenthesis, this should give us our desired precedence.
+As we saw, precedence is achieved by defining a lower-precedence rule in terms of a higher-precedence rule. So `addorsubexpr` is defined using `mulordivexpr`, and `mulordivexpr` is defined using `valexpr`. The highest precedence is `valexpr`, which is currently defined as just a `NUMBER`. If we also define `valexpr` as an expression with parenthesis, this should give us our desired precedence.
 
 But what can appear inside parenthesis? Complete numeric expressions, right?
 
@@ -651,9 +651,9 @@ At this point, we have enhanced our a grammar to recognize multiplication, divis
 
 ### Show me the value
 
-So far, the target compiler just shows us the operations is recognises, and gives us an idea about the order in which they will be performed. How about actually performing the calculations that it parses?
+So far, the target compiler just shows us the operations it recognises, and gives us an idea about the order in which they will be performed. How about actually performing the calculations that it parses?
 
-We could, with a lot of background work, make that work in the existing walker. The reason why it needs a lot of work is that we have to remember when we hit a number, and then when we hit an operator, and then perform the calculation only when we actually hit another number. But that second number may be part of a higher-precedence operation, and...you get the idea. Luckily, there is a better way in Yantra to take care of such things: _functions_.
+We could, with a lot of background work, make that work in the existing walker. The reason why it needs a lot of work is that we have to remember when we hit a number, and then when we hit an operator. Only then can we perform the calculation, once we actually hit another number. But that second number may be part of a higher-precedence operation, and...you get the idea. Luckily, there is a better way in Yantra to take care of such things: _functions_.
 
 Functions, like semantic actions, are C++ code that are attached to rule definitions. Unlike a semantic action, a function can return a single value. So, functions defined for rules with lower precedence can call functions for rules with higher precedence, and use the value (calculated first because of higher precedence) in their own calculations.
 
@@ -836,7 +836,7 @@ Next, notice a named code block attached to the `start` rule. This is a semantic
 
 Since `Calc` is not the default walker, we have to give a name to semantic action code blocks which are attached to it. This semantic action kicks off all the evaluation.
 
-Finally, notice how all elements in the rule definition have variables or aliases defined for them. As we discussed before, these variables are available in the C++ context of semantic actions and functions. Here you can see them being used to actually evaluate the expression being parsed. The correct `eval` will be called, based on the type of paramter passed to it.
+Finally, notice how all elements in the rule definition have variables or aliases defined for them. As we discussed before, these variables are available in the C++ context of semantic actions and functions. Here you can see them being used to actually evaluate the expression being parsed. The correct `eval` will be called, based on the type of parameter passed to it.
 
 Generate and compile with `make`. Test it with `./calc -s "2 + 10 / 5 - 3 * 1" -w Calc`. The `-w Calc` tells the generated `main()` function to invoke the `Calc` walker instead of the defualt `ShowTree`. The result should look like this:
 

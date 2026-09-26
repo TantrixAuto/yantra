@@ -13,8 +13,9 @@ Yantra is a powerful compiler compiler and LALR(1) parser generator written in C
 - Built-in AST walker(s)
 - Bottom-up parsing (being LALR), and top-down walking (traversal)
 - Multi-mode lexer, useful for implementing nested multi-line comments, etc.
-- Lexer-driven parser, useful for incremental parsing.
+- Lexer-driven (push-based) parser: reads input one character at a time and feeds tokens to the parser as they complete, useful for processing input as it arrives (e.g. from a socket).
 - An optional amalgamated mode, where the entire parser is generated as a single cpp file, along with a full-featured main() function.
+- Or, in non-amalgamated mode, the parser is generated as separate .hpp and .cpp files, ready to drop into an existing project.
 
 The name ***Yantra*** is Sanskrit for ***machine***, as in ***state machine*** in this context.
 
@@ -87,7 +88,7 @@ $ echo $?
 
 ### A small AST walker
 
-Yantra parses the entire input into an AST first, *then* walks it top-down calling your semantic actions -- unlike most parser generators, where actions run bottom-up as each piece is reduced. That ordering is what lets a parent rule's action run before its children are visited. Save this as `calc.y`:
+Yantra parses the entire input into an AST first, *then* walks it top-down calling your semantic actions, unlike most parser generators, where actions run bottom-up as each rule is reduced. That ordering is what lets a parent rule's action run before its children are visited. Save this as `calc.y`:
 
 ```
 %class Calculator;
@@ -120,15 +121,15 @@ Number: 2
 Number: 3
 ```
 
-`1 + 2 + 3` parses left-associatively as `(1 + 2) + 3`, so the outer `Adding` -- the root of the tree -- prints *first*, followed by its left child (`Number: 1`) and then its right child, which is itself another `Adding` node with its own two children. A hand-written recursive-descent or bottom-up parser would have to build extra AST classes and a separate walking pass to get this ordering; here it falls out of the grammar directly.
+`1 + 2 + 3` parses left-associatively as `(1 + 2) + 3`. So the outer `Adding`, the root of the tree, prints *first*, followed by its left child (`Number: 1`) and then its right child, which is itself another `Adding` node with its own two children. A hand-written recursive-descent or bottom-up parser would have to build extra AST classes and a separate walking pass to get this ordering. Here it falls out of the grammar directly.
 
 See the [Build Instructions](docs/050_build.md) and [Tutorial](tutorial/) below for a real walk-through of the grammar syntax.
 
 ## How is this different?
 
-- **vs. Bison / Yacc / Lemon** (the classic LALR(1) family -- Lemon, from SQLite, is Yantra's direct stated inspiration): these run semantic actions *during* parsing, as each rule reduces, bottom-up. Yantra always builds the full AST first, then walks it top-down in a separate pass, so a parent rule's action can run before its children are visited, and a single grammar can define more than one walker (e.g. one that emits C++, another that emits Java, from the same parse). Getting either of those out of the Bison family means hand-building your own AST and walker on top.
-- **vs. ANTLR**: ANTLR's visitor pattern is genuinely similar in spirit -- it also lets you walk a fully-built parse tree after parsing completes. The real differences are narrower: Yantra targets C++ only (ANTLR generates for many languages), ships its own integrated lexer with mode-stack support instead of a separate lexer generator, and uses classic LALR(1) table-driven parsing rather than ANTLR's adaptive LL(*) algorithm. ANTLR is far more mature and widely used; Yantra is a much smaller, newer, single-maintainer project.
-- **vs. tree-sitter**: a different problem entirely -- tree-sitter is built for incremental, error-tolerant parsing embedded in editors and IDEs (what GitHub, Neovim, etc. use it for), not for generating a compiler/codegen backend. Yantra doesn't do incremental reparsing and isn't trying to.
+- **vs. Bison / Yacc / Lemon** (the classic LALR(1) family. Lemon, from SQLite, is Yantra's direct stated inspiration): these run semantic actions *during* parsing, as each rule reduces, bottom-up. Yantra always builds the full AST first, then walks it top-down in a separate pass, so a parent rule's action can run before its children are visited. A single grammar can also define more than one walker (e.g. one that emits C++, another that emits Java, from the same parse). Getting either of those out of the Bison family means hand-building your own AST and walker on top.
+- **vs. ANTLR**: ANTLR's visitor pattern is genuinely similar in spirit. It also lets you walk a fully-built parse tree after parsing completes. The real differences are narrower: Yantra targets C++ only (ANTLR generates for many languages), ships its own integrated lexer with mode-stack support instead of a separate lexer generator, and uses classic LALR(1) table-driven parsing rather than ANTLR's adaptive LL(*) algorithm. ANTLR is far more mature and widely used. Yantra is a much smaller, newer, single-maintainer project.
+- **vs. tree-sitter**: a different problem entirely. It's built for incremental, error-tolerant parsing embedded in editors and IDEs (what GitHub, Neovim, etc. use it for), not for generating a compiler/codegen backend. Yantra doesn't do incremental reparsing and isn't trying to.
 
 See [Known Limitations](KNOWN_LIMITATIONS.md) for an honest list of what Yantra doesn't do yet.
 
