@@ -588,8 +588,6 @@ addorsubexpr := addorsubexpr MINUS mulordivexpr
 
 addorsubexpr := mulordivexpr;
 
-addorsubexpr := valexpr;
-
 mulordivexpr := mulordivexpr MUL valexpr
 %{
     startExpression("Multiplying:");
