@@ -97,7 +97,7 @@ In the two diagrams above, the boxes labelled `Semantic Actions`, and everything
 # Defining Semantic Actions
 Consider the following grammar rule.
 ```
-stmt := IF LBRACKET expr(e) RBRACKET true_stmt_block(tsb) ELSE false_stmt_block(fsb);
+stmt := IF LBRACKET expr(e) RBRACKET true_stmt_block(tsb) ELSE false_stmt_block(fsb)
 %{
     //...
 %}
@@ -127,7 +127,7 @@ This is a significant improvement over traditional LALR parsers, where the progr
 
 This allows us to implement REPL-like semantic actions, as below:
 ```
-stmt := IF LBRACKET expr(e) RBRACKET true_stmt_block(tsb) ELSE false_stmt_block(fsb);
+stmt := IF LBRACKET expr(e) RBRACKET true_stmt_block(tsb) ELSE false_stmt_block(fsb)
 %{
     if(eval(e) == true) {
         go(tsb);
