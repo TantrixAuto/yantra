@@ -41,7 +41,10 @@ if [[ -n "$MSYSTEM" ]]; then
 else
   CC="clang++"
   FLAGS="-std=c++23 -o /tmp/a.out"
-  FLAGS="$FLAGS -Wall -Werror -Weverything -Wno-padded -Wno-c++98-compat-pedantic -Wno-c++20-compat -Wno-exit-time-destructors -Wno-global-constructors -Wno-weak-vtables -Wno-switch-default -Wno-switch-enum -Wno-header-hygiene -Wno-poison-system-directories -Wno-unsafe-buffer-usage-in-libc-call"
+  FLAGS="$FLAGS -Wall -Werror -Weverything -Wno-padded -Wno-c++98-compat-pedantic -Wno-c++20-compat -Wno-exit-time-destructors -Wno-global-constructors -Wno-weak-vtables -Wno-switch-default -Wno-switch-enum -Wno-header-hygiene -Wno-poison-system-directories"
+  if echo "int main(){}" | ${CC} -std=c++23 -Werror -Wno-unsafe-buffer-usage-in-libc-call -x c++ -c -o /dev/null - 2>/dev/null; then
+    FLAGS="$FLAGS -Wno-unsafe-buffer-usage-in-libc-call"
+  fi
   if [ -f "/tmp/testpch.hpp.pch" ]; then
     FLAGS="$FLAGS -include-pch /tmp/testpch.hpp.pch"
   fi
