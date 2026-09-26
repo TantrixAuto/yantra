@@ -144,7 +144,7 @@ See the [Build Instructions](docs/050_build.md) and [Tutorial](tutorial/) below 
   - A different problem entirely. It's built for incremental, error-tolerant parsing embedded in editors and IDEs (what GitHub, Neovim, etc. use it for), not for generating a compiler/codegen backend.
   - Yantra doesn't do incremental reparsing and isn't trying to.
 
-See [Known Limitations](KNOWN_LIMITATIONS.md) for an honest list of what Yantra doesn't do yet.
+See [Known Limitations](docs/known_limitations.md) for an honest list of what Yantra doesn't do yet.
 
 ## Essential Reading
 The following are a set of key links to get familiar with Yantra.

@@ -32,7 +32,7 @@ isn't a Yantra-specific gap.
 
 For more than a couple of precedence levels, subrules are more
 maintainable than pragmas and overrides. See
-[Concepts: Precedence](docs/020_concepts.md#precedence).
+[Concepts: Precedence](020_concepts.md#precedence).
 
 ## Reporting an issue
 
