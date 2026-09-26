@@ -7,5 +7,5 @@ struct Logger {
 template <typename ...ArgsT>
 [[maybe_unused]]
 static inline void log(const std::format_string<ArgsT...>& msg, ArgsT... args) {
-    return std::println(Logger::olog(), msg, std::forward<ArgsT>(args)...);
+    Logger::olog() << std::format(msg, std::forward<ArgsT>(args)...) << '\n';
 }
