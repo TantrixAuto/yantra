@@ -25,7 +25,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure and build
+      - name: Install GCC 14 (Linux only, for <print> support)
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++-14
+
+      - name: Configure and build (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++-14
+          cmake --build . --config Release
+
+      - name: Configure and build (macOS/Windows)
+        if: matrix.platform != 'linux'
         run: |
           mkdir build
           cd build

@@ -12,11 +12,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install GCC 14
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++-14
+
       - name: Configure and build
         run: |
           mkdir build
           cd build
-          cmake ..
+          cmake .. -DCMAKE_CXX_COMPILER=g++-14
           cmake --build .
 
       - name: Run unit tests
