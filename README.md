@@ -127,7 +127,8 @@ See the [Build Instructions](docs/050_build.md) and [Tutorial](tutorial/) below 
 
 ## How is this different?
 
-- **vs. Bison / Yacc / Lemon** (the classic LALR(1) family. Lemon, from SQLite, is Yantra's direct stated inspiration):
+- **vs. Bison / Yacc / Lemon** (the classic LALR(1) family):
+  - Lemon, from SQLite, is Yantra's direct stated inspiration.
   - These run semantic actions *during* parsing, as each rule reduces, bottom-up.
   - Yantra always builds the full AST first, then walks it top-down in a separate pass, so a parent rule's action can run before its children are visited.
   - A single grammar can also define more than one walker (e.g. one that emits C++, another that emits Java, from the same parse).
