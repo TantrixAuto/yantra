@@ -96,7 +96,7 @@ MINUS := "-";
 This line makes MINUS associate the same way as PLUS.
 
 ## Rule precedence
-By default, a rule takes on the precedence of the first real *terminal* (token) in its own production. Nonterminal (rule) references are skipped when looking for it.
+By default, a rule takes on the precedence of the last real *terminal* (token) in its own production, matching yacc/bison/lemon convention. Nonterminal (rule) references are skipped when looking for it.
 
 ```
 expr := expr PLUS expr;

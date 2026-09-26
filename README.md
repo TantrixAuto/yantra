@@ -127,9 +127,20 @@ See the [Build Instructions](docs/050_build.md) and [Tutorial](tutorial/) below 
 
 ## How is this different?
 
-- **vs. Bison / Yacc / Lemon** (the classic LALR(1) family. Lemon, from SQLite, is Yantra's direct stated inspiration): these run semantic actions *during* parsing, as each rule reduces, bottom-up. Yantra always builds the full AST first, then walks it top-down in a separate pass, so a parent rule's action can run before its children are visited. A single grammar can also define more than one walker (e.g. one that emits C++, another that emits Java, from the same parse). Getting either of those out of the Bison family means hand-building your own AST and walker on top.
-- **vs. ANTLR**: ANTLR's visitor pattern is genuinely similar in spirit. It also lets you walk a fully-built parse tree after parsing completes. The real differences are narrower: Yantra targets C++ only (ANTLR generates for many languages), ships its own integrated lexer with mode-stack support instead of a separate lexer generator, and uses classic LALR(1) table-driven parsing rather than ANTLR's adaptive LL(*) algorithm. ANTLR is far more mature and widely used. Yantra is a much smaller, newer, single-maintainer project.
-- **vs. tree-sitter**: a different problem entirely. It's built for incremental, error-tolerant parsing embedded in editors and IDEs (what GitHub, Neovim, etc. use it for), not for generating a compiler/codegen backend. Yantra doesn't do incremental reparsing and isn't trying to.
+- **vs. Bison / Yacc / Lemon** (the classic LALR(1) family. Lemon, from SQLite, is Yantra's direct stated inspiration):
+  - These run semantic actions *during* parsing, as each rule reduces, bottom-up.
+  - Yantra always builds the full AST first, then walks it top-down in a separate pass, so a parent rule's action can run before its children are visited.
+  - A single grammar can also define more than one walker (e.g. one that emits C++, another that emits Java, from the same parse).
+  - Getting either of those out of the Bison family means hand-building your own AST and walker on top.
+- **vs. ANTLR**:
+  - ANTLR walks a fully-built parse tree too, but that comes for free from its LL(\*) algorithm, which already builds the tree top-down as it parses.
+  - Yantra gets the same top-down walk out of LALR(1), a bottom-up algorithm with no natural "whole tree exists yet" moment during parsing, while keeping LALR(1)'s time and space efficiency over adaptive LL(\*).
+  - Beyond that, Yantra targets C++ only (ANTLR generates for many languages) and ships its own integrated lexer with mode-stack support instead of a separate lexer generator.
+  - ANTLR's own generator tool is Java, so using it from a C++ project means adding a JVM to the build toolchain just to run the generator. Yantra is a native C++ executable with no such dependency.
+  - ANTLR is far more mature and widely used. Yantra is a much smaller, newer, single-maintainer project.
+- **vs. tree-sitter**:
+  - A different problem entirely. It's built for incremental, error-tolerant parsing embedded in editors and IDEs (what GitHub, Neovim, etc. use it for), not for generating a compiler/codegen backend.
+  - Yantra doesn't do incremental reparsing and isn't trying to.
 
 See [Known Limitations](KNOWN_LIMITATIONS.md) for an honest list of what Yantra doesn't do yet.
 
