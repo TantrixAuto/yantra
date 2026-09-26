@@ -1,7 +1,6 @@
 # Known Limitations
 
-Yantra is a young, actively-developed project (`0.4.0`, pre-1.0). This is
-a list of things it currently doesn't do, so you can decide up front
+Yantra is a young, actively-developed project (still at `0.y.z`, pre-1.0). This is a list of things it currently doesn't do, so you can decide up front
 whether it fits your use case.
 
 ## Scope
@@ -33,7 +32,7 @@ isn't a Yantra-specific gap.
 
 For more than a couple of precedence levels, subrules are more
 maintainable than pragmas and overrides. See
-[Concepts: Precedence](docs/020_concepts.md#precedence).
+[Concepts: Precedence](020_concepts.md#precedence).
 
 ## Reporting an issue
 

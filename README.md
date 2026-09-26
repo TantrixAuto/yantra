@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/TantrixAuto/yantra/actions/workflows/ci.yml/badge.svg)](https://github.com/TantrixAuto/yantra/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.4.0-blue.svg)
+![Version](https://img.shields.io/github/v/tag/TantrixAuto/yantra?label=version)
 ![C++](https://img.shields.io/badge/C%2B%2B-23-blue.svg)
 
 ![Yantra Logo](docs/icon.png)
@@ -144,7 +144,7 @@ See the [Build Instructions](docs/050_build.md) and [Tutorial](tutorial/) below 
   - A different problem entirely. It's built for incremental, error-tolerant parsing embedded in editors and IDEs (what GitHub, Neovim, etc. use it for), not for generating a compiler/codegen backend.
   - Yantra doesn't do incremental reparsing and isn't trying to.
 
-See [Known Limitations](KNOWN_LIMITATIONS.md) for an honest list of what Yantra doesn't do yet.
+See [Known Limitations](docs/known_limitations.md) for an honest list of what Yantra doesn't do yet.
 
 ## Essential Reading
 The following are a set of key links to get familiar with Yantra.
