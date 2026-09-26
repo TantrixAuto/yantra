@@ -704,14 +704,18 @@ struct Grammar : public NonCopyable { // NOLINT(cppcoreguidelines-special-member
             rule.id = ruleSet->rules.size();
         }
 
-        // if anchor is not explicitly set, then set it to first regex node
-        // if there are no regexes, leave it at first node.
+        //C: if anchor is not explicitly set, default to the LAST regex node,
+        //C: not the first. This matches yacc/bison/lemon: a rule's default
+        //C: precedence comes from its last terminal, since that's the
+        //C: terminal actually adjacent to the shift/reduce decision point
+        //C: (the one immediately preceding the lookahead), not whichever
+        //C: terminal happens to appear earliest in the rule. If there are
+        //C: no regexes, leave it at the first node.
         if(anchorSet == false) {
             size_t idx = 0;
             for(auto& n : rule.nodes) {
                 if(n->isRegex()) {
                     rule.anchor = idx;
-                    break;
                 }
                 ++idx;
             }
