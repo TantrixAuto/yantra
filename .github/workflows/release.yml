@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            arch: x86_64
+          - os: macos-14
+            platform: macos
+            arch: arm64
+          - os: macos-13
+            platform: macos
+            arch: x86_64
+          - os: windows-latest
+            platform: windows
+            arch: x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure and build
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+          cmake --build . --config Release
+
+      - name: Package binary (Linux/macOS)
+        if: matrix.platform != 'windows'
+        shell: bash
+        run: |
+          mkdir -p dist stage
+          cp build/bin/ycc stage/ycc
+          tar -czf "dist/ycc-${{ github.ref_name }}-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz" -C stage ycc
+
+      - name: Package binary (Windows)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist,stage | Out-Null
+          Copy-Item build/bin/ycc.exe stage/ycc.exe
+          Compress-Archive -Path stage/ycc.exe -DestinationPath "dist/ycc-${{ github.ref_name }}-windows-${{ matrix.arch }}.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ycc-${{ matrix.platform }}-${{ matrix.arch }}
+          path: dist/*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create draft release with assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          draft: true
+          generate_release_notes: true
