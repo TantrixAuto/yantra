@@ -1,7 +1,6 @@
 # Known Limitations
 
-Yantra is a young, actively-developed project (`0.4.0`, pre-1.0). This is
-a list of things it currently doesn't do, so you can decide up front
+Yantra is a young, actively-developed project (still at `0.y.z`, pre-1.0). This is a list of things it currently doesn't do, so you can decide up front
 whether it fits your use case.
 
 ## Scope
