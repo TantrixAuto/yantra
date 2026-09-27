@@ -61,6 +61,19 @@ constexpr const char* SRC = "";
 #include <functional>
 #include <unordered_map>
 #include <assert.h>
+
+#ifndef __GLIBCXX__
+namespace std {
+template <typename ...ArgsT>
+void print(std::ostream& os, format_string<ArgsT...> fmt, ArgsT&&... args) {
+    os << std::format(fmt, std::forward<ArgsT>(args)...);
+}
+template <typename ...ArgsT>
+void println(std::ostream& os, format_string<ArgsT...> fmt, ArgsT&&... args) {
+    os << std::format(fmt, std::forward<ArgsT>(args)...) << '\n';
+}
+}
+#endif
 ///PROTOTYPE_LEAVE:stdHeaders
 
 ///PROTOTYPE_SEGMENT:hdrHeaders
