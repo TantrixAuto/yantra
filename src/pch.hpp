@@ -16,7 +16,7 @@
 #include <assert.h>
 #include <algorithm>
 
-#ifndef __GLIBCXX__
+#if !defined(__GLIBCXX__) && !defined(_MSVC_STL_VERSION)
 namespace std {
 template <typename ...ArgsT>
 void println(std::ostream& os, format_string<ArgsT...> fmt, ArgsT&&... args) {
