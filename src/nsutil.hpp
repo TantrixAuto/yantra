@@ -11,6 +11,8 @@ inline void unused(const T&...) {} // NOLINT(hicpp-named-parameter,readability-n
 #ifndef OVERLOAD_DECLARED
 template<class... Ts>
 struct overload : Ts... { using Ts::operator()...; };
+template<class... Ts>
+overload(Ts...) -> overload<Ts...>;
 #endif
 
 struct NonCopyable{
