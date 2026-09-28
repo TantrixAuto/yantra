@@ -1163,13 +1163,21 @@ struct Generator {
 
     /// @brief generates code to add default Walker, if none specified
     inline void generateInitWalkers(TextFileWriter& tw, const std::string_view& indent) {
+        std::vector<const yg::Walker*> nonBaseWalkers;
         for (const auto& pwalker : grammar.walkers) {
             auto& walker = *pwalker;
             if(grammar.isBaseWalker(walker) == true) {
                 continue;
             }
-            tw.writeln("{}walkers.push_back(\"{}\");", indent, walker.name);
-            break;
+            nonBaseWalkers.push_back(&walker);
+        }
+
+        // auto-select the one walker if there's only one; otherwise -w is required
+        if(nonBaseWalkers.size() == 1) {
+            tw.writeln("{}walkers.push_back(\"{}\");", indent, nonBaseWalkers.at(0)->name);
+        }else if(nonBaseWalkers.size() > 1) {
+            tw.writeln("{}std::cerr << \"error: multiple walkers declared, -w <walker> is required\" << std::endl;", indent);
+            tw.writeln("{}return 1;", indent);
         }
     }
 
