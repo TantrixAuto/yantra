@@ -3,7 +3,6 @@
 // Region: Walker declarations
 
 %walkers ShowTree Calc;
-%default_walker ShowTree;
 
 // Region:Functions
 
@@ -15,7 +14,7 @@
 // Region:Rules
 
 start := numexpr (n)
-@Calc
+@Calc::go
 %{
     std::cout << "Result:" << eval(n) << std::endl;
 %}
@@ -27,6 +26,7 @@ numexpr := addorsubexpr (e)
 %}
 
 addorsubexpr := addorsubexpr (lhs) PLUS mulordivexpr (rhs)
+@ShowTree::go
 %{
     startExpression("Adding:");
 %}
@@ -36,6 +36,7 @@ addorsubexpr := addorsubexpr (lhs) PLUS mulordivexpr (rhs)
 %}
 
 addorsubexpr := addorsubexpr (lhs) MINUS mulordivexpr (rhs)
+@ShowTree::go
 %{
     startExpression("Subtracting:");
 %}
@@ -51,6 +52,7 @@ addorsubexpr := mulordivexpr (mde)
 %}
 
 mulordivexpr := mulordivexpr (lhs) MUL valexpr (rhs)
+@ShowTree::go
 %{
     startExpression("Multiplying:");
 %}
@@ -60,6 +62,7 @@ mulordivexpr := mulordivexpr (lhs) MUL valexpr (rhs)
 %}
 
 mulordivexpr := mulordivexpr (lhs) DIV valexpr (rhs)
+@ShowTree::go
 %{
     startExpression("Dividing:");
 %}
@@ -81,6 +84,7 @@ valexpr := LPAREN numexpr(n) RPAREN
 %}
 
 valexpr := NUMBER (NUM)
+@ShowTree::go
 %{
     appendNumber(NUM.text);
 %}

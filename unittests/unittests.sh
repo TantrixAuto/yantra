@@ -1187,7 +1187,7 @@ stmts := stmt;
 
 //%function stmt Generator::eval() -> int;
 stmt := ID EQ expr(e) SEMI
-@Generator %{
+@Generator::go %{
   auto v = eval(e);
   if(v) {}
 %}
@@ -1431,7 +1431,7 @@ grammar='
 start := rParameterDef;
 
 rParameterDef := rTypeRef(t) IDENTIFIER
-@CppServer %{
+@CppServer::go %{
     unused(t);
 //    std::print("rParameterDef/@CppServer\n");
     str(t, 1);
@@ -1444,7 +1444,7 @@ rParameterDef := rTypeRef CARET IDENTIFIER;
 %function rTypeRef CppServer::str(int x) -> std::string;
 %function rTypeRef CppServer::len(int x) -> size_t;
 rTypeRef := rTypeRefBase rTypeRefQualifier
-@CppServer %{
+@CppServer::go %{
 //    std::print("rTypeRef/@CppServer ***\n");
 %}
 @CppServer::str %{
@@ -1808,6 +1808,79 @@ run_passing_test -s 'ffa;' -t '0:start_1(1:stmts_2(2:stmt_3(3:HEXDIGIT(ffa) 3:SE
 run_passing_test -s 'abc;' -t '0:start_1(1:stmts_2(2:stmt_4(3:ID(abc) 3:SEMI(;))) 1:_tEND())'
 run_passing_test -s '123;' -t '0:start_1(1:stmts_2(2:stmt_2(3:DIGIT(123) 3:SEMI(;))) 1:_tEND())'
 run_passing_test -s 'ff; ffa; abc; 123;' -t '0:start_1(1:stmts_1(2:stmts_1(3:stmts_1(4:stmts_2(5:stmt_1(6:FF(ff) 6:SEMI(;))) 4:stmt_3(5:HEXDIGIT(ffa) 5:SEMI(;))) 3:stmt_4(4:ID(abc) 4:SEMI(;))) 2:stmt_2(3:DIGIT(123) 3:SEMI(;))) 1:_tEND())'
+
+#############################
+# regression tests for: once %walkers is declared, every codeblock must be
+# @Walker::Method -- a bare %{...%} or a bare @Walker %{...%} (both of which
+# silently target the "first declared walker" today) must be a hard error.
+# A grammar with no %walkers pragma at all is unaffected.
+
+# bare anonymous block + %walkers -- must fail
+grammar='
+%walkers Foo;
+start := ID
+%{
+    std::cout << "hi";
+%}
+ID := "[a-z]+";
+WS := "\s"!;
+'
+compile_grammar "$grammar" 1
+
+# bare @WalkerName block (no ::method) + %walkers -- must fail
+grammar='
+%walkers Foo;
+start := ID
+@Foo
+%{
+    std::cout << "hi";
+%}
+ID := "[a-z]+";
+WS := "\s"!;
+'
+compile_grammar "$grammar" 1
+
+# same, but the bare block appears BEFORE %walkers is declared later in the
+# file (a common real layout, e.g. the tutorial puts a Walkers region last)
+# -- must still fail, since this is a whole-grammar check, not a
+# parsed-so-far check
+grammar='
+start := ID
+%{
+    std::cout << "hi";
+%}
+ID := "[a-z]+";
+WS := "\s"!;
+
+%walkers Foo;
+'
+compile_grammar "$grammar" 1
+
+# fully-labelled @Walker::Method + %walkers -- must succeed
+grammar='
+%walkers Foo;
+start := ID(I)
+@Foo::go
+%{
+    unused(I);
+%}
+ID := "[a-z]+";
+WS := "\s"!;
+'
+compile_grammar "$grammar" 0
+run_passing_test -s 'abc' -t '0:start_1(1:ID(abc) 1:_tEND())'
+
+# no %walkers pragma at all: bare blocks are still fine, unchanged
+grammar='
+start := ID(I)
+%{
+    unused(I);
+%}
+ID := "[a-z]+";
+WS := "\s"!;
+'
+compile_grammar "$grammar" 0
+run_passing_test -s 'abc' -t '0:start_1(1:ID(abc) 1:_tEND())'
 
 #############################
 echo All tests done

@@ -1,5 +1,45 @@
 %class Calculator;
 
+// Region:Walkers
+
+%walkers ShowTree;
+
+%members ShowTree
+%{
+    int level = 0; // Current level of indentation
+    int inExpression = 0; // Position of current NUMBER
+
+    // Return as many spaces as value of `level`,
+    // for indenting.
+    std::string indentLevel() {
+        std::string result(level,' ');
+        return result;
+    }
+
+    // Start a new level, when a new expression
+    // starts.
+    void startExpression(std::string exprName) {
+        std::cout << indentLevel() << exprName << std::endl;
+
+        level++;
+        inExpression = 0;
+    }
+
+    // When a number is output, increase
+    // `inExpression`. If it is even (because our
+    // expressions take two numbers), decrease
+    // the level because the expression is done.
+    void appendNumber(std::string numText) {
+        std::cout << indentLevel() << "Number: " << numText << std::endl;
+
+        inExpression++;
+        if(inExpression % 2 == 0) {
+            level--;
+            inExpression--;
+        }
+    }
+%}
+
 // Region:Rules
 
 start := numexpr;
@@ -7,11 +47,13 @@ start := numexpr;
 numexpr := addorsubexpr;
 
 addorsubexpr := addorsubexpr PLUS mulordivexpr
+@ShowTree::go
 %{
     startExpression("Adding:");
 %}
 
 addorsubexpr := addorsubexpr MINUS mulordivexpr
+@ShowTree::go
 %{
     startExpression("Subtracting:");
 %}
@@ -19,11 +61,13 @@ addorsubexpr := addorsubexpr MINUS mulordivexpr
 addorsubexpr := mulordivexpr;
 
 mulordivexpr := mulordivexpr MUL valexpr
+@ShowTree::go
 %{
     startExpression("Multiplying:");
 %}
 
 mulordivexpr := mulordivexpr DIV valexpr
+@ShowTree::go
 %{
     startExpression("Dividing:");
 %}
@@ -33,6 +77,7 @@ mulordivexpr := valexpr;
 valexpr := LPAREN numexpr RPAREN;
 
 valexpr := NUMBER (NUM)
+@ShowTree::go
 %{
     appendNumber(NUM.text);
 %}
@@ -50,44 +95,3 @@ DIV    := "/";
 LPAREN := "\(";
 RPAREN := "\)";
 WS     := "\s+"!;
-
-// Region:Walkers
-
-%walkers ShowTree;
-%default_walker ShowTree;
-
-%members ShowTree
-%{
-    int level = 0; // Current level of indentation
-    int inExpression = 0; // Position of current NUMBER
-    
-    // Return as many spaces as value of `level`,
-    // for indenting.
-    std::string indentLevel() {
-        std::string result(level,' ');
-        return result;
-    }
-    
-    // Start a new level, when a new expression 
-    // starts.
-    void startExpression(std::string exprName) {
-        std::cout << indentLevel() << exprName << std::endl;
-    
-        level++;
-        inExpression = 0;
-    }
-    
-    // When a number is output, increase 
-    // `inExpression`. If it is even (because our
-    // expressions take two numbers), decrease 
-    // the level because the expression is done.
-    void appendNumber(std::string numText) {
-        std::cout << indentLevel() << "Number: " << numText << std::endl; 
-    
-        inExpression++;
-        if(inExpression % 2 == 0) {
-            level--;
-            inExpression--;
-        }
-    }
-%}

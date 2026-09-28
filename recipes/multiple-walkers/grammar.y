@@ -11,11 +11,11 @@ stmts := stmt;
 // this rule recognizes a simple assignment statement.
 // it has code blocks for each of the two defined walkers.
 stmt := ID(I) EQUAL qualifiedID(qid) SEMI
-@CppWalker
+@CppWalker::go
 %{
     std::cout << I.text << " = " << str(qid) << std::endl;
 %}
-@JavaWalker
+@JavaWalker::go
 %{
     std::cout << I.text << " = " << str(qid) << std::endl;
 %}

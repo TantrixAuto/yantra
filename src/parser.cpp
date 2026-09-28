@@ -1084,6 +1084,9 @@ struct Parser {
         /// @brief whether this is a user-defined function
         bool isUDF = false;
 
+        /// @brief true only for the explicit @Walker::Method form, not a bare block or bare @Walker
+        bool isExplicitMethod = false;
+
         /// @brief whether this function is autowalk-enabled
         bool autowalk = false;
 
@@ -1169,7 +1172,8 @@ struct Parser {
         const std::string& f,
         const std::string& a,
         const bool& autowalk,
-        const Token& d
+        const Token& d,
+        const bool& explicitMethod = false
     ) {
         list.push_back(RuleSetType());
         auto& rt = list.back();
@@ -1181,6 +1185,7 @@ struct Parser {
         rt.args = a;
         rt.autowalk = autowalk;
         rt.data = d;
+        rt.isExplicitMethod = explicitMethod;
     }
 
     /// @brief Add function sig to the ruleset list
@@ -1205,7 +1210,8 @@ struct Parser {
         yg::Walker& w,
         const bool& n,
         const std::string& f,
-        const Token& t
+        const Token& t,
+        const bool& explicitMethod = false
     ) {
         if(hasWalkerData(rsWalkerCodeblocks, rs, rule, w, f) != nullptr) {
             throw GeneratorError(__LINE__, __FILE__, t.pos, "DUPLICATE_CODEBLOCK: {}/{}::{}", rs.text, w.name, f);
@@ -1215,7 +1221,7 @@ struct Parser {
                 throw GeneratorError(__LINE__, __FILE__, t.pos, "UNKNOWN_FUNCTION: {}/{}::{}", rs.text, w.name, f);
             }
         }
-        return _addRsWalkerData(rsWalkerCodeblocks, rs, rule, w, n, f, "", false, t);
+        return _addRsWalkerData(rsWalkerCodeblocks, rs, rule, w, n, f, "", false, t, explicitMethod);
     }
 
     /// @brief Check if @arg name is a valid rule name
@@ -1599,25 +1605,6 @@ struct Parser {
         }
 
         xmembers.setCode(t.pos, t.text);
-        lexer.next();
-    }
-
-    /// @brief read pragma value for `default_walker` and set it in the grammar
-    /// this pragma can be set after only list of walkers are defined
-    inline void default_walker() {
-        Tracer tr{lvl, "default_walker"};
-
-        Token t = peek(tr);
-        if(t.id != Token::ID::ID) {
-            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
-        }
-
-        grammar.setDefaultWalker(t.pos, t.text);
-        lexer.next();
-        t = peek(tr);
-        if(t.id != Token::ID::SEMI) {
-            throw GeneratorError(__LINE__, __FILE__, t.pos, "INVALID_INPUT");
-        }
         lexer.next();
     }
 
@@ -2190,9 +2177,6 @@ struct Parser {
             return set_bool(grammar.stdHeadersEnabled, t);
         }
 
-        if(t.text == "default_walker") {
-            return default_walker();
-        }
         if(t.text == "walkers") {
             return walkers();
         }
@@ -2429,6 +2413,7 @@ struct Parser {
             }
             auto func = w->defaultFunctionName;
             bool isUDF = false;
+            bool isExplicitMethod = false;
 
             if(t.id == Token::ID::AT) {
                 lexer.next();
@@ -2463,6 +2448,7 @@ struct Parser {
                     func = t.text;
                     lexer.next();
                     t = peek(tr);
+                    isExplicitMethod = true;
                 }else{
                     auto w1 = grammar.getWalker(walkerID.text);
                     if(w1 != nullptr) {
@@ -2485,7 +2471,7 @@ struct Parser {
 
             assert(t.id == Token::ID::CODEBLOCK);
             assert(w != nullptr);
-            addRsWalkerCode(ruleName, rule.get(), *w, isUDF, func, t);
+            addRsWalkerCode(ruleName, rule.get(), *w, isUDF, func, t, isExplicitMethod);
             hasCodeBlocks = true;
             lexer.next();
             t = peek(tr);
@@ -2712,6 +2698,15 @@ void parseInput(yg::Grammar& g, Stream& is) {
 
     std::vector<std::pair<FilePos, std::string>> errors;
 
+    // %walkers requires every codeblock to be labelled @Walker::Method, no more implicit default
+    if(g.explicitWalkers == true) {
+        for(auto& rt : p.rsWalkerCodeblocks) {
+            if(rt.isExplicitMethod == false) {
+                auto msg = std::format("codeblock must be labelled");
+                errors.emplace_back(rt.data.pos, msg);
+            }
+        }
+    }
 
     for(auto& pw : g.walkers) {
         auto& w = *pw;

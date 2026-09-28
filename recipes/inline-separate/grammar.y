@@ -1,6 +1,7 @@
 %walkers Compiler;
 
 start := expr(e)
+@Compiler::go
 %{
     auto v = eval(e);
     if(v > 0) {}

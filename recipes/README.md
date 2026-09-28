@@ -72,6 +72,5 @@ It implements two walkers, `CppWalker` and `JavaWalker`.
 | [multiple-walkers](multiple-walkers/)      | This is minimal example of using multiplle walkers againsta single grammar. It produces a single .cpp file combining the main() and all the walkers.|
 | > Generate                            | `./bin/ycc -f ../../recipes/multiple-walkers/grammar.y -a`|
 | > Build                               | `clang++ -g -Wall --std=c++23 grammar.cpp`|
-| > Run with default walker(CppWalker)  | `./a.out -s "a = a::b;"`|
 | > Run with CppWalker                  | `./a.out -s "a = a::b;" -w CppWalker`|
 | > Run with JavaWalker                 | `./a.out -s "a = a::b;" -w JavaWalker`|
