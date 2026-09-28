@@ -208,12 +208,12 @@ stmts := stmt;
 // it has code blocks for each of the two defined walkers.
 </i>
 stmt := ID(I) EQUAL qualifiedID(qid) SEMI
-@CppWalker
+@CppWalker::go
 %{
     <i>// this calls the str() function defined for CppWalker below</i>
     std::cout << I.text << " = " << str(qid) << std::endl;
 %}
-@JavaWalker
+@JavaWalker::go
 %{
     <i>// this calls the str() function defined for JavaWalker below</i>
     std::cout << I.text << " = " << str(qid) << std::endl;

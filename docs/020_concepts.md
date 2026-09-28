@@ -10,6 +10,20 @@ On the other hand, Yantra automatically creates an AST, and the semantic actions
 
 This approach now allows us to define one (or more) Walkers to walk the generated AST.
 
+If a grammar has no `%walkers` pragma at all, Yantra creates a single implicit walker, and a rule's codeblock can just be an unlabelled `%{ ... %}`. Once `%walkers` is used to declare one or more walkers explicitly, that implicit default goes away: every codeblock must be labelled `@WalkerName::FunctionName`, naming both the walker and the function.
+
+```
+%walkers CppWalker;
+
+expr := NUMBER(N)
+@CppWalker::go
+%{
+    std::cout << N.text;
+%}
+```
+
+`go` is a reserved function name (see [Walker Traversal](#walker-traversal) below): it doesn't need a `%function` declaration first, unlike other named functions.
+
 # Functions
 In Yantra, semantic actions are referred to as functions, in the functional programming sense.
 Every walker can have multiple functions for a rule.

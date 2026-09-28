@@ -208,8 +208,7 @@ The following is the list of pragmas supported by Yantra
 | check_unused_tokens | `%check_unused_tokens off;` | No | Grammar | Yantra gives an error if any tokens are not used in the rules.<br/>Enabled by default, use this pragma to disable |
 | auto_resolve        | `%auto_resolve off;` | No | Grammar | Yantra attempts to automatically resolve SHIFT-REDUCE conflicts.<br/>Enabled by default, use this pragma to disable |
 | warn_resolve        | `%warn_resolve off;` | No | Grammar | If auto_resolve is enabled, Yantra gives a warning when conflicts are resolved.<br/>Enabled by default, use this pragma to disable |
-| walkers             | `%walkers CppWalker JavaWalker;` | No | Grammar | Specify list of walkers used in this Parser.<br/>See [Walkers](020_concepts.md#walkers) in concepts for more details |
-| default_walker      | `%default_walker JavaWalker;` | No | Grammar | Set the default walker to use with unnamed semantic actions |
+| walkers             | `%walkers CppWalker JavaWalker;` | No | Grammar | Specify list of walkers used in this Parser. Once declared, every codeblock must be labelled `@Walker::Method`, there is no more implicit default walker.<br/>See [Walkers](020_concepts.md#walkers) in concepts for more details |
 | walker_output       | `%walker_output CppWalker text_file cpp;` | Yes | Walker | Set the output type for the specified walker.<br/>Can be `text_file` or `binary_file`, followed by the extension for the generated file<br/>See [Walker Output](020_concepts.md#walker-output) in concepts for more details |
 | walker_traversal    | `%walker_traversal CppWalker top_down;` | Yes | Walker | Set the traversal type for the specified walker.<br/>Can be `top_down` or `manual`<br/>See [Walker Traversal](020_concepts.md#walker-traversal) in concepts for more details |
 | members             | `%members CppWalker %{ int i = 0; %}` | Yes | Walker | Set additional class members for the specified walker |
