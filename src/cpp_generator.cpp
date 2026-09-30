@@ -628,7 +628,9 @@ struct Generator {
 
                 tw.writeln("{}        explicit inline {}({}){}{} {{}}", indent, r->ruleName, pos.str(), coln, ios.str());
                 tw.writeln();
-                tw.writeln("{}        void dump(std::ostream& ss, const size_t& lvl, const FilePos& p, const std::string& indent, const size_t& depth) const;", indent);
+                // internal parameter names are prefixed with _ to avoid colliding with a
+                // grammar variable of the same name (e.g. a rule variable named "p")
+                tw.writeln("{}        void dump(std::ostream& _ss, const size_t& _lvl, const FilePos& _p, const std::string& _indent, const size_t& _depth) const;", indent);
                 tw.writeln("{}    }};", indent);
                 tw.writeln();
             }
@@ -662,9 +664,9 @@ struct Generator {
 
         for (const auto& rs : grammar.ruleSets) {
             for (auto& r : rs->rules) {
-                tw.writeln("{}void {}::{}::dump(std::ostream& ss, const size_t& lvl, const FilePos& p, const std::string& indent, const size_t& depth) const {{", indent, rs->name, r->ruleName);
-                tw.writeln("{}    if(lvl >= 2) {{", indent);
-                tw.writeln(R"({}        ss << std::format("{{}}: {{}}+--{}\n", p.str(), indent);)", indent, r->str(false));
+                tw.writeln("{}void {}::{}::dump(std::ostream& _ss, const size_t& _lvl, const FilePos& _p, const std::string& _indent, const size_t& _depth) const {{", indent, rs->name, r->ruleName);
+                tw.writeln("{}    if(_lvl >= 2) {{", indent);
+                tw.writeln(R"({}        _ss << std::format("{{}}: {{}}+--{}\n", _p.str(), _indent);)", indent, r->str(false));
                 for (size_t idx = 0; idx < r->nodes.size(); ++idx) {
                     auto& n = r->nodes.at(idx);
                     auto varName = n->varName;
@@ -672,15 +674,15 @@ struct Generator {
                         varName = std::format("{}{}", n->name, idx);
                     }
                     if(n->isRule() == true) {
-                        tw.writeln(R"({}        {}.dump(ss, lvl, indent + "|  ", depth + 1);)", indent, varName);
+                        tw.writeln(R"({}        {}.dump(_ss, _lvl, _indent + "|  ", _depth + 1);)", indent, varName);
                     }else{
                         assert(n->isRegex() == true);
-                        tw.writeln(R"({}        {}.dump(ss, lvl, "{}", indent + "|  ", depth + 1);)", indent, varName, n->name);
+                        tw.writeln(R"({}        {}.dump(_ss, _lvl, "{}", _indent + "|  ", _depth + 1);)", indent, varName, n->name);
                     }
                 }
                 tw.writeln("{}    }}else{{", indent);
-                tw.writeln("{}        assert(lvl == 1);", indent);
-                tw.writeln(R"({}        ss << std::format("{{}}{{}}:{}(", indent, depth);)", indent, r->ruleName);
+                tw.writeln("{}        assert(_lvl == 1);", indent);
+                tw.writeln(R"({}        _ss << std::format("{{}}{{}}:{}(", _indent, _depth);)", indent, r->ruleName);
                 auto ind = std::format("\"\"");
                 for (size_t idx = 0; idx < r->nodes.size(); ++idx) {
                     auto& n = r->nodes.at(idx);
@@ -689,14 +691,14 @@ struct Generator {
                         varName = std::format("{}{}", n->name, idx);
                     }
                     if(n->isRule() == true) {
-                        tw.writeln("{}        {}.dump(ss, lvl, {}, depth + 1);", indent, varName, ind);
+                        tw.writeln("{}        {}.dump(_ss, _lvl, {}, _depth + 1);", indent, varName, ind);
                     }else{
                         assert(n->isRegex() == true);
-                        tw.writeln("{}        {}.dump(ss, lvl, \"{}\", {}, depth + 1);", indent, varName, n->name, ind);
+                        tw.writeln("{}        {}.dump(_ss, _lvl, \"{}\", {}, _depth + 1);", indent, varName, n->name, ind);
                     }
                     ind = std::format("\" \"");
                 }
-                tw.writeln("{}        ss << std::format(\")\");", indent);
+                tw.writeln("{}        _ss << std::format(\")\");", indent);
                 tw.writeln("{}    }}", indent);
                 tw.writeln("{}}}", indent);
                 tw.writeln();

@@ -29,10 +29,34 @@ In Yantra, semantic actions are referred to as functions, in the functional prog
 Every walker can have multiple functions for a rule.
 The user can define any number of user-defined functions per rule, per walker.
 
-# Walker Traversal
-In addition, each walker has a default built-in function called `go` that is automatically traversed when the walker is invoked.
+A function can return any C++ type, not just `int` or `std::string`, a user-defined struct or class works too. Declare it with `%function`, naming the rule, the walker, the function, and its return type:
 
-This behaviour can be turned off using the `%walker_traversal` pragma
+```
+%function expr Calc::eval() -> int;
+```
+
+Every alternative of that rule then needs a matching `@Calc::eval` codeblock returning a value of that type. This is what lets values compose bottom-up even though the walk itself runs top-down: a parent's function calls `eval(child)` on each child it cares about and uses the returned value, the same way a hand-written recursive-descent evaluator would.
+
+```
+expr := expr(a) PLUS expr(b)
+@Calc::eval
+%{
+    return eval(a) + eval(b);
+%}
+
+expr := NUMBER(N)
+@Calc::eval
+%{
+    return std::stoi(N.text);
+%}
+```
+
+The return type isn't limited to primitives. Returning a `std::string` lets a rule build up text from its children, the way the `str()` function in the [Full Example](010_overview.md#full-example) in the overview builds a qualified name by combining a child's `str()` with the current segment. Returning a user-defined struct, or a `std::unique_ptr` to a hand-built node, lets a function construct its own data structure, such as a symbol-table entry or an IR node, as the walk proceeds. The type just has to be valid C++ at the point the generated code uses it, so a type defined via `%class_members` needs to be referred to by its qualified name (e.g. `YantraModule::MyType`) from inside a walker's own functions, since it belongs to the parser class, not the walker class.
+
+# Walker Traversal
+Each walker has a default built-in function called `go`. While the walker's traversal mode is `top_down` (the default), `go` is automatically invoked on every rule-reference child of the node just visited, once its parent's own codeblock returns. Calling `go` on a child yourself, from within that codeblock, marks it as already handled, so the automatic call is skipped for that child rather than running it twice. You can also skip a child without visiting it at all, by calling `skip(child)`.
+
+Set the `%walker_traversal` pragma to `manual` to turn this off entirely: nothing is auto-invoked from that point down, including the very first call into the walker, so every node you want visited (starting from the `start` rule itself) has to be reached by an explicit `go(child)` call somewhere in your own code.
 
 # Walker Output
 A typical use for a walker is to:

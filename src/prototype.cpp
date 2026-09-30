@@ -2,12 +2,14 @@
 /// @brief The prototype file for the generated parser
 /// This file is stringified and embedded into the Yantra executable
 /// The structure of this file (and implicitly the generated parser file) is
-/// - AST classes
+/// - the %class-named interface class, declared as signatures only (PIMPL)
+/// - AST classes: the token class, and one struct per rule
 /// - Walker class(es)
-/// - Token class
 /// - Parser class
 /// - Lexer class
-/// - main() function
+/// - the interface class's method implementations, generated last since
+///   they depend on the Parser and Lexer classes above
+/// - main() function, only when generated with -a
 ///
 /// The main() function reads the input and feeds it into the Lexer
 ///

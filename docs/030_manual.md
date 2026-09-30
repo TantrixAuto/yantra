@@ -152,6 +152,8 @@ Its member `std::string text` contains the text of the token as read from the in
 
 The token has another member `FilePos pos` that specifies where in the input stream this token was recognised.
 
+A rule variable becomes a plain local reference inside the generated function body, so its name must not collide with anything else accessible there: the walker's own built-in methods (`go`, `skip`), a member declared via `%members`, or a function declared via `%function` for that rule. A colliding name shadows whatever it collides with, for the rest of that function, usually surfacing as a compile error, but not always, so avoid reusing these names for rule variables.
+
 ### Walkers
 Parser generators such as YACC, BISON and LEMON allow us to attach a semantic action (typically a C or C++ code block) with a production, and this action is invoked as soon as the production is reduced.
 
@@ -171,6 +173,17 @@ Consider this common use-case:
 We can do this using Yantra by defining two walkers, say CppWalker and JavaWalker, and attaching per-walker semantic actions to each of them.
 
 Every rule can have multiple walkers associated with them.
+
+### Generated file structure
+The generated parser file follows a fixed structure, in this order:
+- AST classes: the token class, and one struct per rule
+- Walker class(es), one per declared walker
+- Parser class
+- Lexer class
+- The `%class`-named interface class's method implementations
+- An optional `main()` function, generated only with `-a`
+
+The `%class`-named class (e.g. `Calculator`) is the one application code actually uses. It's declared right at the top of the file, as a plain interface: a constructor and method signatures only, no bodies, using a pointer-to-implementation (PIMPL) internally (a forward-declared `Impl` struct, held by a `std::unique_ptr`). Its method bodies are generated last, as `Calculator::Impl`, after the Parser and Lexer classes they depend on. Application code that only calls this class's public methods never needs to know Parser, Lexer, or Impl exist.
 
 ### Lexer calls Parser
 In parser generators such as YACC and BISON, the parser calls the lexer to get the next available token.
