@@ -94,6 +94,8 @@ Yantra parses the entire input into an AST first, *then* walks it top-down calli
 ```
 %class Calculator;
 
+%left PLUS;
+
 start := expr;
 
 expr := expr(a) PLUS expr(b)
@@ -116,13 +118,13 @@ Generate and compile it the same way as above (`bin/ycc -c ascii -f calc.y -a`, 
 ```bash
 $ ./calc -s "1 + 2 + 3"
 Adding
-Number: 1
 Adding
+Number: 1
 Number: 2
 Number: 3
 ```
 
-`1 + 2 + 3` parses left-associatively as `(1 + 2) + 3`. So the outer `Adding`, the root of the tree, prints *first*, followed by its left child (`Number: 1`) and then its right child, which is itself another `Adding` node with its own two children. A hand-written recursive-descent or bottom-up parser would have to build extra AST classes and a separate walking pass to get this ordering. Here it falls out of the grammar directly.
+`%left PLUS;` makes `1 + 2 + 3` parse left-associatively as `(1 + 2) + 3`. So the outer `Adding`, the root of the tree, prints *first*, followed by its left child, which is itself another `Adding` node for `1 + 2`, and then its right child (`Number: 3`). A hand-written recursive-descent or bottom-up parser would have to build extra AST classes and a separate walking pass to get this ordering. Here it falls out of the grammar directly.
 
 See the [Build Instructions](docs/050_build.md) and [Tutorial](tutorial/) below for a real walk-through of the grammar syntax.
 
