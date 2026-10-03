@@ -74,6 +74,8 @@ add_executable(ycc
 )
 target_include_directories(ycc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
+install(TARGETS ycc RUNTIME DESTINATION bin)
+
 add_executable(proto
     "prototype.cpp"
 )
