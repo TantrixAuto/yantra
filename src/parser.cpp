@@ -1084,7 +1084,7 @@ struct Parser {
         /// @brief whether this is a user-defined function
         bool isUDF = false;
 
-        /// @brief true only for the explicit @Walker::Method form, not a bare block or bare @Walker
+        /// @brief true only for the explicit \@Walker::Method form, not a bare block or bare \@Walker
         bool isExplicitMethod = false;
 
         /// @brief whether this function is autowalk-enabled
