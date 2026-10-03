@@ -19,6 +19,7 @@
 #if !defined(__GLIBCXX__) && !defined(_MSVC_STL_VERSION)
 namespace std {
 template <typename ...ArgsT>
+requires (!requires(std::ostream& os) { std::println(os, ""); })
 void println(std::ostream& os, format_string<ArgsT...> fmt, ArgsT&&... args) {
     os << std::format(fmt, std::forward<ArgsT>(args)...) << '\n';
 }

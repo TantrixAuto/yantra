@@ -66,11 +66,27 @@ constexpr const char* SRC = "";
 
 #if !defined(__GLIBCXX__) && !defined(_MSVC_STL_VERSION)
 namespace std {
+//C: Guarded, not unconditional-for-libc++ -- __cpp_lib_print stays
+//C: 202207L (the original FILE*-only overloads' value) even on a libc++
+//C: that has since added these ostream ones too, so that macro can't
+//C: tell the two apart; this requires-clause probes for the real
+//C: overload directly instead. Confirmed for real: an unconditional
+//C: polyfill here made every std::print/println(ostream&, ...) call
+//C: ambiguous against clang-21/libc++-21 (apt.llvm.org), which already
+//C: has its own. The probe itself can't see this very template (not yet
+//C: fully declared at the point its own requires-clause is evaluated),
+//C: so this isn't circular. Doubly important here (vs. pch.hpp's own
+//C: copy): this file is stringified and embedded into every generated
+//C: parser (see this file's own top doc comment), so the same ambiguity
+//C: would otherwise hit every consumer of Yantra-generated code too, not
+//C: just Yantra's own build.
 template <typename ...ArgsT>
+    requires (!requires(std::ostream& os) { std::print(os, ""); })
 void print(std::ostream& os, format_string<ArgsT...> fmt, ArgsT&&... args) {
     os << std::format(fmt, std::forward<ArgsT>(args)...);
 }
 template <typename ...ArgsT>
+    requires (!requires(std::ostream& os) { std::println(os, ""); })
 void println(std::ostream& os, format_string<ArgsT...> fmt, ArgsT&&... args) {
     os << std::format(fmt, std::forward<ArgsT>(args)...) << '\n';
 }
